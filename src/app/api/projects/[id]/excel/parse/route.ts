@@ -70,11 +70,19 @@ export async function POST(
         defval: '',
       }) as string[][];
 
+      // Debug: Log raw data length
+      console.log(`Sheet "${name}": jsonData.length = ${jsonData.length}, first row:`, jsonData[0]?.slice(0, 5));
+
       const headers = jsonData.length > 0
         ? jsonData[0].map((h) => String(h || '').trim()).filter(Boolean)
         : [];
 
-      const previewRows = jsonData.slice(1, 6).map((row) => {
+      // Filter out empty rows when counting (rows with only empty values)
+      const dataRows = jsonData.slice(1).filter(row =>
+        row.some(cell => cell !== null && cell !== undefined && cell !== '')
+      );
+
+      const previewRows = dataRows.slice(0, 5).map((row) => {
         const rowData: Record<string, string> = {};
         headers.forEach((header, i) => {
           rowData[header] = String(row[i] ?? '');
@@ -82,10 +90,13 @@ export async function POST(
         return rowData;
       });
 
+      const rowCount = dataRows.length;
+      console.log(`Sheet "${name}": ${rowCount} data rows (after filtering empty rows), ${headers.length} headers`);
+
       return {
         name,
         index,
-        rowCount: Math.max(0, jsonData.length - 1),
+        rowCount,
         headers,
         preview: previewRows,
       };
@@ -112,8 +123,13 @@ export async function POST(
       suggested: sanitizeColumnName(String(h || `column_${i + 1}`)),
     }));
 
+    // Filter out empty rows
+    const dataRowsMain = jsonData.slice(1).filter(row =>
+      row.some(cell => cell !== null && cell !== undefined && cell !== '')
+    );
+
     // Get preview data (first 10 rows after header)
-    const previewRows = jsonData.slice(1, 11).map(row => {
+    const previewRows = dataRowsMain.slice(0, 10).map(row => {
       const rowData: Record<string, string> = {};
       headers.forEach((header, i) => {
         rowData[header.original] = String(row[i] ?? '');
@@ -121,8 +137,8 @@ export async function POST(
       return rowData;
     });
 
-    // Get total row count
-    const totalRows = jsonData.length - 1;
+    // Get total row count (excluding empty rows)
+    const totalRows = dataRowsMain.length;
 
     return NextResponse.json({
       success: true,

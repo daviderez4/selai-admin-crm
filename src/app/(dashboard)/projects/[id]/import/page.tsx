@@ -166,11 +166,23 @@ export default function ImportPage() {
       }
 
       const result = await response.json();
+
+      // Debug: Log the API response to understand the data structure
+      console.log('Excel parse API response:', {
+        fileName: result.fileName,
+        sheetsInfo: result.sheetsInfo,
+        totalRows: result.totalRows,
+        headers: result.headers,
+        previewLength: result.preview?.length,
+      });
+
       setSheetsInfo(result.sheetsInfo || []);
 
       // Initialize sheet configs
       const configs: Record<string, SheetConfig> = {};
       (result.sheetsInfo || []).forEach((sheet: ExcelSheetInfo) => {
+        console.log(`Sheet "${sheet.name}": ${sheet.rowCount} rows, ${sheet.headers.length} columns`);
+
         configs[sheet.name] = {
           sheetName: sheet.name,
           selected: sheet.index === 0, // Select first sheet by default
@@ -194,12 +206,15 @@ export default function ImportPage() {
       });
       setSheetConfigs(configs);
 
+      // Use totalRows from the API if sheetsInfo rowCount is 0
+      const firstSheetRows = result.sheetsInfo[0]?.rowCount || result.totalRows || 0;
+
       if (result.sheetsInfo.length > 1) {
         setStep('sheets');
         toast.success(`נמצאו ${result.sheetsInfo.length} גיליונות`);
       } else {
         setStep('mapping');
-        toast.success(`נטען: ${result.sheetsInfo[0]?.rowCount || 0} שורות`);
+        toast.success(`נטען: ${firstSheetRows} שורות, ${result.sheetsInfo[0]?.headers?.length || 0} עמודות`);
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'שגיאה בקריאת הקובץ');
@@ -856,20 +871,67 @@ export default function ImportPage() {
                           </Label>
                         </div>
 
-                        <div className="flex items-center gap-2 text-sm text-slate-400">
-                          <FileSpreadsheet className="h-4 w-4" />
-                          <span>{config.sheetName}</span>
-                          <Badge variant="outline" className="border-slate-600">
+                        <div className="flex items-center gap-4 text-sm text-slate-400">
+                          <div className="flex items-center gap-2">
+                            <FileSpreadsheet className="h-4 w-4" />
+                            <span>{config.sheetName}</span>
+                          </div>
+                          <Badge variant="outline" className={config.rowCount === 0 ? 'border-amber-600 text-amber-400' : 'border-slate-600'}>
                             {config.rowCount} שורות
                           </Badge>
+                          <Badge variant="outline" className="border-emerald-600 text-emerald-400">
+                            {config.columnMappings.filter(m => m.enabled).length}/{config.columnMappings.length} עמודות נבחרו
+                          </Badge>
                         </div>
+
+                        {/* Warning if 0 rows */}
+                        {config.rowCount === 0 && config.columnMappings.length > 0 && (
+                          <div className="mt-3 p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg text-amber-400 text-sm flex items-start gap-2">
+                            <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                            <div>
+                              <p className="font-medium">לא נמצאו שורות נתונים</p>
+                              <p className="text-amber-400/80 text-xs mt-1">
+                                הקובץ מכיל רק כותרות ללא נתונים, או שכל השורות ריקות.
+                                ודא שהקובץ מכיל נתונים מתחת לשורת הכותרות.
+                              </p>
+                            </div>
+                          </div>
+                        )}
                       </CardContent>
                     </Card>
 
                     {/* Column Mappings */}
                     <Card className="bg-slate-800/50 border-slate-700">
                       <CardHeader>
-                        <CardTitle className="text-white text-lg">מיפוי עמודות</CardTitle>
+                        <div className="flex items-center justify-between">
+                          <CardTitle className="text-white text-lg">מיפוי עמודות</CardTitle>
+                          <div className="flex gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                const mappings = config.columnMappings.map(m => ({ ...m, enabled: true }));
+                                updateSheetConfig(config.sheetName, { columnMappings: mappings });
+                              }}
+                              className="border-slate-600 text-slate-300 text-xs"
+                            >
+                              <Check className="h-3 w-3 ml-1" />
+                              בחר הכל
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                const mappings = config.columnMappings.map(m => ({ ...m, enabled: false }));
+                                updateSheetConfig(config.sheetName, { columnMappings: mappings });
+                              }}
+                              className="border-slate-600 text-slate-300 text-xs"
+                            >
+                              <X className="h-3 w-3 ml-1" />
+                              נקה הכל
+                            </Button>
+                          </div>
+                        </div>
                       </CardHeader>
                       <CardContent>
                         <Table>
@@ -948,14 +1010,42 @@ export default function ImportPage() {
               {/* Navigation */}
               <div className="space-y-4">
                 {/* Helper message when buttons are disabled */}
-                {selectedSheets.some((s) => !s.targetTable || (s.targetTable === '__new__' && !newTableName.trim())) && (
-                  <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg text-amber-400 text-sm flex items-center gap-2">
-                    <AlertCircle className="h-4 w-4 flex-shrink-0" />
-                    {selectedSheets.some((s) => s.targetTable === '__new__' && !newTableName.trim())
-                      ? 'יש להזין שם לטבלה החדשה'
-                      : 'יש לבחור טבלת יעד או ליצור טבלה חדשה'}
-                  </div>
-                )}
+                {(() => {
+                  const noTable = selectedSheets.some((s) => !s.targetTable || (s.targetTable === '__new__' && !newTableName.trim()));
+                  const noColumns = selectedSheets.every((s) => s.columnMappings.filter(m => m.enabled).length === 0);
+                  const noRows = selectedSheets.every((s) => s.rowCount === 0);
+
+                  if (noTable) {
+                    return (
+                      <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg text-amber-400 text-sm flex items-center gap-2">
+                        <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                        {selectedSheets.some((s) => s.targetTable === '__new__' && !newTableName.trim())
+                          ? 'יש להזין שם לטבלה החדשה'
+                          : 'יש לבחור טבלת יעד או ליצור טבלה חדשה'}
+                      </div>
+                    );
+                  }
+
+                  if (noColumns) {
+                    return (
+                      <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg text-amber-400 text-sm flex items-center gap-2">
+                        <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                        יש לבחור לפחות עמודה אחת לייבוא
+                      </div>
+                    );
+                  }
+
+                  if (noRows) {
+                    return (
+                      <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg text-amber-400 text-sm flex items-center gap-2">
+                        <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                        אזהרה: לא נמצאו שורות נתונים בקובץ. ודא שהקובץ מכיל נתונים.
+                      </div>
+                    );
+                  }
+
+                  return null;
+                })()}
 
                 <div className="flex justify-between">
                   <Button
@@ -970,7 +1060,10 @@ export default function ImportPage() {
                     <Button
                       variant="outline"
                       onClick={() => setStep('preview')}
-                      disabled={selectedSheets.some((s) => !s.targetTable || (s.targetTable === '__new__' && !newTableName.trim()))}
+                      disabled={
+                        selectedSheets.some((s) => !s.targetTable || (s.targetTable === '__new__' && !newTableName.trim())) ||
+                        selectedSheets.every((s) => s.columnMappings.filter(m => m.enabled).length === 0)
+                      }
                       className="border-slate-600 text-slate-300"
                     >
                       תצוגה מקדימה
@@ -978,7 +1071,10 @@ export default function ImportPage() {
                     </Button>
                     <Button
                       onClick={handleImport}
-                      disabled={selectedSheets.some((s) => !s.targetTable || (s.targetTable === '__new__' && !newTableName.trim()))}
+                      disabled={
+                        selectedSheets.some((s) => !s.targetTable || (s.targetTable === '__new__' && !newTableName.trim())) ||
+                        selectedSheets.every((s) => s.columnMappings.filter(m => m.enabled).length === 0)
+                      }
                       className="bg-emerald-500 hover:bg-emerald-600 text-lg px-6"
                     >
                       <Import className="h-5 w-5 ml-2" />
