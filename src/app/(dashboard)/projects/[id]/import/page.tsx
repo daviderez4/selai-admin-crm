@@ -444,7 +444,7 @@ export default function ImportPage() {
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'שגיאה בייבוא');
-      setStep('preview');
+      setStep('mapping');
     } finally {
       setIsLoading(false);
       setImportProgress(null);
@@ -946,23 +946,46 @@ export default function ImportPage() {
               })()}
 
               {/* Navigation */}
-              <div className="flex justify-between">
-                <Button
-                  variant="outline"
-                  onClick={() => (sheetsInfo.length > 1 ? setStep('sheets') : handleReset())}
-                  className="border-slate-600 text-slate-300"
-                >
-                  <ArrowRight className="h-4 w-4 ml-2" />
-                  חזור
-                </Button>
-                <Button
-                  onClick={() => setStep('preview')}
-                  disabled={selectedSheets.some((s) => !s.targetTable)}
-                  className="bg-emerald-500 hover:bg-emerald-600"
-                >
-                  המשך לתצוגה מקדימה
-                  <ArrowLeft className="h-4 w-4 mr-2" />
-                </Button>
+              <div className="space-y-4">
+                {/* Helper message when buttons are disabled */}
+                {selectedSheets.some((s) => !s.targetTable || (s.targetTable === '__new__' && !newTableName.trim())) && (
+                  <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg text-amber-400 text-sm flex items-center gap-2">
+                    <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                    {selectedSheets.some((s) => s.targetTable === '__new__' && !newTableName.trim())
+                      ? 'יש להזין שם לטבלה החדשה'
+                      : 'יש לבחור טבלת יעד או ליצור טבלה חדשה'}
+                  </div>
+                )}
+
+                <div className="flex justify-between">
+                  <Button
+                    variant="outline"
+                    onClick={() => (sheetsInfo.length > 1 ? setStep('sheets') : handleReset())}
+                    className="border-slate-600 text-slate-300"
+                  >
+                    <ArrowRight className="h-4 w-4 ml-2" />
+                    חזור
+                  </Button>
+                  <div className="flex gap-3">
+                    <Button
+                      variant="outline"
+                      onClick={() => setStep('preview')}
+                      disabled={selectedSheets.some((s) => !s.targetTable || (s.targetTable === '__new__' && !newTableName.trim()))}
+                      className="border-slate-600 text-slate-300"
+                    >
+                      תצוגה מקדימה
+                      <Eye className="h-4 w-4 mr-2" />
+                    </Button>
+                    <Button
+                      onClick={handleImport}
+                      disabled={selectedSheets.some((s) => !s.targetTable || (s.targetTable === '__new__' && !newTableName.trim()))}
+                      className="bg-emerald-500 hover:bg-emerald-600 text-lg px-6"
+                    >
+                      <Import className="h-5 w-5 ml-2" />
+                      ייבוא
+                    </Button>
+                  </div>
+                </div>
               </div>
             </div>
           )}
