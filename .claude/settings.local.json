@@ -12,7 +12,10 @@
       "Bash(git branch:*)",
       "Bash(git remote add:*)",
       "Bash(git push:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(npx shadcn@latest add:*)",
+      "Bash(npx ts-node:*)",
+      "Bash(node test-analysis-inline.cjs:*)"
     ]
   }
 }

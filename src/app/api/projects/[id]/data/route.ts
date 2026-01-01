@@ -24,7 +24,9 @@ export async function GET(
     const { id: projectId } = await params;
     const { searchParams } = new URL(request.url);
     const tableName = searchParams.get('table');
-    const limit = parseInt(searchParams.get('limit') || '1000');
+    // No limit by default - fetch all records. Use limit=N for pagination
+    const limitParam = searchParams.get('limit');
+    const limit = limitParam ? parseInt(limitParam) : null;
     const offset = parseInt(searchParams.get('offset') || '0');
 
     if (!tableName) {
@@ -78,22 +80,28 @@ export async function GET(
       .from(tableName)
       .select('*', { count: 'exact', head: true });
 
-    // Fetch data with pagination
-    const { data, error } = await projectSupabase
-      .from(tableName)
-      .select('*')
-      .range(offset, offset + limit - 1);
+    // Fetch data - with optional pagination
+    let query = projectSupabase.from(tableName).select('*');
+
+    if (limit !== null) {
+      query = query.range(offset, offset + limit - 1);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       throw error;
     }
 
+    const total = totalCount || 0;
+    const effectiveLimit = limit || total;
+
     return NextResponse.json({
       data: data || [],
-      total: totalCount || 0,
-      limit,
+      total,
+      limit: effectiveLimit,
       offset,
-      hasMore: (totalCount || 0) > offset + limit,
+      hasMore: limit !== null && total > offset + limit,
     });
   } catch (error) {
     console.error('Error fetching data:', error);

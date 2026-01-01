@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "SELAI Admin Hub",
-  description: "Multi-project Supabase administration dashboard",
+  title: "סלע דשבורדים | Sela Dashboards",
+  description: "מערכת ניהול דשבורדים מרכזית לסלע ביטוח",
 };
 
 export default function RootLayout({

@@ -1,697 +1,431 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { useParams, useSearchParams, useRouter } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
 import {
   Database,
-  Table as TableIcon,
   Upload,
   RefreshCw,
-  Plus,
-  Trash2,
-  Edit,
-  FileSpreadsheet,
+  Settings,
   BarChart3,
-  PieChart,
-  Calendar,
-  Hash,
-  Eye,
-  EyeOff,
-  Settings2,
-  Sparkles,
+  Layout,
+  Users,
+  DollarSign,
+  Clock,
+  FileText,
+  ArrowLeft,
+  TrendingUp,
+  Activity,
 } from 'lucide-react';
 import { Header } from '@/components/layout/Header';
-import { DataTable } from '@/components/DataTable';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { Checkbox } from '@/components/ui/checkbox';
+import { Badge } from '@/components/ui/badge';
 import { useProjectsStore } from '@/lib/stores/projectsStore';
-import { useUserPreferencesStore } from '@/lib/stores/userPreferencesStore';
 import { toast } from 'sonner';
-import type { ColumnDef } from '@tanstack/react-table';
-import type { TableRow, ImportedDataStats } from '@/types';
+import { cn } from '@/lib/utils';
 
-export default function ProjectPage() {
+interface ProjectStats {
+  totalRecords: number;
+  totalAccumulation: number;
+  handlers: number;
+  supervisors: number;
+  lastUpdate: string | null;
+  recentImports: {
+    id: string;
+    file_name: string;
+    rows_imported: number;
+    created_at: string;
+    status: string;
+  }[];
+}
+
+interface StatCardProps {
+  title: string;
+  value: string | number;
+  icon: React.ElementType;
+  color: 'blue' | 'emerald' | 'amber' | 'purple' | 'cyan';
+  trend?: string;
+}
+
+function StatCard({ title, value, icon: Icon, color, trend }: StatCardProps) {
+  const colorClasses = {
+    blue: 'from-blue-500/30 to-blue-600/10 text-blue-400',
+    emerald: 'from-emerald-500/30 to-emerald-600/10 text-emerald-400',
+    amber: 'from-amber-500/30 to-amber-600/10 text-amber-400',
+    purple: 'from-purple-500/30 to-purple-600/10 text-purple-400',
+    cyan: 'from-cyan-500/30 to-cyan-600/10 text-cyan-400',
+  };
+
+  return (
+    <Card className="bg-gradient-to-br from-slate-800 to-slate-900 border-slate-700 hover:border-slate-600 transition-all duration-300">
+      <CardContent className="pt-6">
+        <div className="flex items-center gap-4">
+          <div className={cn('w-14 h-14 bg-gradient-to-br rounded-xl flex items-center justify-center', colorClasses[color])}>
+            <Icon className="h-7 w-7" />
+          </div>
+          <div className="flex-1">
+            <p className="text-slate-400 text-sm">{title}</p>
+            <p className="text-2xl font-bold text-white">{value}</p>
+            {trend && (
+              <p className="text-xs text-emerald-400 flex items-center gap-1 mt-1">
+                <TrendingUp className="h-3 w-3" />
+                {trend}
+              </p>
+            )}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+interface QuickLinkProps {
+  href: string;
+  icon: React.ElementType;
+  title: string;
+  description: string;
+  color: 'cyan' | 'green' | 'purple' | 'amber';
+}
+
+function QuickLink({ href, icon: Icon, title, description, color }: QuickLinkProps) {
+  const colorClasses = {
+    cyan: 'hover:border-cyan-500/50 group-hover:from-cyan-500/20 group-hover:to-cyan-600/5',
+    green: 'hover:border-emerald-500/50 group-hover:from-emerald-500/20 group-hover:to-emerald-600/5',
+    purple: 'hover:border-purple-500/50 group-hover:from-purple-500/20 group-hover:to-purple-600/5',
+    amber: 'hover:border-amber-500/50 group-hover:from-amber-500/20 group-hover:to-amber-600/5',
+  };
+
+  const iconColors = {
+    cyan: 'text-cyan-400 bg-cyan-500/20',
+    green: 'text-emerald-400 bg-emerald-500/20',
+    purple: 'text-purple-400 bg-purple-500/20',
+    amber: 'text-amber-400 bg-amber-500/20',
+  };
+
+  return (
+    <Link
+      href={href}
+      className={cn(
+        'group block p-5 bg-gradient-to-br from-slate-800/50 to-slate-900 border border-slate-700 rounded-xl transition-all duration-300',
+        colorClasses[color]
+      )}
+    >
+      <div className="flex items-start gap-4">
+        <div className={cn('w-12 h-12 rounded-xl flex items-center justify-center', iconColors[color])}>
+          <Icon className="h-6 w-6" />
+        </div>
+        <div className="flex-1">
+          <h3 className="text-white font-semibold mb-1 group-hover:text-white/90">{title}</h3>
+          <p className="text-slate-400 text-sm">{description}</p>
+        </div>
+        <ArrowLeft className="h-5 w-5 text-slate-500 group-hover:text-white transition-colors" />
+      </div>
+    </Link>
+  );
+}
+
+function formatNumber(value: number): string {
+  if (value >= 1000000) {
+    return `${(value / 1000000).toFixed(1)}M`;
+  } else if (value >= 1000) {
+    return `${(value / 1000).toFixed(0)}K`;
+  }
+  return value.toLocaleString('he-IL');
+}
+
+function formatDate(dateString: string | null): string {
+  if (!dateString) return '-';
+  const date = new Date(dateString);
+  return date.toLocaleDateString('he-IL', {
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+export default function ProjectHomePage() {
   const params = useParams();
-  const searchParams = useSearchParams();
   const router = useRouter();
   const projectId = params.id as string;
-  const initialTab = searchParams.get('tab') || 'data';
 
-  const {
-    projects,
-    selectedProject,
-    tables,
-    selectedTable,
-    tableData,
-    tableDataPagination,
-    isLoadingTables,
-    isLoadingData,
-    connectToProject,
-    selectTable,
-    fetchTableData,
-    deleteRow,
-  } = useProjectsStore();
-
-  const [activeTab, setActiveTab] = useState(initialTab);
-  const [stats, setStats] = useState<ImportedDataStats | null>(null);
-  const [isLoadingStats, setIsLoadingStats] = useState(false);
-  const [visibleColumns, setVisibleColumns] = useState<Set<string>>(new Set());
-  const [searchFilter, setSearchFilter] = useState('');
-
-  const {
-    getProjectPreferences,
-    setVisibleColumns: saveVisibleColumns,
-    setLastSelectedTable,
-    setFilters,
-  } = useUserPreferencesStore();
+  const { projects, selectedProject, connectToProject, fetchProjects } = useProjectsStore();
+  const [stats, setStats] = useState<ProjectStats | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [projectNotFound, setProjectNotFound] = useState(false);
 
   // Find and connect to project
   useEffect(() => {
-    const project = projects.find((p) => p.id === projectId);
-    if (project && (!selectedProject || selectedProject.id !== projectId)) {
-      connectToProject(project);
-    }
-  }, [projectId, projects, selectedProject, connectToProject]);
+    const findAndConnect = async () => {
+      let project = projects.find((p) => p.id === projectId);
 
-  // Fetch stats when table is selected
+      // If project not found in store, try to refresh
+      if (!project && projects.length >= 0) {
+        console.log('Project not in store, refreshing...');
+        await fetchProjects();
+        // Re-check after refresh
+        const updatedProjects = useProjectsStore.getState().projects;
+        project = updatedProjects.find((p) => p.id === projectId);
+      }
+
+      if (project) {
+        if (!selectedProject || selectedProject.id !== projectId) {
+          connectToProject(project);
+        }
+        setProjectNotFound(false);
+      } else {
+        console.error('Project not found:', projectId);
+        setProjectNotFound(true);
+      }
+    };
+
+    findAndConnect();
+  }, [projectId, projects, selectedProject, connectToProject, fetchProjects]);
+
+  // Fetch project stats
   const fetchStats = useCallback(async () => {
-    if (!selectedTable || !projectId) return;
-
-    setIsLoadingStats(true);
+    setLoading(true);
     try {
-      const response = await fetch(
-        `/api/projects/${projectId}/stats?table=${encodeURIComponent(selectedTable)}`
-      );
-      if (response.ok) {
-        const data = await response.json();
-        setStats(data);
+      const [dataRes, historyRes] = await Promise.all([
+        fetch(`/api/projects/${projectId}/master-data`),
+        fetch(`/api/projects/${projectId}/import-history`),
+      ]);
+
+      const dataResult = await dataRes.json();
+      const historyResult = await historyRes.json();
+
+      if (dataRes.ok && dataResult.stats) {
+        setStats({
+          totalRecords: dataResult.stats.total || 0,
+          totalAccumulation: dataResult.stats.totalAccumulation || 0,
+          handlers: dataResult.stats.uniqueHandlers || 0,
+          supervisors: dataResult.stats.uniqueSupervisors || 0,
+          lastUpdate: historyResult.history?.[0]?.created_at || null,
+          recentImports: historyResult.history?.slice(0, 5) || [],
+        });
       }
     } catch (error) {
       console.error('Error fetching stats:', error);
     } finally {
-      setIsLoadingStats(false);
+      setLoading(false);
     }
-  }, [selectedTable, projectId]);
+  }, [projectId]);
 
-  // Load saved column preferences when table changes
   useEffect(() => {
-    if (selectedTable && projectId) {
-      const prefs = getProjectPreferences(`${projectId}:${selectedTable}`);
-      if (prefs.visible_columns.length > 0) {
-        setVisibleColumns(new Set(prefs.visible_columns));
-      }
-      // Load saved search filter
-      const savedSearch = (prefs.filters?.search as string) || '';
-      setSearchFilter(savedSearch);
-      // Save last selected table
-      setLastSelectedTable(projectId, selectedTable);
-      // Fetch stats
-      fetchStats();
-    }
-  }, [selectedTable, projectId, getProjectPreferences, setLastSelectedTable, fetchStats]);
+    fetchStats();
+  }, [fetchStats]);
 
-  // Handle search change with persistence
-  const handleSearchChange = (value: string) => {
-    setSearchFilter(value);
-    if (selectedTable && projectId) {
-      setFilters(projectId, selectedTable, { search: value });
-    }
-  };
-
-  // Initialize visible columns when data loads
-  useEffect(() => {
-    if (tableData.length > 0 && visibleColumns.size === 0) {
-      const allColumns = Object.keys(tableData[0]);
-      setVisibleColumns(new Set(allColumns));
-    }
-  }, [tableData, visibleColumns.size]);
-
-  const handleTableSelect = (tableName: string) => {
-    selectTable(tableName);
-  };
-
-  const handleColumnToggle = (columnName: string) => {
-    setVisibleColumns((prev) => {
-      const next = new Set(prev);
-      if (next.has(columnName)) {
-        next.delete(columnName);
-      } else {
-        next.add(columnName);
-      }
-      // Save to preferences
-      if (selectedTable && projectId) {
-        saveVisibleColumns(projectId, selectedTable, Array.from(next));
-      }
-      return next;
-    });
-  };
-
-  const handleRefresh = () => {
-    if (selectedTable) {
-      fetchTableData(selectedTable);
-      toast.success('הנתונים רועננו');
-    }
-  };
-
-  const handlePageChange = (page: number) => {
-    if (selectedTable) {
-      fetchTableData(selectedTable, page, tableDataPagination.pageSize);
-    }
-  };
-
-  const handlePageSizeChange = (pageSize: number) => {
-    if (selectedTable) {
-      fetchTableData(selectedTable, 1, pageSize);
-    }
-  };
-
-  const handleDeleteRow = async (id: string | number) => {
-    if (!selectedTable) return;
-
-    if (confirm('האם אתה בטוח שברצונך למחוק את השורה?')) {
-      const success = await deleteRow(selectedTable, id);
-      if (success) {
-        toast.success('השורה נמחקה בהצלחה');
-      } else {
-        toast.error('שגיאה במחיקת השורה');
-      }
-    }
-  };
-
-  // Get all column names from data
-  const allColumnNames = tableData.length > 0 ? Object.keys(tableData[0]) : [];
-
-  // Generate columns dynamically from data (filtered by visibility)
-  const columns: ColumnDef<TableRow>[] = tableData.length > 0
-    ? [
-        ...allColumnNames
-          .filter((key) => visibleColumns.has(key))
-          .map((key) => ({
-            accessorKey: key,
-            header: key,
-            cell: ({ row }: { row: { getValue: (key: string) => unknown } }) => {
-              const value = row.getValue(key);
-              if (value === null || value === undefined) {
-                return <span className="text-slate-500">null</span>;
-              }
-              if (typeof value === 'object') {
-                return (
-                  <pre className="text-xs max-w-xs truncate">
-                    {JSON.stringify(value)}
-                  </pre>
-                );
-              }
-              if (typeof value === 'boolean') {
-                return (
-                  <Badge variant="outline" className={value ? 'text-emerald-400' : 'text-red-400'}>
-                    {value ? 'true' : 'false'}
-                  </Badge>
-                );
-              }
-              return String(value);
-            },
-          })),
-        {
-          id: 'actions',
-          header: 'פעולות',
-          cell: ({ row }: { row: { original: TableRow } }) => {
-            const id = row.original.id;
-            if (!id) return null;
-            return (
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 text-slate-400 hover:text-white"
-                >
-                  <Edit className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 text-slate-400 hover:text-red-400"
-                  onClick={() => handleDeleteRow(id as string | number)}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
-            );
-          },
-        },
-      ]
-    : [];
+  if (projectNotFound) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="text-center">
+          <Database className="h-12 w-12 text-red-500 mx-auto mb-4" />
+          <p className="text-red-400 mb-2">הפרויקט לא נמצא</p>
+          <p className="text-slate-500 text-sm mb-4">ID: {projectId}</p>
+          <Button
+            variant="outline"
+            onClick={() => router.push('/')}
+            className="border-slate-700 text-slate-300"
+          >
+            חזור לדף הבית
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   if (!selectedProject) {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="text-center">
-          <Database className="h-12 w-12 text-slate-600 mx-auto mb-4" />
+          <Database className="h-12 w-12 text-slate-600 mx-auto mb-4 animate-pulse" />
           <p className="text-slate-400">טוען פרויקט...</p>
         </div>
       </div>
     );
   }
 
+  const breadcrumbs = [
+    { label: selectedProject.name },
+  ];
+
   return (
     <div className="flex flex-col h-full">
-      <Header title={selectedProject.name} />
+      <Header breadcrumbs={breadcrumbs} />
 
-      <div className="flex-1 p-6">
-        <Tabs value={activeTab} onValueChange={setActiveTab} dir="rtl">
-          <TabsList className="bg-slate-800 border-slate-700">
-            <TabsTrigger
-              value="dashboard"
-              className="data-[state=active]:bg-emerald-500 data-[state=active]:text-white"
-            >
-              <BarChart3 className="h-4 w-4 ml-2" />
-              דשבורד
-            </TabsTrigger>
-            <TabsTrigger
-              value="data"
-              className="data-[state=active]:bg-emerald-500 data-[state=active]:text-white"
-            >
-              <TableIcon className="h-4 w-4 ml-2" />
-              נתונים
-            </TabsTrigger>
-            <TabsTrigger
-              value="import"
-              className="data-[state=active]:bg-emerald-500 data-[state=active]:text-white"
-              onClick={() => router.push(`/projects/${projectId}/import`)}
-            >
-              <FileSpreadsheet className="h-4 w-4 ml-2" />
-              ייבוא
-            </TabsTrigger>
-            <TabsTrigger
-              value="builder"
-              className="data-[state=active]:bg-blue-500 data-[state=active]:text-white"
-              onClick={() => router.push(`/projects/${projectId}/dashboard-builder`)}
-            >
-              <Sparkles className="h-4 w-4 ml-2" />
-              בונה דשבורד
-            </TabsTrigger>
-            <TabsTrigger
-              value="settings"
-              className="data-[state=active]:bg-emerald-500 data-[state=active]:text-white"
-            >
-              הגדרות
-            </TabsTrigger>
-          </TabsList>
-
-          {/* Dashboard Tab */}
-          <TabsContent value="dashboard" className="space-y-6 mt-4">
-            {/* Table Selection for Dashboard */}
-            <div className="flex items-center gap-4">
-              <Select
-                value={selectedTable || ''}
-                onValueChange={handleTableSelect}
+      <div className="flex-1 p-6 overflow-auto" dir="rtl">
+        <div className="max-w-7xl mx-auto space-y-6">
+          {/* Project Header */}
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-white">{selectedProject.name}</h1>
+              <p className="text-slate-400">{selectedProject.description || 'פרויקט Supabase'}</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-slate-700 text-slate-300 hover:bg-slate-800"
+                onClick={fetchStats}
+                disabled={loading}
               >
-                <SelectTrigger className="w-64 bg-slate-800 border-slate-700">
-                  <SelectValue placeholder="בחר טבלה לצפייה בסטטיסטיקות" />
-                </SelectTrigger>
-                <SelectContent className="bg-slate-800 border-slate-700">
-                  {tables.map((table) => (
-                    <SelectItem
-                      key={table.name}
-                      value={table.name}
-                      className="text-white focus:bg-slate-700"
-                    >
-                      {table.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {selectedTable && (
+                <RefreshCw className={cn('h-4 w-4 ml-2', loading && 'animate-spin')} />
+                רענן
+              </Button>
+              <Link href={`/projects/${projectId}/settings`}>
                 <Button
                   variant="outline"
-                  size="sm"
-                  className="border-slate-700 text-slate-300"
-                  onClick={fetchStats}
-                  disabled={isLoadingStats}
+                  size="icon"
+                  className="border-slate-700 text-slate-300 hover:bg-slate-800"
                 >
-                  <RefreshCw className={`h-4 w-4 ml-2 ${isLoadingStats ? 'animate-spin' : ''}`} />
-                  רענן סטטיסטיקות
+                  <Settings className="h-4 w-4" />
                 </Button>
+              </Link>
+            </div>
+          </div>
+
+          {/* Stats Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <StatCard
+              title="סה״כ רשומות"
+              value={stats ? formatNumber(stats.totalRecords) : '-'}
+              icon={FileText}
+              color="blue"
+            />
+            <StatCard
+              title="צבירה צפויה"
+              value={stats ? `₪${formatNumber(stats.totalAccumulation)}` : '-'}
+              icon={DollarSign}
+              color="emerald"
+            />
+            <StatCard
+              title="מטפלים"
+              value={stats?.handlers || '-'}
+              icon={Users}
+              color="amber"
+            />
+            <StatCard
+              title="עדכון אחרון"
+              value={stats ? formatDate(stats.lastUpdate) : '-'}
+              icon={Clock}
+              color="purple"
+            />
+          </div>
+
+          {/* Quick Links */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <QuickLink
+              href={`/projects/${projectId}/data`}
+              icon={BarChart3}
+              title="תצוגת נתונים"
+              description="צפה בנתונים עם פילטרים וסיכומים"
+              color="cyan"
+            />
+            <QuickLink
+              href={`/projects/${projectId}/import`}
+              icon={Upload}
+              title="ייבוא נתונים"
+              description="העלה קובץ אקסל חדש"
+              color="green"
+            />
+            <QuickLink
+              href={`/projects/${projectId}/dashboard-builder`}
+              icon={Layout}
+              title="בונה דשבורד"
+              description="צור דשבורדים מותאמים"
+              color="purple"
+            />
+          </div>
+
+          {/* Recent Activity */}
+          <Card className="bg-slate-800/50 border-slate-700">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="text-lg text-white flex items-center gap-2">
+                <Activity className="h-5 w-5 text-emerald-400" />
+                פעילות אחרונה
+              </CardTitle>
+              {stats && stats.recentImports.length > 0 && (
+                <Badge variant="outline" className="border-slate-600 text-slate-400">
+                  {stats.recentImports.length} ייבואים אחרונים
+                </Badge>
               )}
-            </div>
-
-            {selectedTable && stats ? (
-              <>
-                {/* Stats Cards */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <Card className="bg-slate-800/50 border-slate-700">
-                    <CardContent className="pt-6">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-sm text-slate-400">סה״כ רשומות</p>
-                          <p className="text-2xl font-bold text-white">
-                            {stats.total_records.toLocaleString()}
-                          </p>
-                        </div>
-                        <div className="p-3 rounded-lg bg-emerald-500/10">
-                          <Hash className="h-6 w-6 text-emerald-500" />
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card className="bg-slate-800/50 border-slate-700">
-                    <CardContent className="pt-6">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-sm text-slate-400">עמודות</p>
-                          <p className="text-2xl font-bold text-white">
-                            {stats.columns.length}
-                          </p>
-                        </div>
-                        <div className="p-3 rounded-lg bg-blue-500/10">
-                          <TableIcon className="h-6 w-6 text-blue-500" />
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  {stats.last_import_date && (
-                    <Card className="bg-slate-800/50 border-slate-700">
-                      <CardContent className="pt-6">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-sm text-slate-400">ייבוא אחרון</p>
-                            <p className="text-lg font-bold text-white">
-                              {new Date(stats.last_import_date).toLocaleDateString('he-IL')}
-                            </p>
-                            <p className="text-xs text-slate-500">
-                              {stats.last_import_rows?.toLocaleString()} שורות
-                            </p>
-                          </div>
-                          <div className="p-3 rounded-lg bg-purple-500/10">
-                            <Calendar className="h-6 w-6 text-purple-500" />
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  )}
-
-                  {stats.status_breakdown && Object.keys(stats.status_breakdown).length > 0 && (
-                    <Card className="bg-slate-800/50 border-slate-700">
-                      <CardContent className="pt-6">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-sm text-slate-400">סטטוסים</p>
-                            <p className="text-2xl font-bold text-white">
-                              {Object.keys(stats.status_breakdown).length}
-                            </p>
-                          </div>
-                          <div className="p-3 rounded-lg bg-amber-500/10">
-                            <PieChart className="h-6 w-6 text-amber-500" />
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  )}
+            </CardHeader>
+            <CardContent>
+              {loading ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="h-6 w-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
                 </div>
-
-                {/* Status Breakdown */}
-                {stats.status_breakdown && Object.keys(stats.status_breakdown).length > 0 && (
-                  <Card className="bg-slate-800/50 border-slate-700">
-                    <CardHeader>
-                      <CardTitle className="text-white text-lg flex items-center gap-2">
-                        <PieChart className="h-5 w-5 text-emerald-500" />
-                        התפלגות סטטוסים
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-3">
-                        {Object.entries(stats.status_breakdown).map(([status, count]) => {
-                          const percentage = (count / stats.total_records) * 100;
-                          return (
-                            <div key={status} className="space-y-1">
-                              <div className="flex justify-between text-sm">
-                                <span className="text-slate-300">{status}</span>
-                                <span className="text-slate-400">
-                                  {count.toLocaleString()} ({percentage.toFixed(1)}%)
-                                </span>
-                              </div>
-                              <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
-                                <div
-                                  className="h-full bg-emerald-500 rounded-full transition-all"
-                                  style={{ width: `${percentage}%` }}
-                                />
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-
-                {/* Column Info */}
-                <Card className="bg-slate-800/50 border-slate-700">
-                  <CardHeader>
-                    <CardTitle className="text-white text-lg flex items-center gap-2">
-                      <TableIcon className="h-5 w-5 text-blue-500" />
-                      מבנה הטבלה
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {stats.columns.map((col) => (
-                        <div
-                          key={col.name}
-                          className="p-3 bg-slate-700/50 rounded-lg border border-slate-600"
-                        >
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-white font-medium">{col.name}</span>
-                            <Badge
-                              variant="outline"
-                              className="border-slate-500 text-slate-400 text-xs"
-                            >
-                              {col.type}
-                            </Badge>
-                          </div>
-                          <div className="text-xs text-slate-500">
-                            {col.unique_values !== undefined && (
-                              <span>{col.unique_values} ערכים ייחודיים</span>
-                            )}
-                            {(col.null_count ?? 0) > 0 && (
-                              <span className="mr-2">• {col.null_count} null</span>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              </>
-            ) : selectedTable && isLoadingStats ? (
-              <div className="flex items-center justify-center h-64">
-                <div className="text-center">
-                  <div className="h-8 w-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-                  <p className="text-slate-400">טוען סטטיסטיקות...</p>
-                </div>
-              </div>
-            ) : (
-              <div className="flex items-center justify-center h-64 border border-dashed border-slate-700 rounded-lg">
-                <div className="text-center">
-                  <BarChart3 className="h-12 w-12 text-slate-600 mx-auto mb-4" />
-                  <p className="text-slate-400">בחר טבלה לצפייה בסטטיסטיקות</p>
-                </div>
-              </div>
-            )}
-          </TabsContent>
-
-          <TabsContent value="data" className="space-y-4 mt-4">
-            {/* Table Selection & Actions */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <Select
-                  value={selectedTable || '__none__'}
-                  onValueChange={(value) => value !== '__none__' && value !== '__loading__' && value !== '__empty__' && handleTableSelect(value)}
-                >
-                  <SelectTrigger className="w-64 bg-slate-800 border-slate-700">
-                    <SelectValue placeholder="בחר טבלה" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-slate-800 border-slate-700">
-                    {isLoadingTables ? (
-                      <SelectItem value="__loading__" disabled className="text-slate-500">
-                        טוען טבלאות...
-                      </SelectItem>
-                    ) : tables.length > 0 ? (
-                      tables.map((table) => (
-                        <SelectItem
-                          key={table.name}
-                          value={table.name}
-                          className="text-white focus:bg-slate-700"
-                        >
-                          {table.name}
-                        </SelectItem>
-                      ))
-                    ) : (
-                      <SelectItem value="__empty__" disabled className="text-slate-500">
-                        לא נמצאו טבלאות
-                      </SelectItem>
-                    )}
-                  </SelectContent>
-                </Select>
-
-                {selectedTable && (
-                  <Badge variant="outline" className="border-slate-600 text-slate-400">
-                    {tableDataPagination.total} שורות
-                  </Badge>
-                )}
-              </div>
-
-              <div className="flex items-center gap-2">
-                {/* Column Visibility Dropdown */}
-                {allColumnNames.length > 0 && (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="border-slate-700 text-slate-300"
-                      >
-                        <Settings2 className="h-4 w-4 ml-2" />
-                        עמודות ({visibleColumns.size}/{allColumnNames.length})
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent
-                      align="end"
-                      className="bg-slate-800 border-slate-700 w-56 max-h-80 overflow-auto"
+              ) : stats && stats.recentImports.length > 0 ? (
+                <div className="space-y-3">
+                  {stats.recentImports.map((item) => (
+                    <div
+                      key={item.id}
+                      className="flex items-center gap-4 p-3 bg-slate-900/50 rounded-lg border border-slate-700"
                     >
-                      <DropdownMenuLabel className="text-slate-400">
-                        הצג/הסתר עמודות
-                      </DropdownMenuLabel>
-                      <DropdownMenuSeparator className="bg-slate-700" />
-                      {allColumnNames.map((col) => (
-                        <DropdownMenuCheckboxItem
-                          key={col}
-                          checked={visibleColumns.has(col)}
-                          onCheckedChange={() => handleColumnToggle(col)}
-                          className="text-slate-300 focus:bg-slate-700"
+                      <div className="w-10 h-10 bg-emerald-500/20 rounded-lg flex items-center justify-center">
+                        <Upload className="h-5 w-5 text-emerald-400" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-white text-sm font-medium">{item.file_name}</p>
+                        <p className="text-slate-500 text-xs">
+                          {item.rows_imported.toLocaleString('he-IL')} שורות יובאו
+                        </p>
+                      </div>
+                      <div className="text-left">
+                        <Badge
+                          className={cn(
+                            'text-xs',
+                            item.status === 'completed'
+                              ? 'bg-emerald-500/20 text-emerald-400'
+                              : 'bg-amber-500/20 text-amber-400'
+                          )}
                         >
-                          {col}
-                        </DropdownMenuCheckboxItem>
-                      ))}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                )}
-
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="border-slate-700 text-slate-300"
-                  onClick={handleRefresh}
-                  disabled={!selectedTable || isLoadingData}
-                >
-                  <RefreshCw className={`h-4 w-4 ml-2 ${isLoadingData ? 'animate-spin' : ''}`} />
-                  רענן
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="border-slate-700 text-slate-300"
-                  onClick={() => router.push(`/projects/${projectId}/import`)}
-                >
-                  <FileSpreadsheet className="h-4 w-4 ml-2" />
-                  ייבוא מאקסל
-                </Button>
-                <Button
-                  size="sm"
-                  className="bg-emerald-500 hover:bg-emerald-600"
-                  disabled={!selectedTable}
-                >
-                  <Plus className="h-4 w-4 ml-2" />
-                  הוסף שורה
-                </Button>
-              </div>
-            </div>
-
-            {/* Data Table */}
-            {selectedTable ? (
-              <DataTable
-                columns={columns}
-                data={tableData}
-                isLoading={isLoadingData}
-                searchKey="id"
-                searchPlaceholder="חיפוש..."
-                initialSearchValue={searchFilter}
-                onSearchChange={handleSearchChange}
-                pagination={{
-                  page: tableDataPagination.page,
-                  pageSize: tableDataPagination.pageSize,
-                  total: tableDataPagination.total,
-                  onPageChange: handlePageChange,
-                  onPageSizeChange: handlePageSizeChange,
-                }}
-              />
-            ) : (
-              <div className="flex items-center justify-center h-64 border border-dashed border-slate-700 rounded-lg">
-                <div className="text-center">
-                  <TableIcon className="h-12 w-12 text-slate-600 mx-auto mb-4" />
-                  <p className="text-slate-400">בחר טבלה לצפייה בנתונים</p>
+                          {item.status === 'completed' ? 'הושלם' : item.status}
+                        </Badge>
+                        <p className="text-slate-500 text-xs mt-1">
+                          {formatDate(item.created_at)}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              </div>
-            )}
-          </TabsContent>
+              ) : (
+                <div className="text-center py-8">
+                  <Activity className="h-10 w-10 text-slate-600 mx-auto mb-3" />
+                  <p className="text-slate-400">אין פעילות אחרונה</p>
+                  <Link href={`/projects/${projectId}/import`}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="mt-4 border-slate-700 text-slate-300"
+                    >
+                      <Upload className="h-4 w-4 ml-2" />
+                      ייבא נתונים ראשונים
+                    </Button>
+                  </Link>
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
-          <TabsContent value="settings" className="mt-4">
-            <div className="max-w-2xl space-y-6">
-              <div className="p-6 bg-slate-800/50 rounded-lg border border-slate-700">
-                <h3 className="text-lg font-semibold text-white mb-4">פרטי הפרויקט</h3>
-                <dl className="space-y-4">
-                  <div>
-                    <dt className="text-sm text-slate-400">שם</dt>
-                    <dd className="text-white">{selectedProject.name}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-sm text-slate-400">URL</dt>
-                    <dd className="text-white font-mono text-sm">
-                      {selectedProject.supabase_url}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-sm text-slate-400">תיאור</dt>
-                    <dd className="text-white">
-                      {selectedProject.description || '-'}
-                    </dd>
-                  </div>
-                </dl>
+          {/* Connection Info */}
+          <Card className="bg-slate-800/30 border-slate-700/50">
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-3 h-3 bg-emerald-500 rounded-full animate-pulse" />
+                  <span className="text-slate-400 text-sm">מחובר ל-Supabase</span>
+                </div>
+                <code className="text-xs text-slate-500 bg-slate-900/50 px-3 py-1 rounded">
+                  {selectedProject.supabase_url}
+                </code>
               </div>
-
-              <div className="p-6 bg-red-500/10 rounded-lg border border-red-500/30">
-                <h3 className="text-lg font-semibold text-red-400 mb-2">אזור מסוכן</h3>
-                <p className="text-sm text-slate-400 mb-4">
-                  מחיקת הפרויקט היא פעולה בלתי הפיכה
-                </p>
-                <Button variant="destructive" size="sm">
-                  <Trash2 className="h-4 w-4 ml-2" />
-                  מחק פרויקט
-                </Button>
-              </div>
-            </div>
-          </TabsContent>
-        </Tabs>
+            </CardContent>
+          </Card>
+        </div>
       </div>
-
     </div>
   );
 }

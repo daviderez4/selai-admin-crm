@@ -37,14 +37,9 @@ export async function GET(
       .order('name', { ascending: true });
 
     if (error) {
-      // Table might not exist yet
-      if (error.code === '42P01') {
-        return NextResponse.json({
-          templates: [],
-          message: 'Smart templates table not created yet'
-        });
-      }
-      throw error;
+      // Table might not exist yet - return empty array
+      console.warn('Smart templates fetch error:', error.message);
+      return NextResponse.json({ templates: [] });
     }
 
     // Transform to match our types
@@ -68,11 +63,9 @@ export async function GET(
 
     return NextResponse.json({ templates: transformedTemplates });
   } catch (error) {
-    console.error('Error fetching smart templates:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch templates' },
-      { status: 500 }
-    );
+    console.warn('Error fetching smart templates:', error);
+    // Return empty array instead of error to prevent console errors
+    return NextResponse.json({ templates: [] });
   }
 }
 

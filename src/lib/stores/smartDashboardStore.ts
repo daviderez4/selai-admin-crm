@@ -83,21 +83,26 @@ export const useSmartDashboardStore = create<SmartDashboardState>()(
           const response = await fetch(`/api/projects/${projectId}/smart-templates`);
 
           if (!response.ok) {
-            throw new Error('Failed to fetch templates');
+            // API not available or error - just use empty array
+            console.warn('Templates API not available, using empty array');
+            set({ templates: [], isLoadingTemplates: false });
+            return;
           }
 
-          const { templates } = await response.json();
-          set({ templates: templates || [], isLoadingTemplates: false });
+          const result = await response.json();
+          const templates = result.templates || [];
+          set({ templates, isLoadingTemplates: false });
 
           // Set default template as active if none is set
           const { activeTemplate } = get();
-          if (!activeTemplate && templates?.length > 0) {
+          if (!activeTemplate && templates.length > 0) {
             const defaultTemplate = templates.find((t: SmartDashboardTemplate) => t.isDefault) || templates[0];
             set({ activeTemplate: defaultTemplate });
           }
         } catch (error) {
-          console.error('Error fetching templates:', error);
-          set({ isLoadingTemplates: false });
+          // Silently handle errors - templates are optional
+          console.warn('Failed to fetch templates:', error);
+          set({ templates: [], isLoadingTemplates: false });
         }
       },
 

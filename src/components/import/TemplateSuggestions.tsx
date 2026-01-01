@@ -4,6 +4,21 @@ import { Check, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 
+interface CalculatedField {
+  name: string;
+  displayName: string;
+  formula: string;
+  sourceColumns: string[];
+  operation: 'sum' | 'subtract' | 'multiply' | 'divide' | 'concat';
+}
+
+interface ChartConfig {
+  type: 'pie' | 'bar' | 'line' | 'area';
+  title: string;
+  valueColumn: string;
+  groupByColumn: string;
+}
+
 interface TemplateSuggestion {
   id: string;
   name: string;
@@ -12,39 +27,43 @@ interface TemplateSuggestion {
   columns: string[];
   cardColumns: string[];
   filterColumns: string[];
+  calculatedFields?: CalculatedField[];
+  charts?: ChartConfig[];
 }
 
 interface TemplateSuggestionsProps {
   suggestions: TemplateSuggestion[];
-  selectedId: string | null;
-  onSelect: (template: TemplateSuggestion) => void;
+  selectedIds: string[];
+  onToggle: (template: TemplateSuggestion) => void;
   onCustomize: () => void;
+  totalSelectedColumns: number;
 }
 
 export function TemplateSuggestions({
   suggestions,
-  selectedId,
-  onSelect,
+  selectedIds,
+  onToggle,
   onCustomize,
+  totalSelectedColumns,
 }: TemplateSuggestionsProps) {
   return (
     <div className="space-y-4">
       <div className="text-center mb-6">
-        <h2 className="text-xl font-bold text-white mb-2">בחר תבנית לדשבורד</h2>
+        <h2 className="text-xl font-bold text-white mb-2">בחר תבניות לדשבורד</h2>
         <p className="text-slate-400 text-sm">
-          בחר תבנית מוכנה או התאם אישית את העמודות
+          ניתן לבחור מספר תבניות - העמודות ישולבו יחד
         </p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {suggestions.map((template) => {
-          const isSelected = selectedId === template.id;
+          const isSelected = selectedIds.includes(template.id);
           const isCustom = template.id === 'custom';
 
           return (
             <button
               key={template.id}
-              onClick={() => isCustom ? onCustomize() : onSelect(template)}
+              onClick={() => isCustom ? onCustomize() : onToggle(template)}
               className={cn(
                 'relative p-5 rounded-xl border-2 text-right transition-all',
                 'hover:border-emerald-500/50 hover:bg-slate-700/50',
@@ -86,6 +105,16 @@ export function TemplateSuggestions({
                       {template.filterColumns.length} פילטרים
                     </Badge>
                   )}
+                  {template.calculatedFields && template.calculatedFields.length > 0 && (
+                    <Badge variant="outline" className="border-amber-600 text-amber-400">
+                      {template.calculatedFields.length} חישוב
+                    </Badge>
+                  )}
+                  {template.charts && template.charts.length > 0 && (
+                    <Badge variant="outline" className="border-emerald-600 text-emerald-400">
+                      {template.charts.length} גרפים
+                    </Badge>
+                  )}
                 </div>
               )}
 
@@ -108,6 +137,18 @@ export function TemplateSuggestions({
           );
         })}
       </div>
+
+      {/* Total selected columns */}
+      {totalSelectedColumns > 0 && (
+        <div className="mt-4 p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-lg">
+          <div className="flex items-center justify-between">
+            <span className="text-emerald-400 font-medium">סה&quot;כ עמודות נבחרו</span>
+            <Badge className="bg-emerald-500 text-white text-lg px-3">
+              {totalSelectedColumns}
+            </Badge>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

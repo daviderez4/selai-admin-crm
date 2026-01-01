@@ -1,6 +1,6 @@
 'use client';
 
-import { Bell, Search, User } from 'lucide-react';
+import { Bell, Search, User, Home, ChevronLeft, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -16,14 +16,24 @@ import { Badge } from '@/components/ui/badge';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useProjectsStore } from '@/lib/stores/projectsStore';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
-interface HeaderProps {
-  title?: string;
+export interface BreadcrumbItem {
+  label: string;
+  href?: string;
 }
 
-export function Header({ title }: HeaderProps) {
+export interface HeaderProps {
+  title?: string;
+  subtitle?: string;
+  breadcrumbs?: BreadcrumbItem[];
+  showBackButton?: boolean;
+}
+
+export function Header({ title, subtitle, breadcrumbs, showBackButton = false }: HeaderProps) {
   const { user, signOut } = useAuthStore();
   const { selectedProject } = useProjectsStore();
+  const router = useRouter();
 
   const handleSignOut = async () => {
     await signOut();
@@ -38,19 +48,68 @@ export function Header({ title }: HeaderProps) {
   return (
     <header className="h-16 border-b border-slate-800 bg-slate-900/50 backdrop-blur-sm" dir="rtl">
       <div className="flex items-center justify-between h-full px-6">
-        {/* Title & Project Badge */}
+        {/* Left Side: Back Button + Breadcrumbs/Title */}
         <div className="flex items-center gap-4">
-          {title && (
-            <h1 className="text-xl font-semibold text-white">{title}</h1>
+          {/* Back Button */}
+          {showBackButton && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => router.back()}
+              className="flex items-center gap-2 text-slate-400 hover:text-white hover:bg-slate-800"
+            >
+              <ArrowRight className="h-4 w-4" />
+              חזור
+            </Button>
           )}
-          {selectedProject && (
-            <Badge variant="outline" className="border-emerald-500/50 text-emerald-400">
-              {selectedProject.name}
-            </Badge>
+
+          {/* Breadcrumbs */}
+          {breadcrumbs && breadcrumbs.length > 0 ? (
+            <nav className="flex items-center gap-2 text-sm">
+              <Link
+                href="/projects"
+                className="flex items-center gap-1 text-slate-400 hover:text-white transition-colors"
+              >
+                <Home className="h-4 w-4" />
+                <span>דשבורד</span>
+              </Link>
+              {breadcrumbs.map((item, index) => (
+                <div key={index} className="flex items-center gap-2">
+                  <ChevronLeft className="h-4 w-4 text-slate-600" />
+                  {item.href ? (
+                    <Link
+                      href={item.href}
+                      className="text-slate-400 hover:text-white transition-colors"
+                    >
+                      {item.label}
+                    </Link>
+                  ) : (
+                    <span className="text-white font-medium">{item.label}</span>
+                  )}
+                </div>
+              ))}
+            </nav>
+          ) : (
+            /* Fallback to Title & Subtitle */
+            <div className="flex items-center gap-4">
+              {title && (
+                <div className="flex items-center gap-2">
+                  <h1 className="text-xl font-semibold text-white">{title}</h1>
+                  {subtitle && (
+                    <span className="text-sm text-slate-400">/ {subtitle}</span>
+                  )}
+                </div>
+              )}
+              {selectedProject && !breadcrumbs && (
+                <Badge variant="outline" className="border-emerald-500/50 text-emerald-400">
+                  {selectedProject.name}
+                </Badge>
+              )}
+            </div>
           )}
         </div>
 
-        {/* Search & Actions */}
+        {/* Right Side: Search & Actions */}
         <div className="flex items-center gap-4">
           {/* Search */}
           <div className="relative hidden md:block">

@@ -182,6 +182,23 @@ function formatDisplayName(name: string): string {
     .trim();
 }
 
+// Calculated field definition
+interface CalculatedField {
+  name: string;
+  displayName: string;
+  formula: string;
+  sourceColumns: string[];
+  operation: 'sum' | 'subtract' | 'multiply' | 'divide' | 'concat';
+}
+
+// Chart configuration
+interface ChartConfig {
+  type: 'pie' | 'bar' | 'line' | 'area';
+  title: string;
+  valueColumn: string;
+  groupByColumn: string;
+}
+
 // Suggest templates based on analysis
 interface TemplateSuggestion {
   id: string;
@@ -191,13 +208,125 @@ interface TemplateSuggestion {
   columns: string[];
   cardColumns: string[];
   filterColumns: string[];
+  calculatedFields?: CalculatedField[];
+  charts?: ChartConfig[];
 }
 
 function suggestTemplates(
   categories: Record<ColumnCategory, AnalyzedColumn[]>,
-  recommendedFields: string[]
+  recommendedFields: string[],
+  allColumns: AnalyzedColumn[]
 ): TemplateSuggestion[] {
   const suggestions: TemplateSuggestion[] = [];
+
+  // Helper to find column by partial name match
+  const findColumn = (patterns: string[]): string | null => {
+    for (const pattern of patterns) {
+      const found = allColumns.find(c =>
+        c.name.includes(pattern) || c.name.toLowerCase().includes(pattern.toLowerCase())
+      );
+      if (found) return found.name;
+    }
+    return null;
+  };
+
+  // Helper to find all columns matching patterns
+  const findColumns = (patterns: string[]): string[] => {
+    const found: string[] = [];
+    for (const pattern of patterns) {
+      const match = allColumns.find(c =>
+        c.name.includes(pattern) || c.name.toLowerCase().includes(pattern.toLowerCase())
+      );
+      if (match && !found.includes(match.name)) {
+        found.push(match.name);
+      }
+    }
+    return found;
+  };
+
+  // Custom Financial Template - "דוח פיננסי"
+  // Specific fields requested by user
+  const financialFields = {
+    tzvira: findColumn(['סה"כ צבירה צפויה מניוד', 'צבירה צפויה', 'סהכ צבירה']),
+    hafkada: findColumn(['הפקדה חד פעמית צפויה', 'הפקדה חד פעמית', 'הפקדה צפויה']),
+    productType: findColumn(['סוג מוצר חדש', 'סוג מוצר', 'סוג_מוצר']),
+    manufacturer: findColumn(['יצרן חדש', 'יצרן', 'יצרן_חדש']),
+    docDate: findColumn(['תאריך העברת מסמכים ליצרן', 'תאריך העברת מסמכים', 'תאריך מסמכים']),
+  };
+
+  // Check if we have at least some of the specific financial fields
+  const hasSpecificFinancialFields = financialFields.tzvira || financialFields.hafkada;
+
+  if (hasSpecificFinancialFields) {
+    const templateColumns: string[] = [];
+    const cardCols: string[] = [];
+    const filterCols: string[] = [];
+
+    // Add available columns
+    if (financialFields.tzvira) {
+      templateColumns.push(financialFields.tzvira);
+      cardCols.push(financialFields.tzvira);
+    }
+    if (financialFields.hafkada) {
+      templateColumns.push(financialFields.hafkada);
+      cardCols.push(financialFields.hafkada);
+    }
+    if (financialFields.productType) {
+      templateColumns.push(financialFields.productType);
+      filterCols.push(financialFields.productType);
+    }
+    if (financialFields.manufacturer) {
+      templateColumns.push(financialFields.manufacturer);
+      filterCols.push(financialFields.manufacturer);
+    }
+    if (financialFields.docDate) {
+      templateColumns.push(financialFields.docDate);
+      filterCols.push(financialFields.docDate);
+    }
+
+    // Create calculated field definition
+    const calculatedFields: CalculatedField[] = [];
+    if (financialFields.tzvira && financialFields.hafkada) {
+      calculatedFields.push({
+        name: 'סהכ_צפוי',
+        displayName: 'סה"כ צפוי',
+        formula: `${financialFields.tzvira} + ${financialFields.hafkada}`,
+        sourceColumns: [financialFields.tzvira, financialFields.hafkada],
+        operation: 'sum',
+      });
+    }
+
+    // Create chart configurations
+    const charts: ChartConfig[] = [];
+    if (financialFields.manufacturer) {
+      charts.push({
+        type: 'pie',
+        title: 'סה"כ צפוי לפי יצרן',
+        valueColumn: calculatedFields.length > 0 ? 'סהכ_צפוי' : (financialFields.tzvira || templateColumns[0]),
+        groupByColumn: financialFields.manufacturer,
+      });
+    }
+    if (financialFields.productType) {
+      charts.push({
+        type: 'bar',
+        title: 'סה"כ צפוי לפי סוג מוצר',
+        valueColumn: calculatedFields.length > 0 ? 'סהכ_צפוי' : (financialFields.tzvira || templateColumns[0]),
+        groupByColumn: financialFields.productType,
+      });
+    }
+
+    suggestions.push({
+      id: 'financial',
+      name: 'דוח פיננסי',
+      icon: '💎',
+      description: 'צבירה צפויה, הפקדות, יצרנים וסוגי מוצרים',
+      columns: templateColumns,
+      cardColumns: cardCols,
+      filterColumns: filterCols,
+      calculatedFields: calculatedFields.length > 0 ? calculatedFields : undefined,
+      charts: charts.length > 0 ? charts : undefined,
+    });
+  }
 
   // Commission Report - has financial + status + dates
   const hasFinancial = categories.financial.length >= 2;
@@ -434,7 +563,7 @@ export async function POST(
       .map(c => c.name);
 
     // Suggest templates
-    const templateSuggestions = suggestTemplates(categories, recommendedFields);
+    const templateSuggestions = suggestTemplates(categories, recommendedFields, analyzedColumns);
 
     return NextResponse.json({
       success: true,

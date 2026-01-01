@@ -1,17 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import crypto from 'crypto';
 
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || crypto.randomBytes(32).toString('hex');
-
-function encrypt(text: string): string {
-  const iv = crypto.randomBytes(16);
-  const key = Buffer.from(ENCRYPTION_KEY.slice(0, 32), 'utf-8');
-  const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
-  let encrypted = cipher.update(text, 'utf8', 'hex');
-  encrypted += cipher.final('hex');
-  return iv.toString('hex') + ':' + encrypted;
-}
+// Central Supabase URL - ALL projects use this
+const CENTRAL_SUPABASE_URL = process.env.CENTRAL_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 
 export async function POST(request: Request) {
   try {
@@ -25,37 +16,62 @@ export async function POST(request: Request) {
       );
     }
 
-    const { name, supabase_url, supabase_anon_key, service_key, description } = await request.json();
+    const {
+      name,
+      description,
+      table_name,
+      data_type,
+      icon,
+      color,
+    } = await request.json();
 
-    if (!name || !supabase_url || !supabase_anon_key || !service_key) {
+    if (!name) {
       return NextResponse.json(
-        { error: 'Missing required fields' },
+        { error: 'Project name is required' },
         { status: 400 }
       );
     }
 
-    // Validate Supabase URL format
-    try {
-      new URL(supabase_url);
-    } catch {
+    // Get credentials from ANY existing project (they all use the same Supabase)
+    const { data: existingProject } = await supabase
+      .from('projects')
+      .select('supabase_url, supabase_anon_key, supabase_service_key')
+      .limit(1)
+      .single();
+
+    // Determine the Supabase URL and keys
+    let finalSupabaseUrl = CENTRAL_SUPABASE_URL;
+    let finalAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+    let encryptedServiceKey = '';
+
+    if (existingProject) {
+      // Use credentials from existing project (already encrypted)
+      finalSupabaseUrl = CENTRAL_SUPABASE_URL; // Always use central URL!
+      finalAnonKey = existingProject.supabase_anon_key;
+      encryptedServiceKey = existingProject.supabase_service_key;
+    } else {
+      // First project - need to provide credentials via API or env
       return NextResponse.json(
-        { error: 'Invalid Supabase URL' },
+        { error: 'No existing project found. Please create the first project with full credentials.' },
         { status: 400 }
       );
     }
 
-    // Encrypt the service key
-    const encryptedKey = encrypt(service_key);
+    console.log('Creating project with central Supabase:', finalSupabaseUrl);
 
-    // Create the project - using actual column names from database
+    // Create the project
     const { data: project, error: projectError } = await supabase
       .from('projects')
       .insert({
         name,
-        supabase_url,
-        supabase_anon_key,
-        supabase_service_key: encryptedKey,
+        supabase_url: finalSupabaseUrl,
+        supabase_anon_key: finalAnonKey,
+        supabase_service_key: encryptedServiceKey,
         description,
+        table_name: table_name || 'master_data',
+        data_type: data_type || 'custom',
+        icon: icon || 'layout-dashboard',
+        color: color || 'slate',
         created_by: user.id,
       })
       .select()
@@ -63,7 +79,6 @@ export async function POST(request: Request) {
 
     if (projectError) {
       console.error('Error creating project:', projectError);
-      // Check if it's a missing table/column error
       if (projectError.code === 'PGRST204' || projectError.code === '42P01') {
         return NextResponse.json(
           { error: 'Database tables not configured. Please run schema.sql in Supabase SQL Editor.' },
@@ -87,7 +102,6 @@ export async function POST(request: Request) {
 
     if (accessError) {
       console.error('Error granting access:', accessError);
-      // Rollback project creation
       await supabase.from('projects').delete().eq('id', project.id);
       return NextResponse.json(
         { error: 'Failed to grant access' },
@@ -100,7 +114,11 @@ export async function POST(request: Request) {
       user_id: user.id,
       project_id: project.id,
       action: 'create_project',
-      details: { project_name: name },
+      details: {
+        project_name: name,
+        table_name: table_name || 'master_data',
+        supabase_url: finalSupabaseUrl,
+      },
     });
 
     return NextResponse.json({ project });
