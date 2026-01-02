@@ -733,7 +733,7 @@ export default function ImportPage() {
                       <div>
                         <h3 className="text-white font-bold">נתונים קיימים</h3>
                         <p className="text-slate-400 text-sm">
-                          {currentStats.totalRecords.toLocaleString('he-IL')} רשומות בטבלת master_data
+                          {currentStats.totalRecords.toLocaleString('he-IL')} רשומות בטבלת {projectInfo?.table_name || 'master_data'}
                         </p>
                         {currentStats.lastImport && (
                           <p className="text-slate-500 text-xs">
@@ -1223,7 +1223,7 @@ export default function ImportPage() {
             </div>
 
             <p className="text-slate-300 mb-6">
-              האם אתה בטוח שברצונך למחוק את כל {currentStats.totalRecords.toLocaleString('he-IL')} הרשומות מטבלת master_data?
+              האם אתה בטוח שברצונך למחוק את כל {currentStats.totalRecords.toLocaleString('he-IL')} הרשומות מטבלת {projectInfo?.table_name || 'master_data'}?
             </p>
 
             <div className="flex gap-3">

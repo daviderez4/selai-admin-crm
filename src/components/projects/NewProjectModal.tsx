@@ -90,9 +90,34 @@ export function NewProjectModal({ open, onOpenChange, onProjectCreated }: NewPro
     setError(null);
     try {
       const buffer = await file.arrayBuffer();
-      const workbook = XLSX.read(buffer, { type: 'array', cellDates: true });
+
+      // Try different read options to handle various Excel formats
+      let workbook;
+      try {
+        workbook = XLSX.read(buffer, {
+          type: 'array',
+          cellDates: true,
+          codepage: 65001, // UTF-8
+        });
+      } catch (xlsxError) {
+        // Try with different options if first attempt fails
+        console.warn('First XLSX read attempt failed, trying alternative:', xlsxError);
+        workbook = XLSX.read(buffer, {
+          type: 'array',
+          raw: true,
+        });
+      }
+
+      if (!workbook.SheetNames || workbook.SheetNames.length === 0) {
+        throw new Error('לא נמצאו גיליונות בקובץ');
+      }
+
       const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-      const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as unknown[][];
+      const jsonData = XLSX.utils.sheet_to_json(worksheet, {
+        header: 1,
+        raw: false,
+        defval: '',
+      }) as unknown[][];
 
       if (jsonData.length < 2) {
         throw new Error('הקובץ ריק או ללא נתונים');
@@ -101,29 +126,48 @@ export function NewProjectModal({ open, onOpenChange, onProjectCreated }: NewPro
       const headers = jsonData[0] as string[];
       const firstRow = jsonData[1] as unknown[];
 
-      const columns: DetectedColumn[] = headers.map((header, index) => {
-        const sample = firstRow[index];
-        let type: 'text' | 'number' | 'date' | 'boolean' = 'text';
+      const columns: DetectedColumn[] = headers
+        .filter(h => h && String(h).trim()) // Filter out empty headers
+        .map((header, index) => {
+          const sample = firstRow[index];
+          let type: 'text' | 'number' | 'date' | 'boolean' = 'text';
 
-        if (typeof sample === 'number') {
-          type = 'number';
-        } else if (sample instanceof Date) {
-          type = 'date';
-        } else if (typeof sample === 'boolean') {
-          type = 'boolean';
-        }
+          if (typeof sample === 'number') {
+            type = 'number';
+          } else if (sample instanceof Date) {
+            type = 'date';
+          } else if (typeof sample === 'boolean') {
+            type = 'boolean';
+          } else if (typeof sample === 'string') {
+            // Try to detect number strings
+            const cleaned = sample.replace(/[,₪$€%\s]/g, '').trim();
+            if (cleaned && !isNaN(Number(cleaned))) {
+              type = 'number';
+            }
+          }
 
-        return {
-          name: String(header || `col_${index + 1}`).trim(),
-          type,
-          sample: sample !== null && sample !== undefined ? String(sample).slice(0, 50) : '-',
-        };
-      });
+          return {
+            name: String(header || `col_${index + 1}`).trim(),
+            type,
+            sample: sample !== null && sample !== undefined ? String(sample).slice(0, 50) : '-',
+          };
+        });
+
+      if (columns.length === 0) {
+        throw new Error('לא נמצאו עמודות בקובץ');
+      }
 
       setDetectedColumns(columns);
       setUploadedFile(file);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'שגיאה בניתוח הקובץ');
+      console.error('Excel parse error:', err);
+      const errorMessage = err instanceof Error ? err.message : 'שגיאה בניתוח הקובץ';
+      // Provide more helpful error messages
+      if (errorMessage.includes('Bad uncompressed size') || errorMessage.includes('compression')) {
+        setError('שגיאה בקריאת הקובץ - נסה לשמור את הקובץ מחדש כ-xlsx או להמיר ל-csv');
+      } else {
+        setError(errorMessage);
+      }
     } finally {
       setIsAnalyzing(false);
     }
@@ -201,39 +245,29 @@ export function NewProjectModal({ open, onOpenChange, onProjectCreated }: NewPro
       console.log('New project ID:', project?.id);
       console.log('New project name:', project?.name);
 
-      // If we have an uploaded file, import data
+      // If we have an uploaded file, import data using the import-master API
       if (uploadedFile && detectedColumns.length > 0) {
         console.log('Importing file to table:', formData.selectedTable);
-
-        const sanitizeColumnName = (name: string): string => {
-          return name
-            .toLowerCase()
-            .replace(/\s+/g, '_')
-            .replace(/[^a-z0-9_]/g, '')
-            .replace(/^_+|_+$/g, '')
-            || 'col';
-        };
 
         const importFormData = new FormData();
         importFormData.append('file', uploadedFile);
         importFormData.append('tableName', formData.selectedTable);
-        importFormData.append('skipFirstRow', 'true');
+        importFormData.append('importMode', 'append');
+        importFormData.append('importMonth', String(new Date().getMonth() + 1));
+        importFormData.append('importYear', String(new Date().getFullYear()));
 
-        const columnMappings = detectedColumns.map(col => ({
-          excelColumn: col.name,
-          dbColumn: sanitizeColumnName(col.name),
-          transform: col.type === 'number' ? 'number' : col.type === 'date' ? 'date' : 'string',
-        }));
-        importFormData.append('columnMappings', JSON.stringify(columnMappings));
-
-        const importRes = await fetch(`/api/projects/${project.id}/excel/import`, {
+        const importRes = await fetch(`/api/projects/${project.id}/excel/import-master`, {
           method: 'POST',
           body: importFormData,
         });
 
+        const importResult = await importRes.json();
+
         if (!importRes.ok) {
-          const importError = await importRes.json();
-          console.warn('Import warning:', importError);
+          console.warn('Import warning:', importResult);
+          // Don't fail project creation, just warn
+        } else {
+          console.log('Import success:', importResult.message);
         }
       }
 
