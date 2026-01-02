@@ -160,8 +160,9 @@ export async function POST(
         });
 
         // Base data for all tables - raw_data is now an OBJECT with Hebrew keys!
+        // Clean the raw_data object to ensure valid JSON (removes undefined, functions, etc.)
         const baseData = {
-          raw_data: rawDataObject, // Store as JSONB object with Hebrew column names
+          raw_data: JSON.parse(JSON.stringify(rawDataObject)), // Store as JSONB object with Hebrew column names
           project_id: projectId,
           import_batch: batchId,
           import_date: importDate,
@@ -258,9 +259,10 @@ NOTIFY pgrst, 'reload schema';`,
       if (val === null || val === undefined) return 'NULL';
       if (typeof val === 'number') return String(val);
       if (typeof val === 'boolean') return val ? 'TRUE' : 'FALSE';
-      if (Array.isArray(val)) {
-        // For JSONB columns, escape the JSON properly
-        const jsonStr = JSON.stringify(val).replace(/'/g, "''");
+      // Handle objects and arrays as JSONB
+      if (typeof val === 'object') {
+        // Clean and serialize the object to ensure valid JSON
+        const jsonStr = JSON.stringify(JSON.parse(JSON.stringify(val))).replace(/'/g, "''");
         return `'${jsonStr}'::jsonb`;
       }
       return `'${String(val).replace(/'/g, "''")}'`;
