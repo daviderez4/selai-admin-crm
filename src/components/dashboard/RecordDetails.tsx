@@ -598,24 +598,33 @@ function MasterDataRecordDetails({ record }: { record: Record<string, unknown> }
 export function RecordDetails({ isOpen, onClose, record, tableName }: RecordDetailsProps) {
   if (!record) return null;
 
-  // Determine record type
-  const isMasterData = tableName === 'master_data' || isMasterDataRecord(record);
-  const isInsuranceData = tableName === 'insurance_data' || isInsuranceDataRecord(record);
+  // Debug: log what we received
+  console.log('RecordDetails - tableName:', tableName);
+  console.log('RecordDetails - record keys:', Object.keys(record));
+
+  // Determine record type - check tableName FIRST before heuristics
+  // Insurance data takes priority if tableName matches
+  const isInsuranceData = tableName === 'insurance_data' ||
+    (tableName !== 'master_data' && isInsuranceDataRecord(record));
+  const isMasterData = !isInsuranceData &&
+    (tableName === 'master_data' || isMasterDataRecord(record));
+
+  console.log('RecordDetails - isInsuranceData:', isInsuranceData, 'isMasterData:', isMasterData);
 
   // Determine panel title
   const getPanelTitle = () => {
-    if (isMasterData) return 'פרטי תהליך';
     if (isInsuranceData) return 'פרטי תהליך';
+    if (isMasterData) return 'פרטי תהליך';
     return 'פרטי רשומה';
   };
 
   // Render appropriate content
   const renderContent = () => {
-    if (isMasterData) {
-      return <MasterDataRecordDetails record={record} />;
-    }
     if (isInsuranceData) {
       return <InsuranceDataRecordDetails record={record} />;
+    }
+    if (isMasterData) {
+      return <MasterDataRecordDetails record={record} />;
     }
     return <DynamicRecordDetails record={record} onClose={onClose} />;
   };
