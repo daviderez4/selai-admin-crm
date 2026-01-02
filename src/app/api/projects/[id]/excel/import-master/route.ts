@@ -34,6 +34,9 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const startTime = Date.now();
+  let importLogId: string | null = null;
+
   try {
     const { id: projectId } = await params;
     const supabase = await createClient();
@@ -82,6 +85,23 @@ export async function POST(
     }
 
     console.log('Import to table:', TABLE_NAME, 'for project:', project.name);
+
+    // Create import log entry at the start
+    const { data: importLog } = await supabase
+      .from('import_logs')
+      .insert({
+        project_id: projectId,
+        user_id: user.id,
+        file_name: file.name,
+        file_size: file.size,
+        target_table: TABLE_NAME,
+        status: 'processing',
+        import_options: { importMode, importMonth, importYear, sheetName },
+      })
+      .select('id')
+      .single();
+
+    importLogId = importLog?.id || null;
 
     // Generate batch ID
     const batchId = `batch_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -328,22 +348,27 @@ NOTIFY pgrst, 'reload schema';`,
       }
     }
 
-    console.log(`Master import - Final: imported=${imported}, errors=${errors.length}`);
+    const durationMs = Date.now() - startTime;
+    const finalStatus = errors.length === 0 ? 'success' : (imported > 0 ? 'partial' : 'failed');
 
-    // Log the import
-    await supabase.from('import_history').insert({
-      user_id: user.id,
-      project_id: projectId,
-      table_name: TABLE_NAME,
-      file_name: file.name,
-      rows_imported: imported,
-      status: errors.length === 0 ? 'completed' : 'completed_with_errors',
-      error_message: errors.length > 0 ? errors.slice(0, 5).join('; ') : null,
-      batch_id: batchId,
-      import_month: importMonth,
-      import_year: importYear,
-      import_mode: importMode,
-    });
+    console.log(`Master import - Final: imported=${imported}, errors=${errors.length}, duration=${durationMs}ms`);
+
+    // Update import log with results
+    if (importLogId) {
+      await supabase
+        .from('import_logs')
+        .update({
+          status: finalStatus,
+          rows_total: transformedData.length,
+          rows_imported: imported,
+          rows_failed: transformedData.length - imported,
+          error_message: errors.length > 0 ? errors.slice(0, 3).join('; ') : null,
+          error_details: errors.length > 0 ? { errors: errors.slice(0, 20) } : null,
+          completed_at: new Date().toISOString(),
+          duration_ms: durationMs,
+        })
+        .eq('id', importLogId);
+    }
 
     // Log audit
     await supabase.from('audit_logs').insert({
@@ -355,6 +380,8 @@ NOTIFY pgrst, 'reload schema';`,
         file_name: file.name,
         rows_imported: imported,
         total_rows: transformedData.length,
+        duration_ms: durationMs,
+        status: finalStatus,
       },
     });
 
@@ -367,15 +394,39 @@ NOTIFY pgrst, 'reload schema';`,
       importMonth,
       importYear,
       importMode,
+      durationMs,
+      status: finalStatus,
+      importLogId,
       errors: errors.length > 0 ? errors.slice(0, 10) : undefined,
       message: imported > 0
-        ? `יובאו ${imported} שורות מתוך ${transformedData.length} (${importMode === 'append' ? 'הוספה' : importMode === 'replace_period' ? `החלפת ${importMonth}/${importYear}` : 'החלפה מלאה'})`
-        : 'לא יובאו שורות',
+        ? `✅ יובאו ${imported} שורות מתוך ${transformedData.length} (${importMode === 'append' ? 'הוספה' : importMode === 'replace_period' ? `החלפת ${importMonth}/${importYear}` : 'החלפה מלאה'}) - ${(durationMs / 1000).toFixed(1)} שניות`
+        : '❌ לא יובאו שורות - בדוק את פורמט הקובץ',
     });
   } catch (error) {
+    const durationMs = Date.now() - startTime;
     console.error('Master import error:', error);
+
+    // Update import log with failure
+    if (importLogId) {
+      const supabase = await createClient();
+      await supabase
+        .from('import_logs')
+        .update({
+          status: 'failed',
+          error_message: error instanceof Error ? error.message : 'Unknown error',
+          error_details: { stack: error instanceof Error ? error.stack : null },
+          completed_at: new Date().toISOString(),
+          duration_ms: durationMs,
+        })
+        .eq('id', importLogId);
+    }
+
     return NextResponse.json(
-      { error: 'Failed to import data' },
+      {
+        error: 'Failed to import data',
+        message: `❌ שגיאה בייבוא: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        importLogId,
+      },
       { status: 500 }
     );
   }

@@ -27,6 +27,7 @@ import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { AnalysisSummary, TemplateSuggestions, CategoryColumnSelector } from '@/components/import';
+import { ImportHistory } from '@/components/ImportHistory';
 import type { AnalyzedColumn, ColumnCategory } from '@/types/dashboard';
 
 interface CategorySummary {
@@ -142,6 +143,7 @@ export default function ImportPage() {
   const [importHistory, setImportHistory] = useState<ImportHistoryItem[]>([]);
   const [currentStats, setCurrentStats] = useState<CurrentStats>({ totalRecords: 0, lastImport: null });
   const [showHistory, setShowHistory] = useState(false);
+  const [showImportConfirm, setShowImportConfirm] = useState(false);
 
   // Project info
   const [projectInfo, setProjectInfo] = useState<{ name: string; table_name: string } | null>(null);
@@ -340,8 +342,19 @@ export default function ImportPage() {
     }
   };
 
+  // Show confirmation dialog before import
+  const handleImportClick = () => {
+    if (!file || !analysis) {
+      toast.error('יש להעלות קובץ');
+      return;
+    }
+    setShowImportConfirm(true);
+  };
+
   // Handle direct import to project's table
   const handleDirectImport = async () => {
+    setShowImportConfirm(false);
+
     if (!file || !analysis) {
       toast.error('יש להעלות קובץ');
       return;
@@ -380,11 +393,11 @@ export default function ImportPage() {
       const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.error || 'Failed to import');
+        throw new Error(result.message || result.error || 'Failed to import');
       }
 
       if (result.imported === 0) {
-        throw new Error(result.errors?.join(', ') || 'לא יובאו שורות');
+        throw new Error(result.message || result.errors?.join(', ') || 'לא יובאו שורות');
       }
 
       setImportProgress({
@@ -399,9 +412,26 @@ export default function ImportPage() {
       });
 
       setStep('complete');
-      toast.success(`יובאו ${result.imported} שורות לטבלת ${tableName}!`);
+
+      // Enhanced success toast with details
+      const durationSec = result.durationMs ? (result.durationMs / 1000).toFixed(1) : '?';
+      if (result.status === 'success') {
+        toast.success(result.message || `✅ יובאו ${result.imported} שורות בהצלחה!`, {
+          description: `טבלה: ${tableName} | זמן: ${durationSec} שניות`,
+          duration: 5000,
+        });
+      } else if (result.status === 'partial') {
+        toast.warning(`⚠️ יובאו ${result.imported} מתוך ${result.total} שורות`, {
+          description: result.errors?.[0] || 'חלק מהנתונים לא יובאו',
+          duration: 8000,
+        });
+      }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'שגיאה בייבוא');
+      const errorMessage = error instanceof Error ? error.message : 'שגיאה בייבוא';
+      toast.error(`❌ ${errorMessage}`, {
+        description: 'בדוק את פורמט הקובץ ונסה שוב',
+        duration: 8000,
+      });
       setStep('upload');
     } finally {
       setIsLoading(false);
@@ -713,15 +743,7 @@ export default function ImportPage() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setShowHistory(!showHistory)}
-                        className="border-slate-600 text-slate-300"
-                      >
-                        <History className="h-4 w-4 ml-2" />
-                        היסטוריה
-                      </Button>
+                      <ImportHistory projectId={projectId} />
                       {currentStats.totalRecords > 0 && (
                         <Button
                           variant="outline"
@@ -893,7 +915,7 @@ export default function ImportPage() {
                         </div>
                       </div>
                       <Button
-                        onClick={handleDirectImport}
+                        onClick={handleImportClick}
                         className="bg-emerald-500 hover:bg-emerald-600 text-white"
                         disabled={isLoading}
                       >
@@ -1219,6 +1241,75 @@ export default function ImportPage() {
               </Button>
               <Button
                 onClick={() => setShowDeleteConfirm(false)}
+                variant="outline"
+                className="flex-1 border-slate-600 text-slate-300"
+              >
+                ביטול
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Import Confirmation Modal */}
+      {showImportConfirm && analysis && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-800 rounded-xl border border-slate-700 max-w-lg w-full p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 bg-emerald-500/20 rounded-full flex items-center justify-center">
+                <FileSpreadsheet className="h-6 w-6 text-emerald-400" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-white">אישור ייבוא</h3>
+                <p className="text-slate-400 text-sm">סיכום פרטי הייבוא</p>
+              </div>
+            </div>
+
+            <div className="space-y-3 mb-6">
+              <div className="flex items-center justify-between p-3 bg-slate-900/50 rounded-lg">
+                <span className="text-slate-400">קובץ</span>
+                <span className="text-white font-medium">{file?.name}</span>
+              </div>
+              <div className="flex items-center justify-between p-3 bg-slate-900/50 rounded-lg">
+                <span className="text-slate-400">שורות לייבוא</span>
+                <span className="text-emerald-400 font-bold">{analysis.totalRows.toLocaleString('he-IL')}</span>
+              </div>
+              <div className="flex items-center justify-between p-3 bg-slate-900/50 rounded-lg">
+                <span className="text-slate-400">טבלת יעד</span>
+                <span className="text-white font-mono">{projectInfo?.table_name || 'master_data'}</span>
+              </div>
+              <div className="flex items-center justify-between p-3 bg-slate-900/50 rounded-lg">
+                <span className="text-slate-400">מצב ייבוא</span>
+                <Badge className={
+                  importMode === 'append' ? 'bg-emerald-500/20 text-emerald-400' :
+                  importMode === 'replace_period' ? 'bg-amber-500/20 text-amber-400' :
+                  'bg-red-500/20 text-red-400'
+                }>
+                  {importMode === 'append' ? 'הוספה לקיימים' :
+                   importMode === 'replace_period' ? `החלפת ${hebrewMonths[importMonth - 1]} ${importYear}` :
+                   'החלפה מלאה'}
+                </Badge>
+              </div>
+              {importMode === 'replace_all' && currentStats.totalRecords > 0 && (
+                <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
+                  <p className="text-red-400 text-sm flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4" />
+                    שים לב: {currentStats.totalRecords.toLocaleString('he-IL')} רשומות קיימות יימחקו!
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-3">
+              <Button
+                onClick={handleDirectImport}
+                className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white"
+              >
+                <Check className="h-4 w-4 ml-2" />
+                אשר וייבא
+              </Button>
+              <Button
+                onClick={() => setShowImportConfirm(false)}
                 variant="outline"
                 className="flex-1 border-slate-600 text-slate-300"
               >
