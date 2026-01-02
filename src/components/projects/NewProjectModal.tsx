@@ -90,46 +90,50 @@ export function NewProjectModal({ open, onOpenChange, onProjectCreated }: NewPro
 
   // File handling - analyze file and detect sheets
   const analyzeFile = async (file: File) => {
+    console.log('=== analyzeFile called ===');
+    console.log('File:', file.name, 'Size:', file.size);
+
     setIsAnalyzing(true);
     setError(null);
+
     try {
       const buffer = await file.arrayBuffer();
+      console.log('Buffer size:', buffer.byteLength);
 
-      // Try different read options to handle various Excel formats
-      let workbook: XLSX.WorkBook;
-      try {
-        workbook = XLSX.read(buffer, {
-          type: 'array',
-          cellDates: true,
-          codepage: 65001, // UTF-8
-        });
-      } catch (xlsxError) {
-        // Try with different options if first attempt fails
-        console.warn('First XLSX read attempt failed, trying alternative:', xlsxError);
-        workbook = XLSX.read(buffer, {
-          type: 'array',
-        });
-      }
+      // Read Excel file
+      const workbook = XLSX.read(buffer, {
+        type: 'array',
+        cellDates: true,
+      });
+
+      console.log('=== WORKBOOK LOADED ===');
+      console.log('SheetNames:', workbook.SheetNames);
+      console.log('Number of sheets:', workbook.SheetNames.length);
 
       if (!workbook.SheetNames || workbook.SheetNames.length === 0) {
         throw new Error('לא נמצאו גיליונות בקובץ');
       }
 
       // Store workbook reference and available sheets
+      const sheets = [...workbook.SheetNames];
+      console.log('Setting availableSheets to:', sheets);
+
       setWorkbookRef(workbook);
-      setAvailableSheets(workbook.SheetNames);
+      setAvailableSheets(sheets);
 
       // Auto-select first sheet
-      const firstSheet = workbook.SheetNames[0];
+      const firstSheet = sheets[0];
+      console.log('Auto-selecting first sheet:', firstSheet);
       setSelectedSheet(firstSheet);
 
       // Analyze the first sheet
       analyzeSheet(workbook, firstSheet);
       setUploadedFile(file);
+
+      console.log('=== analyzeFile complete ===');
     } catch (err) {
       console.error('Excel parse error:', err);
       const errorMessage = err instanceof Error ? err.message : 'שגיאה בניתוח הקובץ';
-      // Provide more helpful error messages
       if (errorMessage.includes('Bad uncompressed size') || errorMessage.includes('compression')) {
         setError('שגיאה בקריאת הקובץ - נסה לשמור את הקובץ מחדש כ-xlsx או להמיר ל-csv');
       } else {
@@ -142,14 +146,24 @@ export function NewProjectModal({ open, onOpenChange, onProjectCreated }: NewPro
 
   // Analyze a specific sheet
   const analyzeSheet = (workbook: XLSX.WorkBook, sheetName: string) => {
+    console.log('=== analyzeSheet called ===');
+    console.log('Sheet name:', sheetName);
+
     try {
       const worksheet = workbook.Sheets[sheetName];
+      if (!worksheet) {
+        console.error('Worksheet not found:', sheetName);
+        setError(`גיליון "${sheetName}" לא נמצא`);
+        return;
+      }
 
       // Get data as array of arrays - first row will be headers
       const jsonData = XLSX.utils.sheet_to_json(worksheet, {
         header: 1,
         defval: '',
       }) as unknown[][];
+
+      console.log('Total rows in sheet:', jsonData.length);
 
       if (jsonData.length < 2) {
         setError('הגיליון ריק או ללא נתונים');
@@ -159,20 +173,32 @@ export function NewProjectModal({ open, onOpenChange, onProjectCreated }: NewPro
       }
 
       // First row is headers
-      const headers = jsonData[0] as string[];
+      const headers = jsonData[0];
       // Second row is first data row (for sample values)
       const firstDataRow = jsonData[1] as unknown[];
 
-      console.log('Sheet:', sheetName);
-      console.log('Headers from first row:', headers);
-      console.log('First data row:', firstDataRow);
+      console.log('=== RAW DATA ===');
+      console.log('Row 0 (headers):', headers);
+      console.log('Row 1 (first data):', firstDataRow);
 
       const columns: DetectedColumn[] = [];
+      const headerArray = headers as unknown[];
 
-      for (let index = 0; index < headers.length; index++) {
-        const header = headers[index];
+      console.log('Processing', headerArray.length, 'potential columns');
+
+      for (let index = 0; index < headerArray.length; index++) {
+        const headerValue = headerArray[index];
+
+        // Convert header to string
+        const headerStr = headerValue !== null && headerValue !== undefined
+          ? String(headerValue).trim()
+          : '';
+
         // Skip empty headers
-        if (!header || !String(header).trim()) continue;
+        if (!headerStr) {
+          console.log(`Column ${index}: empty header, skipping`);
+          continue;
+        }
 
         const sample = firstDataRow[index];
         let type: 'text' | 'number' | 'date' | 'boolean' = 'text';
@@ -184,15 +210,16 @@ export function NewProjectModal({ open, onOpenChange, onProjectCreated }: NewPro
         } else if (typeof sample === 'boolean') {
           type = 'boolean';
         } else if (typeof sample === 'string' && sample.trim()) {
-          // Try to detect number strings
           const cleaned = sample.replace(/[,₪$€%\s]/g, '').trim();
           if (cleaned && !isNaN(Number(cleaned))) {
             type = 'number';
           }
         }
 
+        console.log(`Column ${index}: "${headerStr}" (${type})`);
+
         columns.push({
-          name: String(header).trim(),
+          name: headerStr,
           type,
           sample: sample !== null && sample !== undefined && sample !== ''
             ? String(sample).slice(0, 50)
@@ -200,13 +227,17 @@ export function NewProjectModal({ open, onOpenChange, onProjectCreated }: NewPro
         });
       }
 
+      console.log('=== COLUMNS DETECTED ===');
+      console.log('Total columns:', columns.length);
+      console.log('Column names:', columns.map(c => c.name));
+
       if (columns.length === 0) {
         setError('לא נמצאו עמודות עם כותרות בגיליון');
         return;
       }
 
       setDetectedColumns(columns);
-      setTotalRows(jsonData.length - 1); // Exclude header row
+      setTotalRows(jsonData.length - 1);
       setError(null);
     } catch (err) {
       console.error('Sheet analysis error:', err);
@@ -558,13 +589,13 @@ export function NewProjectModal({ open, onOpenChange, onProjectCreated }: NewPro
                       </div>
 
                       {/* Sheet Selector - show when multiple sheets */}
-                      {availableSheets.length > 1 && (
-                        <div className="flex items-center justify-center gap-2">
-                          <span className="text-xs text-slate-400">גיליון:</span>
+                      {availableSheets.length > 1 ? (
+                        <div className="flex items-center justify-center gap-2 p-2 bg-cyan-500/10 rounded-lg border border-cyan-500/30">
+                          <span className="text-xs text-cyan-400">גיליון:</span>
                           <select
                             value={selectedSheet}
                             onChange={(e) => handleSheetChange(e.target.value)}
-                            className="bg-slate-800 border border-slate-600 rounded px-2 py-1 text-sm text-white"
+                            className="bg-slate-800 border border-cyan-500/50 rounded px-2 py-1 text-sm text-white"
                           >
                             {availableSheets.map((sheet) => (
                               <option key={sheet} value={sheet}>
@@ -572,11 +603,15 @@ export function NewProjectModal({ open, onOpenChange, onProjectCreated }: NewPro
                               </option>
                             ))}
                           </select>
-                          <span className="text-xs text-slate-500">
+                          <span className="text-xs text-cyan-300">
                             ({availableSheets.length} גיליונות)
                           </span>
                         </div>
-                      )}
+                      ) : availableSheets.length === 1 ? (
+                        <div className="text-xs text-slate-500 text-center">
+                          גיליון: {availableSheets[0]}
+                        </div>
+                      ) : null}
 
                       {/* Column Preview */}
                       {detectedColumns.length > 0 && (
