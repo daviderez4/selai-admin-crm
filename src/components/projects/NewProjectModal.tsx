@@ -157,7 +157,7 @@ export function NewProjectModal({ open, onOpenChange, onProjectCreated }: NewPro
         return;
       }
 
-      // Get data as array of arrays - first row will be headers
+      // Get data as array of arrays
       const jsonData = XLSX.utils.sheet_to_json(worksheet, {
         header: 1,
         defval: '',
@@ -172,14 +172,27 @@ export function NewProjectModal({ open, onOpenChange, onProjectCreated }: NewPro
         return;
       }
 
-      // First row is headers
-      const headers = jsonData[0];
-      // Second row is first data row (for sample values)
-      const firstDataRow = jsonData[1] as unknown[];
+      // Find the first row with data (skip empty rows at beginning)
+      // Header row is the first row with more than 3 non-empty cells
+      let headerRowIndex = 0;
+      for (let i = 0; i < Math.min(20, jsonData.length); i++) {
+        const row = jsonData[i] as unknown[];
+        const nonEmptyCells = row.filter(cell => cell !== null && cell !== undefined && cell !== '').length;
+        if (nonEmptyCells > 3) {
+          headerRowIndex = i;
+          console.log(`Found header row at index ${i} with ${nonEmptyCells} non-empty cells`);
+          break;
+        }
+      }
+
+      const headers = jsonData[headerRowIndex];
+      // First data row is the row after headers
+      const firstDataRow = jsonData[headerRowIndex + 1] as unknown[] || [];
 
       console.log('=== RAW DATA ===');
-      console.log('Row 0 (headers):', headers);
-      console.log('Row 1 (first data):', firstDataRow);
+      console.log(`Header row index: ${headerRowIndex}`);
+      console.log('Headers:', headers);
+      console.log('First data row:', firstDataRow);
 
       const columns: DetectedColumn[] = [];
       const headerArray = headers as unknown[];
@@ -237,7 +250,8 @@ export function NewProjectModal({ open, onOpenChange, onProjectCreated }: NewPro
       }
 
       setDetectedColumns(columns);
-      setTotalRows(jsonData.length - 1);
+      // Total data rows = total rows - header row index - 1 (for header itself)
+      setTotalRows(jsonData.length - headerRowIndex - 1);
       setError(null);
     } catch (err) {
       console.error('Sheet analysis error:', err);

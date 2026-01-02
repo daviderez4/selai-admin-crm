@@ -123,7 +123,7 @@ export async function POST(
       return NextResponse.json({ error: `Sheet "${selectedSheet}" not found` }, { status: 400 });
     }
 
-    // Get data as array of arrays - first row is headers
+    // Get data as array of arrays
     const jsonData = XLSX.utils.sheet_to_json(worksheet, {
       header: 1,
       defval: '',
@@ -133,12 +133,23 @@ export async function POST(
       return NextResponse.json({ error: 'File is empty or has no data rows' }, { status: 400 });
     }
 
-    // First row contains headers
-    const headerRow = jsonData[0];
+    // Find header row - first row with more than 3 non-empty cells (skip empty rows at beginning)
+    let headerRowIndex = 0;
+    for (let i = 0; i < Math.min(20, jsonData.length); i++) {
+      const row = jsonData[i] as unknown[];
+      const nonEmptyCells = row.filter(cell => cell !== null && cell !== undefined && cell !== '').length;
+      if (nonEmptyCells > 3) {
+        headerRowIndex = i;
+        console.log(`Found header row at index ${i} with ${nonEmptyCells} non-empty cells`);
+        break;
+      }
+    }
+
+    const headerRow = jsonData[headerRowIndex];
     console.log('Raw header row:', headerRow);
 
-    // Extract headers from first row - convert to strings and handle empty cells
-    const headers = headerRow.map((h, i) => {
+    // Extract headers - convert to strings and handle empty cells
+    const headers = (headerRow as unknown[]).map((h, i) => {
       if (h === null || h === undefined || h === '') {
         return `עמודה_${i + 1}`;
       }
@@ -148,8 +159,8 @@ export async function POST(
 
     console.log('Parsed headers:', headers.slice(0, 10));
 
-    // Skip header row - data rows start from index 1
-    const dataRows = jsonData.slice(1) as unknown[][];
+    // Data rows start after header row
+    const dataRows = jsonData.slice(headerRowIndex + 1) as unknown[][];
 
     console.log('Master import - Total data rows:', dataRows.length);
     console.log('Master import - Headers (first 10):', headers.slice(0, 10));
