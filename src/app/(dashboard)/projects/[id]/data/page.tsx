@@ -177,10 +177,28 @@ export default function DataPage() {
         const metaColumns = ['id', 'raw_data', 'created_at', 'updated_at', 'import_batch',
           'import_date', 'import_month', 'import_year', 'project_id', 'total_expected_accumulation'];
 
-        // Check if data has old array format (raw_data as array) or new object format
-        if (firstRow.raw_data && Array.isArray(firstRow.raw_data)) {
+        // Check raw_data format
+        const rawData = firstRow.raw_data;
+        console.log('raw_data type:', typeof rawData, 'isArray:', Array.isArray(rawData));
+        console.log('raw_data sample:', rawData);
+
+        if (rawData && typeof rawData === 'object' && !Array.isArray(rawData)) {
+          // New format - raw_data is an object with Hebrew column names as keys
+          const columnKeys = Object.keys(rawData);
+          console.log('Hebrew column keys from raw_data:', columnKeys);
+
+          const dynamicCols: ColumnConfig[] = columnKeys.map(key => ({
+            key: `raw_data.${key}`, // Access nested property
+            label: key, // Hebrew column name directly
+            icon: '📄',
+            type: 'text' as const,
+            width: '150px',
+            sortable: true,
+          }));
+          setDynamicColumns(dynamicCols);
+        } else if (rawData && Array.isArray(rawData)) {
           // Old format - raw_data is an array, create col_X columns
-          const rawColumns: ColumnConfig[] = firstRow.raw_data.map((_: unknown, index: number) => ({
+          const rawColumns: ColumnConfig[] = rawData.map((_: unknown, index: number) => ({
             key: `col_${index}`,
             label: `עמודה ${index + 1}`,
             icon: '📄',
@@ -190,12 +208,11 @@ export default function DataPage() {
           }));
           setDynamicColumns(rawColumns);
         } else {
-          // New format - Hebrew column names are directly on the row
-          // Extract all column keys except meta columns
+          // Fallback - use row keys directly except meta columns
           const columnKeys = Object.keys(firstRow).filter(key => !metaColumns.includes(key));
           const dynamicCols: ColumnConfig[] = columnKeys.map(key => ({
             key,
-            label: key.replace(/_/g, ' '), // Replace underscores with spaces for display
+            label: key.replace(/_/g, ' '),
             icon: '📄',
             type: 'text' as const,
             width: '120px',

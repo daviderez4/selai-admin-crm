@@ -74,6 +74,23 @@ interface SmartTableProps {
   pageSize?: number;
 }
 
+// Helper to get nested value from object (e.g., "raw_data.columnName")
+const getNestedValue = (obj: Record<string, unknown>, path: string): unknown => {
+  if (!path.includes('.')) {
+    return obj[path];
+  }
+  const parts = path.split('.');
+  let value: unknown = obj;
+  for (const part of parts) {
+    if (value && typeof value === 'object') {
+      value = (value as Record<string, unknown>)[part];
+    } else {
+      return undefined;
+    }
+  }
+  return value;
+};
+
 export function SmartTable({
   data,
   projectId,
@@ -533,7 +550,7 @@ export function SmartTable({
                             isPinned && 'sticky right-10 bg-slate-900 z-10 border-l border-slate-700'
                           )}
                         >
-                          {formatCell(row[colName], col)}
+                          {formatCell(getNestedValue(row, colName), col)}
                         </td>
                       );
                     })}
