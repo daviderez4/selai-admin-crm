@@ -66,6 +66,252 @@ const isMasterDataRecord = (record: Record<string, unknown>): boolean => {
   return 'מספר_תהליך' in record || 'סוג_תהליך' in record || 'לקוח' in record;
 };
 
+// Helper to get value from record or raw_data
+const getFieldValue = (record: Record<string, unknown>, ...fieldNames: string[]): unknown => {
+  // First check top-level record
+  for (const field of fieldNames) {
+    if (record[field] !== undefined && record[field] !== null && record[field] !== '') {
+      return record[field];
+    }
+  }
+  // Then check raw_data if it exists
+  const rawData = record.raw_data as Record<string, unknown> | undefined;
+  if (rawData && typeof rawData === 'object') {
+    for (const field of fieldNames) {
+      if (rawData[field] !== undefined && rawData[field] !== null && rawData[field] !== '') {
+        return rawData[field];
+      }
+    }
+  }
+  return null;
+};
+
+// Insurance data details component
+function InsuranceDataRecordDetails({ record }: { record: Record<string, unknown> }) {
+  const [copied, setCopied] = useState(false);
+
+  // Debug: log raw_data to see exact field names
+  console.log('=== Insurance Record Debug ===');
+  console.log('Full record:', record);
+  console.log('raw_data:', record.raw_data);
+  if (record.raw_data && typeof record.raw_data === 'object') {
+    console.log('raw_data keys:', Object.keys(record.raw_data as object));
+  }
+  console.log('==============================');
+
+  // Get values from raw_data or top-level record
+  // Based on actual field names from Excel import
+  const processNumber = getFieldValue(record, 'מספר תהליך', 'מספר_תהליך', 'מספר רפסנ');
+  const processType = getFieldValue(record, 'סוג תהליך', 'סוג_תהליך');
+  const producer = getFieldValue(record, 'יצרן חדש', 'יצרן_חדש', 'יצרן');
+  const productType = getFieldValue(record, 'סוג מוצר חדש', 'סוג מוצר', 'סוג_מוצר');
+  const policyNumber = getFieldValue(record, 'מספר חשבון/פוליסה חדש', 'מספר פוליסה', 'מספר_פוליסה');
+  const status = getFieldValue(record, 'סטטוס', 'סטטוס תהליך');
+  const supervisor = getFieldValue(record, 'מפקח', 'שם מפקח');
+  const customerId = getFieldValue(record, 'מזהה לקוח', 'מזהה_לקוח', 'ת.ז.', 'תז');
+  const expectedPremium = getFieldValue(record, 'פרמיה צפויה', 'פרמיה_צפויה', 'פרמיה');
+  const customerName = getFieldValue(record, 'לקוח', 'שם לקוח', 'שם');
+  const handler = getFieldValue(record, 'תיאור מספר סוכן', 'מטפל', 'שם מטפל', 'סוכן');
+  const agentNumber = getFieldValue(record, 'מספר סוכן רשום', 'מספר_סוכן_רשום');
+  const phone = getFieldValue(record, 'טלפון', 'סלולרי', 'נייד', 'סלולרי לקוח');
+  const joinDate = getFieldValue(record, 'תאריך הצטרפות לקופה/הפקת פוליסה', 'תאריך פתיחת תהליך');
+
+  const handleCopyId = () => {
+    const id = String(customerId || '');
+    navigator.clipboard.writeText(id);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleCall = () => {
+    const phoneStr = formatPhone(phone);
+    if (phoneStr !== '-') {
+      window.open(`tel:${phoneStr}`, '_blank');
+    }
+  };
+
+  const handleWhatsApp = () => {
+    const phoneStr = formatPhone(phone);
+    if (phoneStr !== '-') {
+      const intlPhone = phoneStr.startsWith('0') ? '972' + phoneStr.slice(1) : phoneStr;
+      window.open(`https://wa.me/${intlPhone}`, '_blank');
+    }
+  };
+
+  const statusStr = String(status || '');
+  const statusClass = statusColors[statusStr] || 'bg-slate-500/20 text-slate-400 border-slate-500/30';
+
+  return (
+    <>
+      {/* Content */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-6">
+        {/* Customer Info */}
+        <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white text-lg font-bold">
+              {String(customerName || processNumber || '?').charAt(0)}
+            </div>
+            <div>
+              <h3 className="text-white font-bold text-lg">
+                {customerName ? String(customerName) : `תהליך ${formatValue(processNumber)}`}
+              </h3>
+              {customerId && (
+                <div className="flex items-center gap-2 text-slate-400 text-sm">
+                  <span>מזהה: {String(customerId)}</span>
+                  <button onClick={handleCopyId} className="hover:text-white transition-colors">
+                    {copied ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+          {phone && (
+            <div className="flex items-center gap-2 text-slate-300">
+              <span>📱</span>
+              <span className="font-mono">{formatPhone(phone)}</span>
+            </div>
+          )}
+        </div>
+
+        {/* Process Details */}
+        <div className="space-y-4">
+          <h4 className="text-slate-300 font-medium flex items-center gap-2">
+            <span>📊</span> פרטי התהליך
+          </h4>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-slate-800/30 rounded-lg p-3">
+              <p className="text-slate-500 text-xs mb-1">מספר תהליך</p>
+              <p className="text-white font-mono">{formatValue(processNumber)}</p>
+            </div>
+            <div className="bg-slate-800/30 rounded-lg p-3">
+              <p className="text-slate-500 text-xs mb-1">סטטוס</p>
+              <Badge className={cn('border', statusClass)}>{statusStr || '-'}</Badge>
+            </div>
+            <div className="bg-slate-800/30 rounded-lg p-3 col-span-2">
+              <p className="text-slate-500 text-xs mb-1">סוג תהליך</p>
+              <p className="text-white">{formatValue(processType)}</p>
+            </div>
+            <div className="bg-slate-800/30 rounded-lg p-3">
+              <p className="text-slate-500 text-xs mb-1">יצרן</p>
+              <p className="text-white">{formatValue(producer)}</p>
+            </div>
+            <div className="bg-slate-800/30 rounded-lg p-3">
+              <p className="text-slate-500 text-xs mb-1">סוג מוצר</p>
+              <p className="text-white">{formatValue(productType)}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Policy Details */}
+        <div className="space-y-4">
+          <h4 className="text-slate-300 font-medium flex items-center gap-2">
+            <span>📄</span> פרטי פוליסה
+          </h4>
+          <div className="grid grid-cols-1 gap-3">
+            <div className="bg-slate-800/30 rounded-lg p-3">
+              <p className="text-slate-500 text-xs mb-1">מספר פוליסה</p>
+              <p className="text-white font-mono">{formatValue(policyNumber)}</p>
+            </div>
+            {expectedPremium && (
+              <div className="bg-slate-800/30 rounded-lg p-3">
+                <p className="text-slate-500 text-xs mb-1">פרמיה צפויה</p>
+                <p className="text-emerald-400 font-bold font-mono">{formatCurrency(expectedPremium)}</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Dates */}
+        {joinDate && (
+          <div className="space-y-4">
+            <h4 className="text-slate-300 font-medium flex items-center gap-2">
+              <span>📅</span> תאריכים
+            </h4>
+            <div className="bg-slate-800/30 rounded-lg p-3">
+              <p className="text-slate-500 text-xs mb-1">תאריך הצטרפות/פתיחה</p>
+              <p className="text-white">{formatValue(joinDate)}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Staff Details */}
+        <div className="space-y-4">
+          <h4 className="text-slate-300 font-medium flex items-center gap-2">
+            <span>👨‍💼</span> צוות
+          </h4>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-slate-800/30 rounded-lg p-3">
+              <p className="text-slate-500 text-xs mb-1">מפקח</p>
+              <p className="text-white">{formatValue(supervisor)}</p>
+            </div>
+            <div className="bg-slate-800/30 rounded-lg p-3">
+              <p className="text-slate-500 text-xs mb-1">סוכן</p>
+              <p className="text-white">{formatValue(handler)}</p>
+            </div>
+            {agentNumber && (
+              <div className="bg-slate-800/30 rounded-lg p-3 col-span-2">
+                <p className="text-slate-500 text-xs mb-1">מספר סוכן רשום</p>
+                <p className="text-white font-mono">{formatValue(agentNumber)}</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Customer ID */}
+        <div className="space-y-4">
+          <h4 className="text-slate-300 font-medium flex items-center gap-2">
+            <span>🆔</span> זיהוי לקוח
+          </h4>
+          <div className="bg-slate-800/30 rounded-lg p-3">
+            <p className="text-slate-500 text-xs mb-1">מזהה לקוח (ת.ז.)</p>
+            <p className="text-white font-mono">{formatValue(customerId)}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Footer Actions */}
+      <div className="p-4 border-t border-slate-700">
+        <div className="grid grid-cols-3 gap-2">
+          <Button
+            variant="outline"
+            className="border-slate-600 text-slate-300 hover:bg-slate-800"
+            onClick={handleCall}
+          >
+            <Phone className="h-4 w-4 ml-1" />
+            התקשר
+          </Button>
+          <Button
+            variant="outline"
+            className="border-green-600 text-green-400 hover:bg-green-500/10"
+            onClick={handleWhatsApp}
+          >
+            <MessageCircle className="h-4 w-4 ml-1" />
+            WhatsApp
+          </Button>
+          <Button
+            variant="outline"
+            className="border-slate-600 text-slate-300 hover:bg-slate-800"
+          >
+            <Edit className="h-4 w-4 ml-1" />
+            ערוך
+          </Button>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// Check if this is an insurance_data record
+const isInsuranceDataRecord = (record: Record<string, unknown>): boolean => {
+  const rawData = record.raw_data as Record<string, unknown> | undefined;
+  if (rawData && typeof rawData === 'object') {
+    // Check for insurance-specific fields in raw_data
+    return 'מספר תהליך' in rawData || 'יצרן חדש' in rawData || 'סוג מוצר חדש' in rawData || 'מפקח' in rawData;
+  }
+  // Check top-level fields
+  return 'מספר תהליך' in record || 'יצרן חדש' in record || 'סוג מוצר חדש' in record;
+};
+
 // Dynamic details component for non-master_data tables
 function DynamicRecordDetails({ record, onClose }: { record: Record<string, unknown>; onClose: () => void }) {
   // Filter out meta fields and get displayable fields
@@ -352,8 +598,27 @@ function MasterDataRecordDetails({ record }: { record: Record<string, unknown> }
 export function RecordDetails({ isOpen, onClose, record, tableName }: RecordDetailsProps) {
   if (!record) return null;
 
-  // Determine if this is master_data structure or dynamic
+  // Determine record type
   const isMasterData = tableName === 'master_data' || isMasterDataRecord(record);
+  const isInsuranceData = tableName === 'insurance_data' || isInsuranceDataRecord(record);
+
+  // Determine panel title
+  const getPanelTitle = () => {
+    if (isMasterData) return 'פרטי תהליך';
+    if (isInsuranceData) return 'פרטי תהליך';
+    return 'פרטי רשומה';
+  };
+
+  // Render appropriate content
+  const renderContent = () => {
+    if (isMasterData) {
+      return <MasterDataRecordDetails record={record} />;
+    }
+    if (isInsuranceData) {
+      return <InsuranceDataRecordDetails record={record} />;
+    }
+    return <DynamicRecordDetails record={record} onClose={onClose} />;
+  };
 
   return (
     <>
@@ -377,18 +642,14 @@ export function RecordDetails({ isOpen, onClose, record, tableName }: RecordDeta
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-slate-700">
           <h2 className="text-lg font-bold text-white">
-            {isMasterData ? 'פרטי תהליך' : 'פרטי רשומה'}
+            {getPanelTitle()}
           </h2>
           <Button variant="ghost" size="icon" onClick={onClose}>
             <X className="h-5 w-5 text-slate-400" />
           </Button>
         </div>
 
-        {isMasterData ? (
-          <MasterDataRecordDetails record={record} />
-        ) : (
-          <DynamicRecordDetails record={record} onClose={onClose} />
-        )}
+        {renderContent()}
       </div>
     </>
   );
