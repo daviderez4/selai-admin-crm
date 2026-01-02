@@ -115,29 +115,45 @@ export async function POST(
       cellDates: true,
     });
 
-    const worksheet = workbook.Sheets[sheetName || workbook.SheetNames[0]];
+    const selectedSheet = sheetName || workbook.SheetNames[0];
+    console.log('Using sheet:', selectedSheet, 'from available:', workbook.SheetNames);
+
+    const worksheet = workbook.Sheets[selectedSheet];
+    if (!worksheet) {
+      return NextResponse.json({ error: `Sheet "${selectedSheet}" not found` }, { status: 400 });
+    }
+
+    // Get data as array of arrays - first row is headers
     const jsonData = XLSX.utils.sheet_to_json(worksheet, {
       header: 1,
-      raw: false,
       defval: '',
-    }) as string[][];
+    }) as unknown[][];
 
     if (jsonData.length < 2) {
       return NextResponse.json({ error: 'File is empty or has no data rows' }, { status: 400 });
     }
 
-    // Extract headers from first row
-    const headers = jsonData[0].map((h, i) => {
-      const header = String(h || '').trim();
+    // First row contains headers
+    const headerRow = jsonData[0];
+    console.log('Raw header row:', headerRow);
+
+    // Extract headers from first row - convert to strings and handle empty cells
+    const headers = headerRow.map((h, i) => {
+      if (h === null || h === undefined || h === '') {
+        return `עמודה_${i + 1}`;
+      }
+      const header = String(h).trim();
       return header || `עמודה_${i + 1}`; // Fallback for empty headers
     });
 
-    // Skip header row
-    const dataRows = jsonData.slice(1);
+    console.log('Parsed headers:', headers.slice(0, 10));
+
+    // Skip header row - data rows start from index 1
+    const dataRows = jsonData.slice(1) as unknown[][];
 
     console.log('Master import - Total data rows:', dataRows.length);
-    console.log('Master import - Headers:', headers.slice(0, 10));
-    console.log('Master import - Sample row length:', dataRows[0]?.length);
+    console.log('Master import - Headers (first 10):', headers.slice(0, 10));
+    console.log('Master import - Sample first data row:', dataRows[0]?.slice(0, 5));
 
     // Helper to parse number from cell
     const parseNumber = (value: unknown): number | null => {
@@ -169,13 +185,15 @@ export async function POST(
 
     // Transform data - create objects with Hebrew column names
     const transformedData = dataRows
-      .filter(row => row.some(cell => cell !== null && cell !== undefined && cell !== ''))
+      .filter(row => Array.isArray(row) && row.some(cell => cell !== null && cell !== undefined && cell !== ''))
       .map(row => {
         // Create object with header names as keys (Hebrew column names!)
         const rawDataObject: Record<string, unknown> = {};
         headers.forEach((header, index) => {
-          if (row[index] !== undefined && row[index] !== null && row[index] !== '') {
-            rawDataObject[header] = row[index];
+          const cellValue = row[index];
+          if (cellValue !== undefined && cellValue !== null && cellValue !== '') {
+            // Convert cell value to string if needed, preserving numbers
+            rawDataObject[header] = cellValue;
           }
         });
 

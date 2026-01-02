@@ -74,6 +74,10 @@ export function NewProjectModal({ open, onOpenChange, onProjectCreated }: NewPro
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [detectedColumns, setDetectedColumns] = useState<DetectedColumn[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [availableSheets, setAvailableSheets] = useState<string[]>([]);
+  const [selectedSheet, setSelectedSheet] = useState<string>('');
+  const [workbookRef, setWorkbookRef] = useState<XLSX.WorkBook | null>(null);
+  const [totalRows, setTotalRows] = useState(0);
 
   const [formData, setFormData] = useState<ProjectFormData>({
     name: '',
@@ -84,7 +88,7 @@ export function NewProjectModal({ open, onOpenChange, onProjectCreated }: NewPro
 
   const selectedType = DASHBOARD_TYPES[formData.dashboardType];
 
-  // File handling
+  // File handling - analyze file and detect sheets
   const analyzeFile = async (file: File) => {
     setIsAnalyzing(true);
     setError(null);
@@ -92,7 +96,7 @@ export function NewProjectModal({ open, onOpenChange, onProjectCreated }: NewPro
       const buffer = await file.arrayBuffer();
 
       // Try different read options to handle various Excel formats
-      let workbook;
+      let workbook: XLSX.WorkBook;
       try {
         workbook = XLSX.read(buffer, {
           type: 'array',
@@ -104,7 +108,6 @@ export function NewProjectModal({ open, onOpenChange, onProjectCreated }: NewPro
         console.warn('First XLSX read attempt failed, trying alternative:', xlsxError);
         workbook = XLSX.read(buffer, {
           type: 'array',
-          raw: true,
         });
       }
 
@@ -112,52 +115,16 @@ export function NewProjectModal({ open, onOpenChange, onProjectCreated }: NewPro
         throw new Error('לא נמצאו גיליונות בקובץ');
       }
 
-      const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-      const jsonData = XLSX.utils.sheet_to_json(worksheet, {
-        header: 1,
-        raw: false,
-        defval: '',
-      }) as unknown[][];
+      // Store workbook reference and available sheets
+      setWorkbookRef(workbook);
+      setAvailableSheets(workbook.SheetNames);
 
-      if (jsonData.length < 2) {
-        throw new Error('הקובץ ריק או ללא נתונים');
-      }
+      // Auto-select first sheet
+      const firstSheet = workbook.SheetNames[0];
+      setSelectedSheet(firstSheet);
 
-      const headers = jsonData[0] as string[];
-      const firstRow = jsonData[1] as unknown[];
-
-      const columns: DetectedColumn[] = headers
-        .filter(h => h && String(h).trim()) // Filter out empty headers
-        .map((header, index) => {
-          const sample = firstRow[index];
-          let type: 'text' | 'number' | 'date' | 'boolean' = 'text';
-
-          if (typeof sample === 'number') {
-            type = 'number';
-          } else if (sample instanceof Date) {
-            type = 'date';
-          } else if (typeof sample === 'boolean') {
-            type = 'boolean';
-          } else if (typeof sample === 'string') {
-            // Try to detect number strings
-            const cleaned = sample.replace(/[,₪$€%\s]/g, '').trim();
-            if (cleaned && !isNaN(Number(cleaned))) {
-              type = 'number';
-            }
-          }
-
-          return {
-            name: String(header || `col_${index + 1}`).trim(),
-            type,
-            sample: sample !== null && sample !== undefined ? String(sample).slice(0, 50) : '-',
-          };
-        });
-
-      if (columns.length === 0) {
-        throw new Error('לא נמצאו עמודות בקובץ');
-      }
-
-      setDetectedColumns(columns);
+      // Analyze the first sheet
+      analyzeSheet(workbook, firstSheet);
       setUploadedFile(file);
     } catch (err) {
       console.error('Excel parse error:', err);
@@ -170,6 +137,88 @@ export function NewProjectModal({ open, onOpenChange, onProjectCreated }: NewPro
       }
     } finally {
       setIsAnalyzing(false);
+    }
+  };
+
+  // Analyze a specific sheet
+  const analyzeSheet = (workbook: XLSX.WorkBook, sheetName: string) => {
+    try {
+      const worksheet = workbook.Sheets[sheetName];
+
+      // Get data as array of arrays - first row will be headers
+      const jsonData = XLSX.utils.sheet_to_json(worksheet, {
+        header: 1,
+        defval: '',
+      }) as unknown[][];
+
+      if (jsonData.length < 2) {
+        setError('הגיליון ריק או ללא נתונים');
+        setDetectedColumns([]);
+        setTotalRows(0);
+        return;
+      }
+
+      // First row is headers
+      const headers = jsonData[0] as string[];
+      // Second row is first data row (for sample values)
+      const firstDataRow = jsonData[1] as unknown[];
+
+      console.log('Sheet:', sheetName);
+      console.log('Headers from first row:', headers);
+      console.log('First data row:', firstDataRow);
+
+      const columns: DetectedColumn[] = [];
+
+      for (let index = 0; index < headers.length; index++) {
+        const header = headers[index];
+        // Skip empty headers
+        if (!header || !String(header).trim()) continue;
+
+        const sample = firstDataRow[index];
+        let type: 'text' | 'number' | 'date' | 'boolean' = 'text';
+
+        if (typeof sample === 'number') {
+          type = 'number';
+        } else if (sample instanceof Date) {
+          type = 'date';
+        } else if (typeof sample === 'boolean') {
+          type = 'boolean';
+        } else if (typeof sample === 'string' && sample.trim()) {
+          // Try to detect number strings
+          const cleaned = sample.replace(/[,₪$€%\s]/g, '').trim();
+          if (cleaned && !isNaN(Number(cleaned))) {
+            type = 'number';
+          }
+        }
+
+        columns.push({
+          name: String(header).trim(),
+          type,
+          sample: sample !== null && sample !== undefined && sample !== ''
+            ? String(sample).slice(0, 50)
+            : '-',
+        });
+      }
+
+      if (columns.length === 0) {
+        setError('לא נמצאו עמודות עם כותרות בגיליון');
+        return;
+      }
+
+      setDetectedColumns(columns);
+      setTotalRows(jsonData.length - 1); // Exclude header row
+      setError(null);
+    } catch (err) {
+      console.error('Sheet analysis error:', err);
+      setError('שגיאה בניתוח הגיליון');
+    }
+  };
+
+  // Handle sheet selection change
+  const handleSheetChange = (sheetName: string) => {
+    setSelectedSheet(sheetName);
+    if (workbookRef) {
+      analyzeSheet(workbookRef, sheetName);
     }
   };
 
@@ -247,11 +296,12 @@ export function NewProjectModal({ open, onOpenChange, onProjectCreated }: NewPro
 
       // If we have an uploaded file, import data using the import-master API
       if (uploadedFile && detectedColumns.length > 0) {
-        console.log('Importing file to table:', formData.selectedTable);
+        console.log('Importing file to table:', formData.selectedTable, 'sheet:', selectedSheet);
 
         const importFormData = new FormData();
         importFormData.append('file', uploadedFile);
         importFormData.append('tableName', formData.selectedTable);
+        importFormData.append('sheetName', selectedSheet); // Pass selected sheet
         importFormData.append('importMode', 'append');
         importFormData.append('importMonth', String(new Date().getMonth() + 1));
         importFormData.append('importYear', String(new Date().getFullYear()));
@@ -267,7 +317,7 @@ export function NewProjectModal({ open, onOpenChange, onProjectCreated }: NewPro
           console.warn('Import warning:', importResult);
           // Don't fail project creation, just warn
         } else {
-          console.log('Import success:', importResult.message);
+          console.log('Import success:', importResult.message, '- imported', importResult.imported, 'rows');
         }
       }
 
@@ -291,6 +341,10 @@ export function NewProjectModal({ open, onOpenChange, onProjectCreated }: NewPro
     });
     setUploadedFile(null);
     setDetectedColumns([]);
+    setAvailableSheets([]);
+    setSelectedSheet('');
+    setWorkbookRef(null);
+    setTotalRows(0);
     setError(null);
   };
 
@@ -478,22 +532,73 @@ export function NewProjectModal({ open, onOpenChange, onProjectCreated }: NewPro
                       />
                     </label>
                   ) : (
-                    <div className="flex items-center justify-center gap-3">
-                      <FileSpreadsheet className="h-5 w-5 text-emerald-400" />
-                      <div className="text-right">
-                        <p className="font-medium text-white text-sm">{uploadedFile.name}</p>
-                        <p className="text-xs text-slate-400">{detectedColumns.length} עמודות</p>
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-center gap-3">
+                        <FileSpreadsheet className="h-5 w-5 text-emerald-400" />
+                        <div className="text-right">
+                          <p className="font-medium text-white text-sm">{uploadedFile.name}</p>
+                          <p className="text-xs text-slate-400">
+                            {detectedColumns.length} עמודות • {totalRows.toLocaleString('he-IL')} שורות
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setUploadedFile(null);
+                            setDetectedColumns([]);
+                            setAvailableSheets([]);
+                            setSelectedSheet('');
+                            setWorkbookRef(null);
+                            setTotalRows(0);
+                          }}
+                          className="p-1 hover:bg-slate-700 rounded"
+                        >
+                          <X className="h-4 w-4 text-slate-400" />
+                        </button>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setUploadedFile(null);
-                          setDetectedColumns([]);
-                        }}
-                        className="p-1 hover:bg-slate-700 rounded"
-                      >
-                        <X className="h-4 w-4 text-slate-400" />
-                      </button>
+
+                      {/* Sheet Selector - show when multiple sheets */}
+                      {availableSheets.length > 1 && (
+                        <div className="flex items-center justify-center gap-2">
+                          <span className="text-xs text-slate-400">גיליון:</span>
+                          <select
+                            value={selectedSheet}
+                            onChange={(e) => handleSheetChange(e.target.value)}
+                            className="bg-slate-800 border border-slate-600 rounded px-2 py-1 text-sm text-white"
+                          >
+                            {availableSheets.map((sheet) => (
+                              <option key={sheet} value={sheet}>
+                                {sheet}
+                              </option>
+                            ))}
+                          </select>
+                          <span className="text-xs text-slate-500">
+                            ({availableSheets.length} גיליונות)
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Column Preview */}
+                      {detectedColumns.length > 0 && (
+                        <div className="max-h-24 overflow-y-auto text-right">
+                          <p className="text-xs text-slate-500 mb-1">עמודות שזוהו:</p>
+                          <div className="flex flex-wrap gap-1 justify-end">
+                            {detectedColumns.slice(0, 10).map((col, i) => (
+                              <span
+                                key={i}
+                                className="text-xs bg-slate-700 px-2 py-0.5 rounded text-slate-300"
+                              >
+                                {col.name}
+                              </span>
+                            ))}
+                            {detectedColumns.length > 10 && (
+                              <span className="text-xs text-slate-500">
+                                +{detectedColumns.length - 10} נוספות
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -550,10 +655,17 @@ export function NewProjectModal({ open, onOpenChange, onProjectCreated }: NewPro
                 {uploadedFile && (
                   <div>
                     <p className="text-xs text-slate-500 mb-1">קובץ לייבוא</p>
-                    <div className="flex items-center gap-2 bg-emerald-500/10 px-3 py-2 rounded">
+                    <div className="flex items-center gap-2 bg-emerald-500/10 px-3 py-2 rounded flex-wrap">
                       <FileSpreadsheet className="h-4 w-4 text-emerald-400" />
                       <span className="text-sm text-emerald-300">{uploadedFile.name}</span>
-                      <span className="text-xs text-slate-400">({detectedColumns.length} עמודות)</span>
+                      {availableSheets.length > 1 && (
+                        <span className="text-xs text-cyan-400 bg-cyan-500/20 px-2 py-0.5 rounded">
+                          גיליון: {selectedSheet}
+                        </span>
+                      )}
+                      <span className="text-xs text-slate-400">
+                        ({detectedColumns.length} עמודות • {totalRows.toLocaleString('he-IL')} שורות)
+                      </span>
                     </div>
                   </div>
                 )}
