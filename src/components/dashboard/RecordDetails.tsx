@@ -155,7 +155,7 @@ function InsuranceDataRecordDetails({ record }: { record: Record<string, unknown
               <h3 className="text-white font-bold text-lg">
                 {customerName ? String(customerName) : `תהליך ${formatValue(processNumber)}`}
               </h3>
-              {customerId && (
+              {Boolean(customerId) && (
                 <div className="flex items-center gap-2 text-slate-400 text-sm">
                   <span>מזהה: {String(customerId)}</span>
                   <button onClick={handleCopyId} className="hover:text-white transition-colors">
@@ -165,7 +165,7 @@ function InsuranceDataRecordDetails({ record }: { record: Record<string, unknown
               )}
             </div>
           </div>
-          {phone && (
+          {Boolean(phone) && (
             <div className="flex items-center gap-2 text-slate-300">
               <span>📱</span>
               <span className="font-mono">{formatPhone(phone)}</span>
@@ -212,7 +212,7 @@ function InsuranceDataRecordDetails({ record }: { record: Record<string, unknown
               <p className="text-slate-500 text-xs mb-1">מספר פוליסה</p>
               <p className="text-white font-mono">{formatValue(policyNumber)}</p>
             </div>
-            {expectedPremium && (
+            {Boolean(expectedPremium) && (
               <div className="bg-slate-800/30 rounded-lg p-3">
                 <p className="text-slate-500 text-xs mb-1">פרמיה צפויה</p>
                 <p className="text-emerald-400 font-bold font-mono">{formatCurrency(expectedPremium)}</p>
@@ -222,7 +222,7 @@ function InsuranceDataRecordDetails({ record }: { record: Record<string, unknown
         </div>
 
         {/* Dates */}
-        {joinDate && (
+        {Boolean(joinDate) && (
           <div className="space-y-4">
             <h4 className="text-slate-300 font-medium flex items-center gap-2">
               <span>📅</span> תאריכים
@@ -248,7 +248,7 @@ function InsuranceDataRecordDetails({ record }: { record: Record<string, unknown
               <p className="text-slate-500 text-xs mb-1">סוכן</p>
               <p className="text-white">{formatValue(handler)}</p>
             </div>
-            {agentNumber && (
+            {Boolean(agentNumber) && (
               <div className="bg-slate-800/30 rounded-lg p-3 col-span-2">
                 <p className="text-slate-500 text-xs mb-1">מספר סוכן רשום</p>
                 <p className="text-white font-mono">{formatValue(agentNumber)}</p>
