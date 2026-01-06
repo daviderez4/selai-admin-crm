@@ -84,10 +84,10 @@ export async function GET(
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
-    // Get project details including table_name
+    // Get project details including table_name and all Supabase credentials
     const { data: project, error: projectError } = await supabase
       .from('projects')
-      .select('supabase_url, supabase_service_key, name, table_name')
+      .select('supabase_url, supabase_anon_key, supabase_service_key, name, table_name')
       .eq('id', projectId)
       .single();
 
@@ -109,32 +109,65 @@ export async function GET(
     const sortKey = url.searchParams.get('sortKey') || 'created_at';
     const sortDir = url.searchParams.get('sortDir') || 'desc';
 
-    // Use central Supabase credentials from environment
-    const supabaseUrl = CENTRAL_SUPABASE_URL;
+    // CRITICAL: Determine which Supabase to use based on project's settings
+    // Normalize the project's URL first
+    const projectSupabaseUrl = normalizeSupabaseUrl(project.supabase_url);
+    const isExternalProject = projectSupabaseUrl && projectSupabaseUrl !== CENTRAL_SUPABASE_URL;
 
-    // Prefer central service key from env, fallback to decrypted project key
-    let serviceKey = CENTRAL_SUPABASE_SERVICE_KEY;
+    let supabaseUrl: string;
+    let serviceKey: string;
 
-    if (!serviceKey) {
-      // Fallback: try to decrypt from project
+    if (isExternalProject) {
+      // Project has its own external Supabase - use ONLY its credentials
+      supabaseUrl = projectSupabaseUrl;
+
+      // Decrypt the project's service key
+      if (!project.supabase_service_key) {
+        console.error('External project missing service key:', project.name);
+        return NextResponse.json({
+          error: 'לא הוגדר Service Key לפרויקט זה.',
+          details: 'יש לעדכן את פרטי החיבור בהגדרות הפרויקט.',
+          noData: true
+        }, { status: 400 });
+      }
+
       try {
         serviceKey = decrypt(project.supabase_service_key);
       } catch (decryptError) {
-        console.error('Failed to decrypt service key:', decryptError);
-        return NextResponse.json({ error: 'Missing CENTRAL_SUPABASE_SERVICE_KEY in environment' }, { status: 500 });
+        console.error('Failed to decrypt external service key:', decryptError);
+        return NextResponse.json({
+          error: 'לא ניתן לפענח את מפתח ה-Service של הפרויקט.',
+          details: 'ייתכן שהמפתח נשמר בפורמט שגוי.',
+          noData: true
+        }, { status: 500 });
       }
-    }
 
-    if (!supabaseUrl) {
-      console.error('Missing CENTRAL_SUPABASE_URL');
-      return NextResponse.json({
-        error: 'לא הוגדר URL למסד נתונים מרכזי.',
-        details: 'יש להגדיר CENTRAL_SUPABASE_URL ב-.env.local'
-      }, { status: 500 });
-    }
+      console.log('Connecting to EXTERNAL Supabase:', supabaseUrl, 'for project:', project.name, 'table:', tableName);
+    } else {
+      // Use Central Supabase
+      supabaseUrl = CENTRAL_SUPABASE_URL;
+      serviceKey = CENTRAL_SUPABASE_SERVICE_KEY;
 
-    // Log connection attempt for debugging
-    console.log('Connecting to Central Supabase:', supabaseUrl, 'for project:', project.name, 'table:', tableName);
+      if (!serviceKey) {
+        // Fallback: try to decrypt from project
+        try {
+          serviceKey = decrypt(project.supabase_service_key);
+        } catch (decryptError) {
+          console.error('Failed to decrypt service key:', decryptError);
+          return NextResponse.json({ error: 'Missing CENTRAL_SUPABASE_SERVICE_KEY in environment' }, { status: 500 });
+        }
+      }
+
+      if (!supabaseUrl) {
+        console.error('Missing CENTRAL_SUPABASE_URL');
+        return NextResponse.json({
+          error: 'לא הוגדר URL למסד נתונים מרכזי.',
+          details: 'יש להגדיר CENTRAL_SUPABASE_URL ב-.env.local'
+        }, { status: 500 });
+      }
+
+      console.log('Connecting to CENTRAL Supabase:', supabaseUrl, 'for project:', project.name, 'table:', tableName);
+    }
 
     const projectClient = createSupabaseClient(supabaseUrl, serviceKey, {
       auth: { autoRefreshToken: false, persistSession: false }
