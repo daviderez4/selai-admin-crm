@@ -15,6 +15,13 @@ import {
   Download,
   X,
   Check,
+  Mail,
+  Share2,
+  Table2,
+  BarChart3,
+  Calculator,
+  PieChart,
+  HelpCircle,
 } from 'lucide-react';
 import { Header } from '@/components/layout/Header';
 import { Card, CardContent } from '@/components/ui/card';
@@ -49,6 +56,7 @@ const COLUMNS: ColumnConfig[] = [
   { key: 'יצרן_קיים', label: 'יצרן קיים', icon: '🏭', type: 'text', width: '120px', sortable: true },
   { key: 'מספר_חשבון_פוליסה_קיים', label: 'מספר פוליסה', icon: '📄', type: 'text', width: '120px', sortable: true },
   { key: 'סהכ_צבירה_צפויה_מניוד', label: 'צבירה צפויה', icon: '💰', type: 'currency', width: '120px', sortable: true },
+  { key: 'total_expected_accumulation', label: 'צבירה + הפקדה', icon: '💎', type: 'currency', width: '130px', sortable: true },
   { key: 'סוג_מוצר_חדש', label: 'מוצר חדש', icon: '🆕', type: 'text', width: '120px', sortable: true },
   { key: 'יצרן_חדש', label: 'יצרן חדש', icon: '🏢', type: 'text', width: '110px', sortable: true },
   { key: 'מספר_חשבון_פוליסה_חדש', label: 'מספר חדש', icon: '🔖', type: 'text', width: '110px', sortable: true },
@@ -67,6 +75,7 @@ const DEFAULT_VISIBLE_COLUMNS = new Set([
   'מטפל',
   'לקוח',
   'סהכ_צבירה_צפויה_מניוד',
+  'total_expected_accumulation', // צבירה + הפקדה חד פעמית
   'יצרן_חדש',
   'תאריך_פתיחת_תהליך',
   'פרמיה_צפויה',
@@ -106,12 +115,51 @@ export default function DataPage() {
   const [filterSidebarOpen, setFilterSidebarOpen] = useState(false);
   const [columnsMenuOpen, setColumnsMenuOpen] = useState(false);
   const [visibleColumns, setVisibleColumns] = useState<Set<string>>(DEFAULT_VISIBLE_COLUMNS);
+  const [columnPrefsLoaded, setColumnPrefsLoaded] = useState(false);
   const [filters, setFilters] = useState<DynamicFilterValues>(INITIAL_FILTERS);
   const [activeQuickView, setActiveQuickView] = useState('all');
   const [selectedRecord, setSelectedRecord] = useState<Record<string, unknown> | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [drillDownType, setDrillDownType] = useState<'accumulation' | 'handlers' | 'supervisors' | 'records' | null>(null);
   const [drillDownOpen, setDrillDownOpen] = useState(false);
+
+  // View mode - table or dashboard
+  const [viewMode, setViewMode] = useState<'table' | 'dashboard'>('table');
+
+  // Summary columns configuration (columns to sum up)
+  const [summaryColumns, setSummaryColumns] = useState<Set<string>>(new Set());
+  const [showSummaryConfig, setShowSummaryConfig] = useState(false);
+
+  // Help modal
+  const [showHelp, setShowHelp] = useState(false);
+
+  // Load column preferences from localStorage
+  useEffect(() => {
+    const storageKey = `column_prefs_${projectId}`;
+    try {
+      const saved = localStorage.getItem(storageKey);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setVisibleColumns(new Set(parsed));
+        }
+      }
+    } catch (e) {
+      console.error('Failed to load column preferences:', e);
+    }
+    setColumnPrefsLoaded(true);
+  }, [projectId]);
+
+  // Save column preferences to localStorage when they change
+  useEffect(() => {
+    if (!columnPrefsLoaded) return; // Don't save before initial load
+    const storageKey = `column_prefs_${projectId}`;
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(Array.from(visibleColumns)));
+    } catch (e) {
+      console.error('Failed to save column preferences:', e);
+    }
+  }, [visibleColumns, projectId, columnPrefsLoaded]);
 
   // Fetch project info
   useEffect(() => {
@@ -174,8 +222,9 @@ export default function DataPage() {
         const firstRow = fetchedData[0];
 
         // Meta columns to exclude from display
+        // Note: total_expected_accumulation is included as it contains צבירה + הפקדה חד פעמית
         const metaColumns = ['id', 'raw_data', 'created_at', 'updated_at', 'import_batch',
-          'import_date', 'import_month', 'import_year', 'project_id', 'total_expected_accumulation'];
+          'import_date', 'import_month', 'import_year', 'project_id'];
 
         // Check raw_data format
         const rawData = firstRow.raw_data;
@@ -443,6 +492,193 @@ export default function DataPage() {
     }
   }, [filteredData, visibleColumns, activeColumns, projectInfo?.table_name]);
 
+  // Share via email handler
+  const handleShareEmail = useCallback(() => {
+    if (filteredData.length === 0) {
+      toast.error('אין נתונים לשיתוף');
+      return;
+    }
+
+    // Build email body with summary
+    const visibleKeys = activeColumns.filter(c => visibleColumns.has(c.key)).map(c => c.key);
+    const visibleLabels = activeColumns.filter(c => visibleColumns.has(c.key)).map(c => c.label);
+
+    const subject = encodeURIComponent(`דו"ח ${projectInfo?.name || 'נתונים'} - ${new Date().toLocaleDateString('he-IL')}`);
+
+    // Create a summary of the data
+    let body = `דו"ח ${projectInfo?.name || 'פרויקט'}\n`;
+    body += `תאריך: ${new Date().toLocaleDateString('he-IL')}\n`;
+    body += `סה"כ רשומות: ${filteredData.length.toLocaleString('he-IL')}\n\n`;
+    body += `עמודות: ${visibleLabels.join(', ')}\n\n`;
+
+    // Add first 10 rows as preview (if not too long)
+    if (filteredData.length > 0) {
+      body += '--- תצוגה מקדימה (10 רשומות ראשונות) ---\n\n';
+      filteredData.slice(0, 10).forEach((row, idx) => {
+        body += `${idx + 1}. `;
+        const values = visibleKeys.slice(0, 5).map(key => {
+          const col = activeColumns.find(c => c.key === key);
+          const value = row[key];
+          return `${col?.label || key}: ${value || '-'}`;
+        });
+        body += values.join(' | ') + '\n';
+      });
+    }
+
+    body += '\n---\nלצפייה בדו"ח המלא, היכנס למערכת.';
+
+    // Open email client
+    window.location.href = `mailto:?subject=${subject}&body=${encodeURIComponent(body)}`;
+    toast.success('נפתח חלון דוא"ל');
+  }, [filteredData, activeColumns, visibleColumns, projectInfo?.name]);
+
+  // Copy link handler
+  const handleCopyLink = useCallback(() => {
+    const currentUrl = window.location.href;
+    navigator.clipboard.writeText(currentUrl).then(() => {
+      toast.success('הקישור הועתק ללוח');
+    }).catch(() => {
+      toast.error('שגיאה בהעתקת הקישור');
+    });
+  }, []);
+
+  // Load summary columns from localStorage
+  useEffect(() => {
+    const storageKey = `summary_cols_${projectId}`;
+    try {
+      const saved = localStorage.getItem(storageKey);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          setSummaryColumns(new Set(parsed));
+        }
+      }
+    } catch (e) {
+      console.error('Failed to load summary columns:', e);
+    }
+  }, [projectId]);
+
+  // Save summary columns to localStorage
+  useEffect(() => {
+    const storageKey = `summary_cols_${projectId}`;
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(Array.from(summaryColumns)));
+    } catch (e) {
+      console.error('Failed to save summary columns:', e);
+    }
+  }, [summaryColumns, projectId]);
+
+  // Calculate summaries for selected columns
+  const columnSummaries = useMemo(() => {
+    if (summaryColumns.size === 0 || filteredData.length === 0) return {};
+
+    const summaries: Record<string, { sum: number; avg: number; min: number; max: number; count: number }> = {};
+
+    summaryColumns.forEach(colKey => {
+      let sum = 0;
+      let count = 0;
+      let min = Infinity;
+      let max = -Infinity;
+
+      filteredData.forEach(row => {
+        // Handle nested raw_data columns
+        let value: unknown;
+        if (colKey.startsWith('raw_data.')) {
+          const rawData = row.raw_data as Record<string, unknown> | undefined;
+          const nestedKey = colKey.replace('raw_data.', '');
+          value = rawData?.[nestedKey];
+        } else {
+          value = row[colKey];
+        }
+
+        // Parse value to number
+        const num = typeof value === 'number' ? value : parseFloat(String(value || '').replace(/[^\d.-]/g, ''));
+        if (!isNaN(num)) {
+          sum += num;
+          count++;
+          min = Math.min(min, num);
+          max = Math.max(max, num);
+        }
+      });
+
+      if (count > 0) {
+        summaries[colKey] = {
+          sum,
+          avg: sum / count,
+          min: min === Infinity ? 0 : min,
+          max: max === -Infinity ? 0 : max,
+          count,
+        };
+      }
+    });
+
+    return summaries;
+  }, [summaryColumns, filteredData]);
+
+  // Get column label by key
+  const getColumnLabel = useCallback((key: string) => {
+    const col = activeColumns.find(c => c.key === key);
+    return col?.label || key.replace('raw_data.', '');
+  }, [activeColumns]);
+
+  // Detect numeric columns
+  const numericColumns = useMemo(() => {
+    if (filteredData.length === 0) return [];
+
+    return activeColumns.filter(col => {
+      // Sample a few rows to determine if column is numeric
+      const sampleSize = Math.min(10, filteredData.length);
+      let numericCount = 0;
+
+      for (let i = 0; i < sampleSize; i++) {
+        const row = filteredData[i];
+        let value: unknown;
+        if (col.key.startsWith('raw_data.')) {
+          const rawData = row.raw_data as Record<string, unknown> | undefined;
+          const nestedKey = col.key.replace('raw_data.', '');
+          value = rawData?.[nestedKey];
+        } else {
+          value = row[col.key];
+        }
+
+        const num = typeof value === 'number' ? value : parseFloat(String(value || '').replace(/[^\d.-]/g, ''));
+        if (!isNaN(num) && num !== 0) {
+          numericCount++;
+        }
+      }
+
+      return numericCount >= sampleSize * 0.5; // At least 50% numeric
+    });
+  }, [activeColumns, filteredData]);
+
+  // Group data by category for charts
+  const groupedData = useMemo(() => {
+    const groups: Record<string, Record<string, number>> = {};
+
+    // Group by common fields
+    const groupByFields = ['מפקח', 'יצרן_חדש', 'סוג_מוצר_חדש', 'מטפל'];
+
+    groupByFields.forEach(field => {
+      const fieldGroups: Record<string, number> = {};
+      filteredData.forEach(row => {
+        let value: unknown;
+        if (field.startsWith('raw_data.')) {
+          const rawData = row.raw_data as Record<string, unknown> | undefined;
+          const nestedKey = field.replace('raw_data.', '');
+          value = rawData?.[nestedKey];
+        } else {
+          value = row[field];
+        }
+
+        const key = String(value || 'לא מוגדר');
+        fieldGroups[key] = (fieldGroups[key] || 0) + 1;
+      });
+      groups[field] = fieldGroups;
+    });
+
+    return groups;
+  }, [filteredData]);
+
   return (
     <div className="flex flex-col h-full">
       <Header
@@ -451,6 +687,51 @@ export default function DataPage() {
       />
 
       <div className="flex-1 p-6 overflow-auto space-y-6" dir="rtl">
+        {/* View Mode Tabs + Help Button */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 p-1 bg-slate-800/50 rounded-lg w-fit">
+            <Button
+              variant={viewMode === 'table' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setViewMode('table')}
+              className={cn(
+                'gap-2',
+                viewMode === 'table'
+                  ? 'bg-emerald-500 hover:bg-emerald-600 text-white'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-700'
+              )}
+            >
+              <Table2 className="h-4 w-4" />
+              טבלה
+            </Button>
+            <Button
+              variant={viewMode === 'dashboard' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setViewMode('dashboard')}
+              className={cn(
+                'gap-2',
+                viewMode === 'dashboard'
+                  ? 'bg-emerald-500 hover:bg-emerald-600 text-white'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-700'
+              )}
+            >
+              <BarChart3 className="h-4 w-4" />
+              דשבורד מנהלים
+            </Button>
+          </div>
+
+          {/* Help Button */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowHelp(true)}
+            className="border-slate-600 text-slate-300 hover:bg-slate-700 gap-2"
+          >
+            <HelpCircle className="h-4 w-4" />
+            עזרה
+          </Button>
+        </div>
+
         {/* Stats Cards */}
         {stats && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
@@ -623,7 +904,7 @@ export default function DataPage() {
             </DropdownMenuTrigger>
             <DropdownMenuContent
               align="start"
-              className="bg-slate-800 border-slate-700 w-64 max-h-80 overflow-y-auto"
+              className="bg-slate-800 border-slate-700 w-72 max-h-80 overflow-y-auto"
             >
               <div className="p-2 border-b border-slate-700 flex items-center justify-between">
                 <span className="text-slate-300 text-sm font-medium">בחר עמודות</span>
@@ -632,37 +913,56 @@ export default function DataPage() {
                     variant="ghost"
                     size="sm"
                     onClick={() => setVisibleColumns(new Set(activeColumns.map(c => c.key)))}
-                    className="h-7 text-xs text-slate-400 hover:text-white"
+                    className="h-7 text-xs text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10"
                   >
-                    הכל
+                    <Check className="h-3 w-3 ml-1" />
+                    בחר הכל
                   </Button>
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => setVisibleColumns(projectInfo?.table_name === 'master_data' ? DEFAULT_VISIBLE_COLUMNS : new Set(activeColumns.slice(0, 50).map(c => c.key)))}
-                    className="h-7 text-xs text-slate-400 hover:text-white"
+                    onClick={() => setVisibleColumns(new Set())}
+                    className="h-7 text-xs text-red-400 hover:text-red-300 hover:bg-red-500/10"
                   >
-                    ברירת מחדל
+                    <X className="h-3 w-3 ml-1" />
+                    הסר הכל
                   </Button>
                 </div>
               </div>
-              {activeColumns.map(column => (
-                <DropdownMenuItem
-                  key={column.key}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    handleColumnToggle(column.key);
-                  }}
-                  className="flex items-center gap-2 text-slate-300 cursor-pointer"
-                >
-                  <Checkbox
-                    checked={visibleColumns.has(column.key)}
-                    className="border-slate-600 data-[state=checked]:bg-emerald-500"
-                  />
-                  <span className="text-sm">{column.icon}</span>
-                  <span>{column.label}</span>
-                </DropdownMenuItem>
-              ))}
+              {activeColumns.map((column, index) => {
+                // Convert index to Excel column letter (A, B, C, ..., Z, AA, AB, ...)
+                const getExcelColumn = (idx: number): string => {
+                  let col = '';
+                  let n = idx;
+                  while (n >= 0) {
+                    col = String.fromCharCode((n % 26) + 65) + col;
+                    n = Math.floor(n / 26) - 1;
+                  }
+                  return col;
+                };
+                const excelLetter = getExcelColumn(index);
+
+                return (
+                  <DropdownMenuItem
+                    key={column.key}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handleColumnToggle(column.key);
+                    }}
+                    className="flex items-center gap-2 text-slate-300 cursor-pointer"
+                  >
+                    <Checkbox
+                      checked={visibleColumns.has(column.key)}
+                      className="border-slate-600 data-[state=checked]:bg-emerald-500"
+                    />
+                    <span className="text-xs font-mono bg-slate-700/50 text-slate-400 px-1.5 py-0.5 rounded min-w-[28px] text-center">
+                      {excelLetter}
+                    </span>
+                    <span className="text-sm">{column.icon}</span>
+                    <span className="truncate">{column.label}</span>
+                  </DropdownMenuItem>
+                );
+              })}
             </DropdownMenuContent>
           </DropdownMenu>
 
@@ -688,6 +988,32 @@ export default function DataPage() {
               >
                 <FileSpreadsheet className="h-4 w-4 ml-2 text-blue-400" />
                 ייצוא ל-CSV
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* Share/Email Button */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="border-slate-700 text-slate-300 hover:bg-slate-800">
+                <Share2 className="h-4 w-4 ml-2" />
+                שיתוף
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="bg-slate-800 border-slate-700">
+              <DropdownMenuItem
+                onClick={() => handleShareEmail()}
+                className="text-slate-300 cursor-pointer"
+              >
+                <Mail className="h-4 w-4 ml-2 text-blue-400" />
+                שלח במייל
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => handleCopyLink()}
+                className="text-slate-300 cursor-pointer"
+              >
+                <Share2 className="h-4 w-4 ml-2 text-purple-400" />
+                העתק קישור
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -728,16 +1054,309 @@ export default function DataPage() {
           </Card>
         )}
 
-        {/* Data Table */}
-        <DataTable
-          data={filteredData}
-          columns={activeColumns}
-          loading={loading}
-          pageSize={50}
-          onRowClick={handleRowClick}
-          visibleColumns={visibleColumns}
-          totalCount={stats?.total}
-        />
+        {/* View Content Based on Mode */}
+        {viewMode === 'table' ? (
+          /* Data Table */
+          <DataTable
+            data={filteredData}
+            columns={activeColumns}
+            loading={loading}
+            pageSize={50}
+            onRowClick={handleRowClick}
+            visibleColumns={visibleColumns}
+            totalCount={stats?.total}
+          />
+        ) : (
+          /* Dashboard View */
+          <div className="space-y-6">
+            {/* Summary Configuration */}
+            <Card className="bg-slate-800/50 border-slate-700">
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <Calculator className="h-5 w-5 text-emerald-400" />
+                    <h3 className="text-white font-medium">עמודות לסיכום</h3>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowSummaryConfig(!showSummaryConfig)}
+                    className="border-slate-600 text-slate-300 hover:bg-slate-700"
+                  >
+                    {showSummaryConfig ? 'סגור' : 'הגדר עמודות'}
+                  </Button>
+                </div>
+
+                {showSummaryConfig && (
+                  <div className="p-4 bg-slate-900/50 rounded-lg border border-slate-700 mb-4 max-h-64 overflow-y-auto">
+                    <p className="text-slate-400 text-sm mb-3">בחר עמודות לסיכום (מספריות יחושבו אוטומטית):</p>
+                    <div className="flex flex-wrap gap-2">
+                      {activeColumns.map((col, index) => {
+                        const getExcelColumn = (idx: number): string => {
+                          let colStr = '';
+                          let n = idx;
+                          while (n >= 0) {
+                            colStr = String.fromCharCode((n % 26) + 65) + colStr;
+                            n = Math.floor(n / 26) - 1;
+                          }
+                          return colStr;
+                        };
+                        const excelLetter = getExcelColumn(index);
+                        const isNumeric = numericColumns.some(nc => nc.key === col.key);
+
+                        return (
+                          <button
+                            key={col.key}
+                            onClick={() => {
+                              setSummaryColumns(prev => {
+                                const newSet = new Set(prev);
+                                if (newSet.has(col.key)) {
+                                  newSet.delete(col.key);
+                                } else {
+                                  newSet.add(col.key);
+                                }
+                                return newSet;
+                              });
+                            }}
+                            className={cn(
+                              'px-3 py-1.5 rounded-lg text-sm flex items-center gap-2 transition-colors',
+                              summaryColumns.has(col.key)
+                                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/50'
+                                : 'bg-slate-700/50 text-slate-400 border border-slate-600 hover:bg-slate-700'
+                            )}
+                          >
+                            <span className="font-mono text-xs opacity-60">{excelLetter}</span>
+                            {col.label}
+                            {isNumeric && <span className="text-xs text-blue-400">#</span>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {activeColumns.length === 0 && (
+                      <p className="text-slate-500 text-sm">לא נמצאו עמודות בנתונים</p>
+                    )}
+                  </div>
+                )}
+
+                {/* Summary Cards */}
+                {summaryColumns.size > 0 && Object.keys(columnSummaries).length > 0 && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 overflow-x-auto">
+                    {Array.from(summaryColumns).map(colKey => {
+                      const summary = columnSummaries[colKey];
+                      if (!summary) return null;
+
+                      return (
+                        <div
+                          key={colKey}
+                          className="p-4 bg-gradient-to-br from-slate-900 to-slate-800 rounded-xl border border-slate-700"
+                        >
+                          <h4 className="text-slate-400 text-sm mb-3">{getColumnLabel(colKey)}</h4>
+                          <div className="space-y-2">
+                            <div className="flex justify-between items-center">
+                              <span className="text-slate-500 text-sm">סה"כ:</span>
+                              <span className="text-emerald-400 font-bold text-lg">
+                                {summary.sum.toLocaleString('he-IL', { maximumFractionDigits: 0 })}
+                              </span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                              <span className="text-slate-500 text-sm">ממוצע:</span>
+                              <span className="text-blue-400">
+                                {summary.avg.toLocaleString('he-IL', { maximumFractionDigits: 2 })}
+                              </span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                              <span className="text-slate-500 text-sm">מינימום:</span>
+                              <span className="text-slate-300">
+                                {summary.min.toLocaleString('he-IL', { maximumFractionDigits: 0 })}
+                              </span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                              <span className="text-slate-500 text-sm">מקסימום:</span>
+                              <span className="text-slate-300">
+                                {summary.max.toLocaleString('he-IL', { maximumFractionDigits: 0 })}
+                              </span>
+                            </div>
+                            <div className="flex justify-between items-center pt-2 border-t border-slate-700">
+                              <span className="text-slate-500 text-sm">רשומות:</span>
+                              <span className="text-slate-400">{summary.count.toLocaleString('he-IL')}</span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    {/* Combined Total Card */}
+                    {summaryColumns.size >= 2 && (
+                      <div className="p-4 bg-gradient-to-br from-emerald-900/30 to-slate-800 rounded-xl border border-emerald-700/50">
+                        <h4 className="text-emerald-400 text-sm mb-3 flex items-center gap-2">
+                          <TrendingUp className="h-4 w-4" />
+                          סה"כ משולב
+                        </h4>
+                        <div className="space-y-2">
+                          <div className="flex justify-between items-center">
+                            <span className="text-slate-500 text-sm">סכום כל העמודות:</span>
+                            <span className="text-emerald-400 font-bold text-xl">
+                              {Object.values(columnSummaries)
+                                .reduce((acc, s) => acc + s.sum, 0)
+                                .toLocaleString('he-IL', { maximumFractionDigits: 0 })}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {summaryColumns.size === 0 && (
+                  <div className="text-center py-8 text-slate-500">
+                    <Calculator className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                    <p>בחר עמודות מספריות לסיכום</p>
+                    <p className="text-sm mt-1">לחץ על "הגדר עמודות" למעלה</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Distribution Charts */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 overflow-x-auto">
+              {/* By Supervisor */}
+              {groupedData['מפקח'] && Object.keys(groupedData['מפקח']).length > 0 && (
+                <Card className="bg-slate-800/50 border-slate-700">
+                  <CardContent className="pt-6">
+                    <div className="flex items-center gap-3 mb-4">
+                      <PieChart className="h-5 w-5 text-purple-400" />
+                      <h3 className="text-white font-medium">התפלגות לפי מפקח</h3>
+                    </div>
+                    <div className="space-y-2 max-h-64 overflow-y-auto">
+                      {Object.entries(groupedData['מפקח'])
+                        .sort((a, b) => b[1] - a[1])
+                        .slice(0, 10)
+                        .map(([name, count]) => {
+                          const percentage = (count / filteredData.length) * 100;
+                          return (
+                            <div key={name} className="flex items-center gap-3">
+                              <div className="w-24 truncate text-slate-400 text-sm">{name}</div>
+                              <div className="flex-1 bg-slate-700/50 rounded-full h-4 overflow-hidden">
+                                <div
+                                  className="bg-purple-500 h-full rounded-full transition-all"
+                                  style={{ width: `${percentage}%` }}
+                                />
+                              </div>
+                              <div className="w-16 text-left text-slate-300 text-sm">
+                                {count.toLocaleString('he-IL')}
+                              </div>
+                            </div>
+                          );
+                        })}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* By Manufacturer */}
+              {groupedData['יצרן_חדש'] && Object.keys(groupedData['יצרן_חדש']).length > 0 && (
+                <Card className="bg-slate-800/50 border-slate-700">
+                  <CardContent className="pt-6">
+                    <div className="flex items-center gap-3 mb-4">
+                      <BarChart3 className="h-5 w-5 text-blue-400" />
+                      <h3 className="text-white font-medium">התפלגות לפי יצרן</h3>
+                    </div>
+                    <div className="space-y-2 max-h-64 overflow-y-auto">
+                      {Object.entries(groupedData['יצרן_חדש'])
+                        .sort((a, b) => b[1] - a[1])
+                        .slice(0, 10)
+                        .map(([name, count]) => {
+                          const percentage = (count / filteredData.length) * 100;
+                          return (
+                            <div key={name} className="flex items-center gap-3">
+                              <div className="w-24 truncate text-slate-400 text-sm">{name}</div>
+                              <div className="flex-1 bg-slate-700/50 rounded-full h-4 overflow-hidden">
+                                <div
+                                  className="bg-blue-500 h-full rounded-full transition-all"
+                                  style={{ width: `${percentage}%` }}
+                                />
+                              </div>
+                              <div className="w-16 text-left text-slate-300 text-sm">
+                                {count.toLocaleString('he-IL')}
+                              </div>
+                            </div>
+                          );
+                        })}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* By Product Type */}
+              {groupedData['סוג_מוצר_חדש'] && Object.keys(groupedData['סוג_מוצר_חדש']).length > 0 && (
+                <Card className="bg-slate-800/50 border-slate-700">
+                  <CardContent className="pt-6">
+                    <div className="flex items-center gap-3 mb-4">
+                      <BarChart3 className="h-5 w-5 text-cyan-400" />
+                      <h3 className="text-white font-medium">התפלגות לפי סוג מוצר</h3>
+                    </div>
+                    <div className="space-y-2 max-h-64 overflow-y-auto">
+                      {Object.entries(groupedData['סוג_מוצר_חדש'])
+                        .sort((a, b) => b[1] - a[1])
+                        .slice(0, 10)
+                        .map(([name, count]) => {
+                          const percentage = (count / filteredData.length) * 100;
+                          return (
+                            <div key={name} className="flex items-center gap-3">
+                              <div className="w-24 truncate text-slate-400 text-sm">{name}</div>
+                              <div className="flex-1 bg-slate-700/50 rounded-full h-4 overflow-hidden">
+                                <div
+                                  className="bg-cyan-500 h-full rounded-full transition-all"
+                                  style={{ width: `${percentage}%` }}
+                                />
+                              </div>
+                              <div className="w-16 text-left text-slate-300 text-sm">
+                                {count.toLocaleString('he-IL')}
+                              </div>
+                            </div>
+                          );
+                        })}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* By Handler */}
+              {groupedData['מטפל'] && Object.keys(groupedData['מטפל']).length > 0 && (
+                <Card className="bg-slate-800/50 border-slate-700">
+                  <CardContent className="pt-6">
+                    <div className="flex items-center gap-3 mb-4">
+                      <Users className="h-5 w-5 text-amber-400" />
+                      <h3 className="text-white font-medium">התפלגות לפי מטפל</h3>
+                    </div>
+                    <div className="space-y-2 max-h-64 overflow-y-auto">
+                      {Object.entries(groupedData['מטפל'])
+                        .sort((a, b) => b[1] - a[1])
+                        .slice(0, 10)
+                        .map(([name, count]) => {
+                          const percentage = (count / filteredData.length) * 100;
+                          return (
+                            <div key={name} className="flex items-center gap-3">
+                              <div className="w-24 truncate text-slate-400 text-sm">{name}</div>
+                              <div className="flex-1 bg-slate-700/50 rounded-full h-4 overflow-hidden">
+                                <div
+                                  className="bg-amber-500 h-full rounded-full transition-all"
+                                  style={{ width: `${percentage}%` }}
+                                />
+                              </div>
+                              <div className="w-16 text-left text-slate-300 text-sm">
+                                {count.toLocaleString('he-IL')}
+                              </div>
+                            </div>
+                          );
+                        })}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Filter Sidebar */}
@@ -764,6 +1383,163 @@ export default function DataPage() {
         type={drillDownType}
         projectId={projectId}
       />
+
+      {/* Help Modal */}
+      {showHelp && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-800 border border-slate-700 rounded-xl max-w-2xl w-full max-h-[80vh] overflow-y-auto">
+            <div className="sticky top-0 bg-slate-800 border-b border-slate-700 p-4 flex items-center justify-between">
+              <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                <HelpCircle className="h-5 w-5 text-emerald-400" />
+                מדריך שימוש במערכת
+              </h2>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setShowHelp(false)}
+                className="text-slate-400 hover:text-white"
+              >
+                <X className="h-5 w-5" />
+              </Button>
+            </div>
+
+            <div className="p-6 space-y-6" dir="rtl">
+              {/* View Modes */}
+              <div className="space-y-3">
+                <h3 className="text-lg font-semibold text-emerald-400 flex items-center gap-2">
+                  <Table2 className="h-5 w-5" />
+                  מצבי תצוגה
+                </h3>
+                <div className="bg-slate-900/50 rounded-lg p-4 space-y-2">
+                  <div className="flex items-start gap-3">
+                    <Table2 className="h-4 w-4 text-blue-400 mt-1 shrink-0" />
+                    <div>
+                      <span className="text-white font-medium">טבלה</span>
+                      <span className="text-slate-400"> - תצוגת כל הנתונים בטבלה עם אפשרות סינון, מיון וחיפוש</span>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <BarChart3 className="h-4 w-4 text-purple-400 mt-1 shrink-0" />
+                    <div>
+                      <span className="text-white font-medium">דשבורד מנהלים</span>
+                      <span className="text-slate-400"> - סיכומים, גרפים והתפלגויות לניתוח מהיר</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Column Selection */}
+              <div className="space-y-3">
+                <h3 className="text-lg font-semibold text-emerald-400 flex items-center gap-2">
+                  <Columns3 className="h-5 w-5" />
+                  בחירת עמודות
+                </h3>
+                <div className="bg-slate-900/50 rounded-lg p-4 space-y-2 text-slate-300">
+                  <p>לחץ על כפתור <span className="text-white font-medium">"עמודות"</span> כדי לבחור אילו עמודות להציג</p>
+                  <ul className="list-disc mr-5 space-y-1 text-sm">
+                    <li>כל עמודה מסומנת באות אקסל (A, B, C...)</li>
+                    <li><span className="text-emerald-400">"בחר הכל"</span> - מציג את כל העמודות</li>
+                    <li><span className="text-red-400">"הסר הכל"</span> - מסתיר את כל העמודות</li>
+                    <li>ההעדפות נשמרות אוטומטית לפרויקט</li>
+                  </ul>
+                </div>
+              </div>
+
+              {/* Dashboard Summary */}
+              <div className="space-y-3">
+                <h3 className="text-lg font-semibold text-emerald-400 flex items-center gap-2">
+                  <Calculator className="h-5 w-5" />
+                  סיכום עמודות בדשבורד
+                </h3>
+                <div className="bg-slate-900/50 rounded-lg p-4 space-y-2 text-slate-300">
+                  <p>במצב דשבורד, ניתן לבחור עמודות לסיכום:</p>
+                  <ul className="list-disc mr-5 space-y-1 text-sm">
+                    <li>לחץ <span className="text-white font-medium">"הגדר עמודות"</span> לבחירת העמודות</li>
+                    <li>עמודות מספריות מסומנות ב-<span className="text-blue-400">#</span></li>
+                    <li>לכל עמודה מוצגים: סה"כ, ממוצע, מינימום, מקסימום</li>
+                    <li className="text-emerald-400">טיפ: "צבירה + הפקדה" כולל את שתי העמודות יחד!</li>
+                  </ul>
+                </div>
+              </div>
+
+              {/* Export & Share */}
+              <div className="space-y-3">
+                <h3 className="text-lg font-semibold text-emerald-400 flex items-center gap-2">
+                  <Share2 className="h-5 w-5" />
+                  ייצוא ושיתוף
+                </h3>
+                <div className="bg-slate-900/50 rounded-lg p-4 space-y-2 text-slate-300">
+                  <div className="flex items-start gap-3">
+                    <Download className="h-4 w-4 text-green-400 mt-1 shrink-0" />
+                    <div>
+                      <span className="text-white font-medium">ייצוא</span>
+                      <span className="text-slate-400"> - הורדת הנתונים כקובץ Excel או CSV</span>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <Mail className="h-4 w-4 text-blue-400 mt-1 shrink-0" />
+                    <div>
+                      <span className="text-white font-medium">שלח במייל</span>
+                      <span className="text-slate-400"> - שליחת סיכום הדוח בדוא"ל</span>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <Share2 className="h-4 w-4 text-purple-400 mt-1 shrink-0" />
+                    <div>
+                      <span className="text-white font-medium">העתק קישור</span>
+                      <span className="text-slate-400"> - העתקת קישור לדף הנוכחי</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Filters */}
+              <div className="space-y-3">
+                <h3 className="text-lg font-semibold text-emerald-400 flex items-center gap-2">
+                  <Filter className="h-5 w-5" />
+                  סינון וחיפוש
+                </h3>
+                <div className="bg-slate-900/50 rounded-lg p-4 space-y-2 text-slate-300">
+                  <div className="flex items-start gap-3">
+                    <Search className="h-4 w-4 text-slate-400 mt-1 shrink-0" />
+                    <div>
+                      <span className="text-white font-medium">חיפוש</span>
+                      <span className="text-slate-400"> - חיפוש חופשי בכל השדות</span>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <Filter className="h-4 w-4 text-orange-400 mt-1 shrink-0" />
+                    <div>
+                      <span className="text-white font-medium">סינון מתקדם</span>
+                      <span className="text-slate-400"> - סינון לפי ערכים ספציפיים בכל עמודה</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Stats Cards */}
+              <div className="space-y-3">
+                <h3 className="text-lg font-semibold text-emerald-400 flex items-center gap-2">
+                  <TrendingUp className="h-5 w-5" />
+                  כרטיסי סטטיסטיקה
+                </h3>
+                <div className="bg-slate-900/50 rounded-lg p-4 text-slate-300">
+                  <p className="text-sm">לחיצה על כרטיס סטטיסטיקה פותחת חלון עם פירוט מלא (drill-down)</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="border-t border-slate-700 p-4">
+              <Button
+                onClick={() => setShowHelp(false)}
+                className="w-full bg-emerald-500 hover:bg-emerald-600 text-white"
+              >
+                הבנתי, תודה!
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
