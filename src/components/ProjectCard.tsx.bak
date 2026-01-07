@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Database, ExternalLink, MoreVertical, Trash2, Settings, ArrowLeft, AlertCircle } from 'lucide-react';
+import { Database, ExternalLink, MoreVertical, Trash2, Settings, ArrowLeft } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
@@ -21,8 +21,6 @@ interface ProjectStats {
   records: number | null;
   tables: number | null;
   lastImport: string | null;
-  isConfigured: boolean;
-  error?: string;
 }
 
 interface ProjectCardProps {
@@ -38,12 +36,7 @@ export function ProjectCard({
   onDelete,
   onSettings,
 }: ProjectCardProps) {
-  const [stats, setStats] = useState<ProjectStats>({
-    records: null,
-    tables: null,
-    lastImport: null,
-    isConfigured: project.is_configured ?? false,
-  });
+  const [stats, setStats] = useState<ProjectStats>({ records: null, tables: null, lastImport: null });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -68,10 +61,7 @@ export function ProjectCard({
     fetchStats();
   }, [project.id]);
 
-  let urlHost = '';
-  try {
-    if (project.supabase_url) urlHost = new URL(project.supabase_url).host;
-  } catch { urlHost = 'לא מוגדר'; }
+  const urlHost = new URL(project.supabase_url).host;
 
   const formatNumber = (num: number | null): string => {
     if (num === null) return '-';

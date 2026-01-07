@@ -1,20 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { createClient as createSupabaseClient } from '@supabase/supabase-js';
-import crypto from 'crypto';
-
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || crypto.randomBytes(32).toString('hex');
-
-function decrypt(text: string): string {
-  const textParts = text.split(':');
-  const iv = Buffer.from(textParts.shift()!, 'hex');
-  const encryptedText = textParts.join(':');
-  const key = Buffer.from(ENCRYPTION_KEY.slice(0, 32), 'utf-8');
-  const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
-  let decrypted = decipher.update(encryptedText, 'hex', 'utf8');
-  decrypted += decipher.final('utf8');
-  return decrypted;
-}
+import { createProjectClient } from '@/lib/utils/projectDatabase';
 
 export async function GET(
   request: Request,
@@ -51,7 +37,7 @@ export async function GET(
     // Get project details
     const { data: project, error: projectError } = await supabase
       .from('projects')
-      .select('supabase_url, supabase_service_key')
+      .select('supabase_url, supabase_service_key, table_name, is_configured')
       .eq('id', projectId)
       .single();
 
@@ -59,11 +45,24 @@ export async function GET(
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
     }
 
-    // Connect to project's Supabase
-    const serviceKey = decrypt(project.supabase_service_key);
-    const projectClient = createSupabaseClient(project.supabase_url, serviceKey, {
-      auth: { autoRefreshToken: false, persistSession: false }
+    // STRICT PROJECT ISOLATION - No Central fallback!
+    const clientResult = createProjectClient({
+      supabase_url: project.supabase_url,
+      supabase_service_key: project.supabase_service_key,
+      table_name: tableName,
+      is_configured: project.is_configured,
     });
+
+    if (!clientResult.success) {
+      return NextResponse.json({
+        error: 'מסד הנתונים של הפרויקט לא מוגדר',
+        details: clientResult.error,
+        errorCode: clientResult.errorCode,
+        action: 'configure_project',
+      }, { status: 400 });
+    }
+
+    const projectClient = clientResult.client!;
 
     // Get total count
     const { count: totalRecords } = await projectClient

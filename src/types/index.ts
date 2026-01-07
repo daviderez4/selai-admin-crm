@@ -10,6 +10,17 @@ export interface Project {
   supabase_service_key: string;
   service_key_encrypted?: string; // Legacy column
   description?: string;
+  table_name: string;
+  data_type?: 'accumulation' | 'insurance' | 'processes' | 'commissions' | 'custom';
+  icon?: string;
+  color?: string;
+  region?: string;
+  is_active?: boolean;
+  settings?: Record<string, unknown>;
+  // Project isolation tracking
+  is_configured: boolean;
+  connection_last_tested?: string;
+  connection_error?: string;
   created_at: string;
   updated_at: string;
   created_by: string;

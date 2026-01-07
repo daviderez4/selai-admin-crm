@@ -1,21 +1,18 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import crypto from 'crypto';
+import {
+  encrypt,
+  normalizeSupabaseUrl,
+  isValidSupabaseUrl,
+  testProjectConnection
+} from '@/lib/utils/projectDatabase';
 
-// Central Supabase URL - default for projects without external Supabase
-const CENTRAL_SUPABASE_URL = process.env.CENTRAL_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || crypto.randomBytes(32).toString('hex');
-
-// Encrypt service key before storing
-function encrypt(text: string): string {
-  const key = Buffer.from(ENCRYPTION_KEY.slice(0, 32), 'utf-8');
-  const iv = crypto.randomBytes(16);
-  const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
-  let encrypted = cipher.update(text, 'utf8', 'hex');
-  encrypted += cipher.final('hex');
-  return iv.toString('hex') + ':' + encrypted;
-}
-
+/**
+ * POST /api/projects/create
+ *
+ * Creates a new project with REQUIRED database credentials.
+ * NO FALLBACK to Central database - each project must have its own Supabase.
+ */
 export async function POST(request: Request) {
   try {
     const supabase = await createClient();
@@ -35,81 +32,104 @@ export async function POST(request: Request) {
       data_type,
       icon,
       color,
-      // External Supabase credentials (optional)
+      // Database credentials - REQUIRED (no fallback!)
       supabase_url,
       supabase_anon_key,
       supabase_service_key,
     } = await request.json();
 
-    if (!name) {
+    // =========================================================================
+    // Validation - ALL credentials are REQUIRED
+    // =========================================================================
+
+    if (!name?.trim()) {
       return NextResponse.json(
-        { error: 'Project name is required' },
+        { error: 'שם הפרויקט הוא שדה חובה' },
         { status: 400 }
       );
     }
 
-    // Determine the Supabase URL and keys
-    let finalSupabaseUrl: string;
-    let finalAnonKey: string;
-    let encryptedServiceKey: string;
-
-    // Check if external Supabase credentials were provided
-    if (supabase_url && supabase_anon_key) {
-      // Use external Supabase credentials
-      finalSupabaseUrl = supabase_url;
-      finalAnonKey = supabase_anon_key;
-
-      // Encrypt the service key if provided, otherwise use anon key as fallback
-      if (supabase_service_key) {
-        encryptedServiceKey = encrypt(supabase_service_key);
-      } else {
-        // Use anon key as service key (limited access)
-        encryptedServiceKey = encrypt(supabase_anon_key);
-      }
-
-      console.log('Creating project with EXTERNAL Supabase:', finalSupabaseUrl);
-    } else {
-      // Use Central Supabase - get credentials from existing project
-      const { data: existingProject } = await supabase
-        .from('projects')
-        .select('supabase_url, supabase_anon_key, supabase_service_key')
-        .limit(1)
-        .single();
-
-      if (existingProject) {
-        finalSupabaseUrl = CENTRAL_SUPABASE_URL;
-        finalAnonKey = existingProject.supabase_anon_key;
-        encryptedServiceKey = existingProject.supabase_service_key;
-      } else {
-        // First project with no external credentials - use env vars
-        const centralServiceKey = process.env.CENTRAL_SUPABASE_SERVICE_KEY;
-        if (!centralServiceKey) {
-          return NextResponse.json(
-            { error: 'No existing project found. Please provide Supabase credentials or configure CENTRAL_SUPABASE_SERVICE_KEY.' },
-            { status: 400 }
-          );
-        }
-        finalSupabaseUrl = CENTRAL_SUPABASE_URL;
-        finalAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-        encryptedServiceKey = encrypt(centralServiceKey);
-      }
-
-      console.log('Creating project with CENTRAL Supabase:', finalSupabaseUrl);
+    if (!supabase_url?.trim()) {
+      return NextResponse.json(
+        { error: 'Supabase URL הוא שדה חובה. כל פרויקט חייב להיות מחובר למסד נתונים משלו.' },
+        { status: 400 }
+      );
     }
 
-    // Create the project
+    if (!supabase_anon_key?.trim()) {
+      return NextResponse.json(
+        { error: 'Anon Key הוא שדה חובה' },
+        { status: 400 }
+      );
+    }
+
+    // Normalize and validate URL
+    const normalizedUrl = normalizeSupabaseUrl(supabase_url.trim());
+    if (!isValidSupabaseUrl(normalizedUrl)) {
+      return NextResponse.json(
+        {
+          error: 'כתובת Supabase URL לא תקינה',
+          details: `נדרש פורמט: https://xxxxx.supabase.co`,
+          received: supabase_url
+        },
+        { status: 400 }
+      );
+    }
+
+    // Use service key if provided, otherwise use anon key (limited access)
+    const serviceKeyToUse = supabase_service_key?.trim() || supabase_anon_key.trim();
+    const tableName = table_name?.trim() || 'master_data';
+
+    // =========================================================================
+    // Test Connection BEFORE creating project
+    // =========================================================================
+
+    console.log('Testing connection to:', normalizedUrl, 'table:', tableName);
+
+    const testResult = await testProjectConnection(
+      normalizedUrl,
+      supabase_anon_key.trim(),
+      serviceKeyToUse,
+      tableName
+    );
+
+    if (!testResult.success) {
+      return NextResponse.json(
+        {
+          error: 'בדיקת החיבור נכשלה',
+          details: testResult.error,
+          action: 'check_credentials'
+        },
+        { status: 400 }
+      );
+    }
+
+    // Warn if table doesn't exist but connection works
+    const tableWarning = !testResult.tableExists
+      ? `הטבלה '${tableName}' לא קיימת עדיין במסד הנתונים. תוכל ליצור אותה בהמשך.`
+      : null;
+
+    // =========================================================================
+    // Create Project with validated credentials
+    // =========================================================================
+
+    const encryptedServiceKey = encrypt(serviceKeyToUse);
+
     const { data: project, error: projectError } = await supabase
       .from('projects')
       .insert({
-        name,
-        supabase_url: finalSupabaseUrl,
-        supabase_anon_key: finalAnonKey,
+        name: name.trim(),
+        supabase_url: normalizedUrl,
+        supabase_anon_key: supabase_anon_key.trim(),
         supabase_service_key: encryptedServiceKey,
-        description,
-        table_name: table_name || 'master_data',
+        description: description?.trim() || '',
+        table_name: tableName,
         data_type: data_type || 'custom',
         icon: icon || 'layout-dashboard',
         color: color || 'slate',
+        is_configured: true, // Validated credentials
+        connection_last_tested: new Date().toISOString(),
+        connection_error: null,
         created_by: user.id,
       })
       .select()
@@ -117,14 +137,16 @@ export async function POST(request: Request) {
 
     if (projectError) {
       console.error('Error creating project:', projectError);
+
       if (projectError.code === 'PGRST204' || projectError.code === '42P01') {
         return NextResponse.json(
-          { error: 'Database tables not configured. Please run schema.sql in Supabase SQL Editor.' },
+          { error: 'טבלאות מסד הנתונים לא מוגדרות. יש להריץ את schema.sql ב-Supabase SQL Editor.' },
           { status: 500 }
         );
       }
+
       return NextResponse.json(
-        { error: `Failed to create project: ${projectError.message}` },
+        { error: `יצירת הפרויקט נכשלה: ${projectError.message}` },
         { status: 500 }
       );
     }
@@ -140,9 +162,10 @@ export async function POST(request: Request) {
 
     if (accessError) {
       console.error('Error granting access:', accessError);
+      // Rollback project creation
       await supabase.from('projects').delete().eq('id', project.id);
       return NextResponse.json(
-        { error: 'Failed to grant access' },
+        { error: 'שגיאה בהענקת הרשאות' },
         { status: 500 }
       );
     }
@@ -154,17 +177,29 @@ export async function POST(request: Request) {
       action: 'create_project',
       details: {
         project_name: name,
-        table_name: table_name || 'master_data',
-        supabase_url: finalSupabaseUrl,
-        is_external: !!(supabase_url && supabase_anon_key),
+        table_name: tableName,
+        supabase_url: normalizedUrl,
+        table_exists: testResult.tableExists,
+        row_count: testResult.rowCount,
       },
     });
 
-    return NextResponse.json({ project });
+    console.log('Project created successfully:', project.name, 'URL:', normalizedUrl);
+
+    return NextResponse.json({
+      project,
+      warning: tableWarning,
+      connection: {
+        tested: true,
+        tableExists: testResult.tableExists,
+        rowCount: testResult.rowCount
+      }
+    });
+
   } catch (error) {
     console.error('Project creation error:', error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'שגיאת שרת פנימית' },
       { status: 500 }
     );
   }

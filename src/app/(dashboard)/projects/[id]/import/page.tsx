@@ -134,8 +134,8 @@ export default function ImportPage() {
   const [manualSql, setManualSql] = useState<string>('');
   const [pendingTableName, setPendingTableName] = useState<string>('');
 
-  // New states
-  const [importMode, setImportMode] = useState<'append' | 'replace_period' | 'replace_all'>('append');
+  // Import mode is always append (growth mode)
+  const importMode = 'append' as const;
   const [importMonth, setImportMonth] = useState(new Date().getMonth() + 1);
   const [importYear, setImportYear] = useState(new Date().getFullYear());
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -364,15 +364,10 @@ export default function ImportPage() {
 
     setStep('importing');
     setIsLoading(true);
-    const statusMessage = importMode === 'replace_all'
-      ? 'מוחק את כל הנתונים...'
-      : importMode === 'replace_period'
-        ? `מוחק נתונים מ-${hebrewMonths[importMonth - 1]} ${importYear}...`
-        : 'מוסיף נתונים חדשים...';
     setImportProgress({
       imported: 0,
       total: analysis.totalRows,
-      status: statusMessage
+      status: `מייבא נתונים ל-${hebrewMonths[importMonth - 1]} ${importYear}...`
     });
 
     try {
@@ -924,88 +919,39 @@ export default function ImportPage() {
                       </Button>
                     </div>
 
-                    {/* Import Mode Selection */}
+                    {/* Import Period Selection */}
                     <div className="space-y-3">
-                      <p className="text-slate-300 font-medium text-sm">מה לעשות עם הנתונים החדשים?</p>
+                      <p className="text-slate-300 font-medium text-sm">בחר תקופת הייבוא:</p>
 
-                      <label className={`flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-colors ${
-                        importMode === 'append' ? 'bg-emerald-500/10 border-emerald-500/50' : 'bg-slate-900/50 border-slate-700 hover:bg-slate-800'
-                      }`}>
-                        <input
-                          type="radio"
-                          name="importMode"
-                          value="append"
-                          checked={importMode === 'append'}
-                          onChange={() => setImportMode('append')}
-                          className="w-4 h-4 text-emerald-500 focus:ring-emerald-500 bg-slate-800"
-                        />
-                        <div>
-                          <span className="text-white font-medium">➕ הוסף לנתונים קיימים</span>
-                          <p className="text-sm text-slate-400">הנתונים החדשים יתווספו למאגר הקיים</p>
-                        </div>
-                      </label>
+                      <div className="flex gap-3 items-center p-3 bg-slate-900/50 rounded-lg border border-slate-700">
+                        <span className="text-slate-400 text-sm">חודש:</span>
+                        <select
+                          value={importMonth}
+                          onChange={(e) => setImportMonth(Number(e.target.value))}
+                          className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm"
+                        >
+                          {hebrewMonths.map((month, i) => (
+                            <option key={i + 1} value={i + 1}>{month}</option>
+                          ))}
+                        </select>
+                        <span className="text-slate-400 text-sm">שנה:</span>
+                        <select
+                          value={importYear}
+                          onChange={(e) => setImportYear(Number(e.target.value))}
+                          className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm"
+                        >
+                          {[2023, 2024, 2025, 2026, 2027].map(year => (
+                            <option key={year} value={year}>{year}</option>
+                          ))}
+                        </select>
+                      </div>
 
-                      <label className={`flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-colors ${
-                        importMode === 'replace_period' ? 'bg-amber-500/10 border-amber-500/50' : 'bg-slate-900/50 border-slate-700 hover:bg-slate-800'
-                      }`}>
-                        <input
-                          type="radio"
-                          name="importMode"
-                          value="replace_period"
-                          checked={importMode === 'replace_period'}
-                          onChange={() => setImportMode('replace_period')}
-                          className="w-4 h-4 text-amber-500 focus:ring-amber-500 bg-slate-800"
-                        />
-                        <div>
-                          <span className="text-white font-medium">🔄 החלף תקופה ספציפית</span>
-                          <p className="text-sm text-slate-400">מחק נתונים מחודש/שנה מסוימים והחלף</p>
-                        </div>
-                      </label>
-
-                      {importMode === 'replace_period' && (
-                        <div className="flex gap-3 mr-7">
-                          <select
-                            value={importMonth}
-                            onChange={(e) => setImportMonth(Number(e.target.value))}
-                            className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm"
-                          >
-                            {hebrewMonths.map((month, i) => (
-                              <option key={i + 1} value={i + 1}>{month}</option>
-                            ))}
-                          </select>
-                          <select
-                            value={importYear}
-                            onChange={(e) => setImportYear(Number(e.target.value))}
-                            className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm"
-                          >
-                            {[2023, 2024, 2025, 2026].map(year => (
-                              <option key={year} value={year}>{year}</option>
-                            ))}
-                          </select>
-                        </div>
-                      )}
-
-                      <label className={`flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-colors ${
-                        importMode === 'replace_all' ? 'bg-red-500/10 border-red-500/50' : 'bg-slate-900/50 border-slate-700 hover:bg-slate-800'
-                      }`}>
-                        <input
-                          type="radio"
-                          name="importMode"
-                          value="replace_all"
-                          checked={importMode === 'replace_all'}
-                          onChange={() => setImportMode('replace_all')}
-                          className="w-4 h-4 text-red-500 focus:ring-red-500 bg-slate-800"
-                        />
-                        <div>
-                          <span className="text-white font-medium">🗑️ החלף הכל</span>
-                          <p className="text-sm text-slate-400">
-                            {currentStats.totalRecords > 0
-                              ? `מחק ${currentStats.totalRecords.toLocaleString('he-IL')} רשומות והחלף`
-                              : 'אין נתונים קיימים'
-                            }
-                          </p>
-                        </div>
-                      </label>
+                      <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-lg">
+                        <p className="text-emerald-400 text-sm flex items-center gap-2">
+                          <Check className="h-4 w-4" />
+                          הנתונים יתווספו למאגר הקיים ויסומנו עם תקופת {hebrewMonths[importMonth - 1]} {importYear}
+                        </p>
+                      </div>
                     </div>
                   </div>
                 </CardContent>
@@ -1279,25 +1225,17 @@ export default function ImportPage() {
                 <span className="text-white font-mono">{projectInfo?.table_name || 'master_data'}</span>
               </div>
               <div className="flex items-center justify-between p-3 bg-slate-900/50 rounded-lg">
-                <span className="text-slate-400">מצב ייבוא</span>
-                <Badge className={
-                  importMode === 'append' ? 'bg-emerald-500/20 text-emerald-400' :
-                  importMode === 'replace_period' ? 'bg-amber-500/20 text-amber-400' :
-                  'bg-red-500/20 text-red-400'
-                }>
-                  {importMode === 'append' ? 'הוספה לקיימים' :
-                   importMode === 'replace_period' ? `החלפת ${hebrewMonths[importMonth - 1]} ${importYear}` :
-                   'החלפה מלאה'}
+                <span className="text-slate-400">תקופת ייבוא</span>
+                <Badge className="bg-emerald-500/20 text-emerald-400">
+                  {hebrewMonths[importMonth - 1]} {importYear}
                 </Badge>
               </div>
-              {importMode === 'replace_all' && currentStats.totalRecords > 0 && (
-                <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
-                  <p className="text-red-400 text-sm flex items-center gap-2">
-                    <AlertTriangle className="h-4 w-4" />
-                    שים לב: {currentStats.totalRecords.toLocaleString('he-IL')} רשומות קיימות יימחקו!
-                  </p>
-                </div>
-              )}
+              <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-lg">
+                <p className="text-emerald-400 text-sm flex items-center gap-2">
+                  <Check className="h-4 w-4" />
+                  הנתונים יתווספו למאגר הקיים ({currentStats.totalRecords.toLocaleString('he-IL')} רשומות)
+                </p>
+              </div>
             </div>
 
             <div className="flex gap-3">

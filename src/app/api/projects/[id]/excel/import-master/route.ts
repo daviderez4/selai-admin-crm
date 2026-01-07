@@ -1,35 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import * as XLSX from 'xlsx';
-import crypto from 'crypto';
-
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || crypto.randomBytes(32).toString('hex');
-
-// Central Supabase - ALL projects use this
-const CENTRAL_SUPABASE_URL = process.env.CENTRAL_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const CENTRAL_SUPABASE_SERVICE_KEY = process.env.CENTRAL_SUPABASE_SERVICE_KEY || '';
-
-function decrypt(text: string): string {
-  const textParts = text.split(':');
-  const iv = Buffer.from(textParts.shift()!, 'hex');
-  const encryptedText = textParts.join(':');
-  const key = Buffer.from(ENCRYPTION_KEY.slice(0, 32), 'utf-8');
-  const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
-  let decrypted = decipher.update(encryptedText, 'hex', 'utf8');
-  decrypted += decipher.final('utf8');
-  return decrypted;
-}
-
-// Convert dashboard URL to API URL
-function normalizeSupabaseUrl(url: string): string {
-  if (!url) return url;
-  const dashboardMatch = url.match(/supabase\.com\/dashboard\/project\/([a-z0-9]+)/i);
-  if (dashboardMatch) {
-    return `https://${dashboardMatch[1]}.supabase.co`;
-  }
-  return url;
-}
+import { createProjectClient } from '@/lib/utils/projectDatabase';
 
 // Fixed column indices for master project (0-based)
 const MASTER_COLUMNS = {
@@ -68,10 +40,10 @@ export async function POST(
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
-    // Get project details including all Supabase credentials
+    // Get project details including credentials and configuration status
     const { data: project, error: projectError } = await supabase
       .from('projects')
-      .select('supabase_url, supabase_anon_key, supabase_service_key, name, table_name')
+      .select('supabase_url, supabase_anon_key, supabase_service_key, name, table_name, is_configured')
       .eq('id', projectId)
       .single();
 
@@ -256,54 +228,30 @@ export async function POST(
     console.log('Master import - Transformed rows:', transformedData.length);
     console.log('Master import - Sample transformed row:', transformedData[0]);
 
-    // CRITICAL: Determine which Supabase to use based on project's settings
-    const projectSupabaseUrl = normalizeSupabaseUrl(project.supabase_url);
-    const isExternalProject = projectSupabaseUrl && projectSupabaseUrl !== CENTRAL_SUPABASE_URL;
+    // =========================================================================
+    // STRICT PROJECT ISOLATION - No Central fallback!
+    // Each project MUST have its own database credentials
+    // =========================================================================
 
-    let supabaseUrl: string;
-    let serviceKey: string;
+    const clientResult = createProjectClient({
+      supabase_url: project.supabase_url,
+      supabase_service_key: project.supabase_service_key,
+      table_name: TABLE_NAME,
+      is_configured: project.is_configured,
+    });
 
-    if (isExternalProject) {
-      // Project has its own external Supabase - use ONLY its credentials
-      supabaseUrl = projectSupabaseUrl;
-
-      if (!project.supabase_service_key) {
-        console.error('External project missing service key:', project.name);
-        return NextResponse.json({
-          error: 'לא הוגדר Service Key לפרויקט זה.',
-          details: 'יש לעדכן את פרטי החיבור בהגדרות הפרויקט.',
-        }, { status: 400 });
-      }
-
-      try {
-        serviceKey = decrypt(project.supabase_service_key);
-      } catch (decryptError) {
-        console.error('Failed to decrypt external service key:', decryptError);
-        return NextResponse.json({
-          error: 'לא ניתן לפענח את מפתח ה-Service של הפרויקט.',
-        }, { status: 500 });
-      }
-
-      console.log('Importing to EXTERNAL Supabase:', supabaseUrl, 'for project:', project.name);
-    } else {
-      // Use Central Supabase
-      supabaseUrl = CENTRAL_SUPABASE_URL;
-      serviceKey = CENTRAL_SUPABASE_SERVICE_KEY;
-
-      if (!serviceKey) {
-        try {
-          serviceKey = decrypt(project.supabase_service_key);
-        } catch {
-          return NextResponse.json({ error: 'Missing CENTRAL_SUPABASE_SERVICE_KEY in environment' }, { status: 500 });
-        }
-      }
-
-      console.log('Importing to CENTRAL Supabase:', supabaseUrl, 'for project:', project.name);
+    if (!clientResult.success) {
+      console.error('Project client creation failed:', project.name, clientResult.errorCode, clientResult.error);
+      return NextResponse.json({
+        error: 'מסד הנתונים של הפרויקט לא מוגדר',
+        details: clientResult.error,
+        errorCode: clientResult.errorCode,
+        action: 'configure_project',
+      }, { status: 400 });
     }
 
-    const projectClient = createSupabaseClient(supabaseUrl, serviceKey, {
-      auth: { autoRefreshToken: false, persistSession: false }
-    });
+    const projectClient = clientResult.client!;
+    console.log('Importing to project database:', project.name, 'table:', TABLE_NAME);
 
     // Check if table exists, if not provide SQL for creation
     const { error: checkError } = await projectClient

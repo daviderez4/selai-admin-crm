@@ -11,7 +11,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 import {
   DASHBOARD_TYPES,
@@ -41,11 +40,10 @@ interface ProjectFormData {
   description: string;
   dashboardType: DashboardType;
   selectedTable: string;
-  // External Supabase
-  useExternalSupabase: boolean;
-  externalSupabaseUrl: string;
-  externalAnonKey: string;
-  externalServiceKey: string;
+  // Database credentials - REQUIRED for all projects
+  supabaseUrl: string;
+  anonKey: string;
+  serviceKey: string;
 }
 
 interface DetectedColumn {
@@ -53,9 +51,6 @@ interface DetectedColumn {
   type: 'text' | 'number' | 'date' | 'boolean';
   sample: string;
 }
-
-// Central Supabase URL - displayed in UI
-const CENTRAL_SUPABASE_URL = 'https://vcskhgqeqctitubryoet.supabase.co';
 
 // All available tables in the system (must exist in Supabase)
 const AVAILABLE_TABLES = [
@@ -90,11 +85,10 @@ export function NewProjectModal({ open, onOpenChange, onProjectCreated }: NewPro
     description: '',
     dashboardType: 'accumulation',
     selectedTable: 'master_data',
-    // External Supabase - default to central
-    useExternalSupabase: false,
-    externalSupabaseUrl: '',
-    externalAnonKey: '',
-    externalServiceKey: '',
+    // Database credentials - REQUIRED for all projects
+    supabaseUrl: '',
+    anonKey: '',
+    serviceKey: '',
   });
 
   const selectedType = DASHBOARD_TYPES[formData.dashboardType];
@@ -327,12 +321,10 @@ export function NewProjectModal({ open, onOpenChange, onProjectCreated }: NewPro
         data_type: formData.dashboardType,
         icon: selectedType.icon.displayName?.toLowerCase() || 'layout-dashboard',
         color: selectedType.color,
-        // External Supabase credentials (optional)
-        ...(formData.useExternalSupabase && {
-          supabase_url: formData.externalSupabaseUrl.trim(),
-          supabase_anon_key: formData.externalAnonKey.trim(),
-          supabase_service_key: formData.externalServiceKey.trim() || undefined,
-        }),
+        // Database credentials - REQUIRED
+        supabase_url: formData.supabaseUrl.trim(),
+        supabase_anon_key: formData.anonKey.trim(),
+        supabase_service_key: formData.serviceKey.trim() || undefined,
       };
 
       console.log('=== Creating new project ===');
@@ -400,10 +392,9 @@ export function NewProjectModal({ open, onOpenChange, onProjectCreated }: NewPro
       description: '',
       dashboardType: 'accumulation',
       selectedTable: 'master_data',
-      useExternalSupabase: false,
-      externalSupabaseUrl: '',
-      externalAnonKey: '',
-      externalServiceKey: '',
+      supabaseUrl: '',
+      anonKey: '',
+      serviceKey: '',
     });
     setUploadedFile(null);
     setDetectedColumns([]);
@@ -419,16 +410,13 @@ export function NewProjectModal({ open, onOpenChange, onProjectCreated }: NewPro
       case 1:
         return !!formData.dashboardType;
       case 2:
-        // Basic validation
+        // Validate name, table, and REQUIRED database credentials
         if (formData.name.trim().length === 0 || !formData.selectedTable) {
           return false;
         }
-        // If external Supabase is enabled, require URL and Anon Key
-        if (formData.useExternalSupabase) {
-          return formData.externalSupabaseUrl.trim().length > 0 &&
-                 formData.externalAnonKey.trim().length > 0;
-        }
-        return true;
+        // Database credentials are REQUIRED for all projects
+        return formData.supabaseUrl.trim().length > 0 &&
+               formData.anonKey.trim().length > 0;
       case 3:
         return true;
       default:
@@ -577,82 +565,63 @@ export function NewProjectModal({ open, onOpenChange, onProjectCreated }: NewPro
                 </div>
               </div>
 
-              {/* External Supabase Toggle */}
+              {/* Database Credentials - REQUIRED */}
               <div className="space-y-3 pt-3 border-t border-slate-700">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label className="text-slate-300">חיבור ל-Supabase חיצוני</Label>
+                <div className="flex items-center gap-2">
+                  <Database className="h-4 w-4 text-cyan-400" />
+                  <Label className="text-slate-300">פרטי חיבור ל-Supabase (חובה)</Label>
+                </div>
+                <p className="text-xs text-slate-500">
+                  כל פרויקט חייב להיות מחובר למסד נתונים משלו
+                </p>
+
+                <div className="space-y-3 p-3 bg-slate-800/50 rounded-lg border border-cyan-500/30">
+                  <div className="space-y-2">
+                    <Label htmlFor="supabaseUrl" className="text-slate-300 text-sm">
+                      Supabase URL *
+                    </Label>
+                    <Input
+                      id="supabaseUrl"
+                      value={formData.supabaseUrl}
+                      onChange={(e) => setFormData(prev => ({ ...prev, supabaseUrl: e.target.value }))}
+                      placeholder="https://xxxxx.supabase.co"
+                      className="bg-slate-800 border-slate-600 text-white font-mono text-sm"
+                      dir="ltr"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="anonKey" className="text-slate-300 text-sm">
+                      Anon Key *
+                    </Label>
+                    <Input
+                      id="anonKey"
+                      value={formData.anonKey}
+                      onChange={(e) => setFormData(prev => ({ ...prev, anonKey: e.target.value }))}
+                      placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                      className="bg-slate-800 border-slate-600 text-white font-mono text-sm"
+                      dir="ltr"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="serviceKey" className="text-slate-300 text-sm">
+                      Service Key (מומלץ לגישה מלאה)
+                    </Label>
+                    <Input
+                      id="serviceKey"
+                      type="password"
+                      value={formData.serviceKey}
+                      onChange={(e) => setFormData(prev => ({ ...prev, serviceKey: e.target.value }))}
+                      placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                      className="bg-slate-800 border-slate-600 text-white font-mono text-sm"
+                      dir="ltr"
+                    />
                     <p className="text-xs text-slate-500">
-                      {formData.useExternalSupabase
-                        ? 'הנתונים יישמרו ב-Supabase שלך'
-                        : 'הנתונים יישמרו ב-Supabase המרכזי'}
+                      נדרש לגישה מלאה לטבלאות (יוצפן בשמירה)
                     </p>
                   </div>
-                  <Switch
-                    checked={formData.useExternalSupabase}
-                    onCheckedChange={(checked) => setFormData(prev => ({
-                      ...prev,
-                      useExternalSupabase: checked,
-                      // Clear fields when toggling off
-                      ...(checked ? {} : {
-                        externalSupabaseUrl: '',
-                        externalAnonKey: '',
-                        externalServiceKey: '',
-                      })
-                    }))}
-                  />
                 </div>
-
-                {/* External Supabase Fields */}
-                {formData.useExternalSupabase && (
-                  <div className="space-y-3 p-3 bg-slate-800/50 rounded-lg border border-cyan-500/30">
-                    <div className="space-y-2">
-                      <Label htmlFor="supabaseUrl" className="text-slate-300 text-sm">
-                        Supabase URL *
-                      </Label>
-                      <Input
-                        id="supabaseUrl"
-                        value={formData.externalSupabaseUrl}
-                        onChange={(e) => setFormData(prev => ({ ...prev, externalSupabaseUrl: e.target.value }))}
-                        placeholder="https://xxxxx.supabase.co"
-                        className="bg-slate-800 border-slate-600 text-white font-mono text-sm"
-                        dir="ltr"
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="anonKey" className="text-slate-300 text-sm">
-                        Anon Key *
-                      </Label>
-                      <Input
-                        id="anonKey"
-                        value={formData.externalAnonKey}
-                        onChange={(e) => setFormData(prev => ({ ...prev, externalAnonKey: e.target.value }))}
-                        placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-                        className="bg-slate-800 border-slate-600 text-white font-mono text-sm"
-                        dir="ltr"
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="serviceKey" className="text-slate-300 text-sm">
-                        Service Key (אופציונלי - מומלץ)
-                      </Label>
-                      <Input
-                        id="serviceKey"
-                        type="password"
-                        value={formData.externalServiceKey}
-                        onChange={(e) => setFormData(prev => ({ ...prev, externalServiceKey: e.target.value }))}
-                        placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-                        className="bg-slate-800 border-slate-600 text-white font-mono text-sm"
-                        dir="ltr"
-                      />
-                      <p className="text-xs text-slate-500">
-                        נדרש לגישה מלאה לטבלאות (יוצפן בשמירה)
-                      </p>
-                    </div>
-                  </div>
-                )}
               </div>
 
               {/* File Upload */}
@@ -794,16 +763,8 @@ export function NewProjectModal({ open, onOpenChange, onProjectCreated }: NewPro
                   <div>
                     <p className="text-xs text-slate-500 mb-1">Database</p>
                     <div className="flex items-center gap-2">
-                      <Database className={cn(
-                        "h-4 w-4",
-                        formData.useExternalSupabase ? "text-cyan-400" : "text-emerald-400"
-                      )} />
-                      <span className={cn(
-                        "text-sm",
-                        formData.useExternalSupabase ? "text-cyan-400" : "text-emerald-400"
-                      )}>
-                        {formData.useExternalSupabase ? 'חיצוני' : 'מרכזי'}
-                      </span>
+                      <Database className="h-4 w-4 text-cyan-400" />
+                      <span className="text-sm text-cyan-400">מסד נתונים ייעודי</span>
                     </div>
                   </div>
                 </div>
@@ -812,9 +773,7 @@ export function NewProjectModal({ open, onOpenChange, onProjectCreated }: NewPro
                 <div>
                   <p className="text-xs text-slate-500 mb-1">Supabase URL</p>
                   <p className="text-sm text-slate-300 font-mono bg-slate-700/50 px-2 py-1 rounded" dir="ltr">
-                    {formData.useExternalSupabase
-                      ? formData.externalSupabaseUrl
-                      : CENTRAL_SUPABASE_URL}
+                    {formData.supabaseUrl || 'לא הוגדר'}
                   </p>
                 </div>
 
