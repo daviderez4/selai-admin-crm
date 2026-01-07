@@ -328,17 +328,61 @@ export default function DataPage() {
     return data;
   }, [data]);
 
+  // Helper to get value from row - checks both direct fields and raw_data
+  const getRowValue = useCallback((row: Record<string, unknown>, fieldNames: string[]): unknown => {
+    for (const field of fieldNames) {
+      // Try direct field
+      if (row[field] !== undefined && row[field] !== null && row[field] !== '') {
+        return row[field];
+      }
+      // Try raw_data
+      const rawData = row.raw_data as Record<string, unknown> | undefined;
+      if (rawData && typeof rawData === 'object') {
+        if (rawData[field] !== undefined && rawData[field] !== null && rawData[field] !== '') {
+          return rawData[field];
+        }
+        // Try partial match
+        for (const key of Object.keys(rawData)) {
+          if (key.includes(field) || field.includes(key)) {
+            if (rawData[key] !== undefined && rawData[key] !== null && rawData[key] !== '') {
+              return rawData[key];
+            }
+          }
+        }
+      }
+    }
+    return null;
+  }, []);
+
   // Quick views configuration - use stats.total for accurate count from DB
   const quickViews = useMemo(() => {
-    const activeCount = data.filter(r => r.סטטוס === 'פעיל' || r.סטטוס === 'בטיפול').length;
-    const pendingCount = data.filter(r => r.סטטוס === 'ממתין').length;
-    const highValueCount = data.filter(r => Number(r.סהכ_צבירה_צפויה_מניוד) > 100000).length;
+    const statusFields = ['סטטוס', 'סטטוס תהליך', 'status'];
+    const accumulationFields = ['סהכ_צבירה_צפויה_מניוד', 'total_expected_accumulation', 'צבירה צפויה', 'סכום צבירה'];
+    const dateFields = ['תאריך_פתיחת_תהליך', 'תאריך פתיחת תהליך', 'תאריך פתיחה', 'created_at'];
+
+    const activeCount = data.filter(r => {
+      const status = String(getRowValue(r, statusFields) || '').toLowerCase();
+      return status.includes('פעיל') || status.includes('בטיפול') || status.includes('active');
+    }).length;
+
+    const pendingCount = data.filter(r => {
+      const status = String(getRowValue(r, statusFields) || '').toLowerCase();
+      return status.includes('ממתין') || status.includes('pending') || status.includes('המתנה');
+    }).length;
+
+    const highValueCount = data.filter(r => {
+      const value = getRowValue(r, accumulationFields);
+      const num = typeof value === 'number' ? value : parseFloat(String(value || '').replace(/[^\d.-]/g, ''));
+      return !isNaN(num) && num > 100000;
+    }).length;
 
     const today = new Date();
     const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
     const thisWeekCount = data.filter(r => {
-      const date = r.תאריך_פתיחת_תהליך ? new Date(String(r.תאריך_פתיחת_תהליך)) : null;
-      return date && date >= weekAgo;
+      const dateVal = getRowValue(r, dateFields);
+      if (!dateVal) return false;
+      const date = new Date(String(dateVal));
+      return !isNaN(date.getTime()) && date >= weekAgo;
     }).length;
 
     // Use stats.total for the "all" count - it comes from DB count: 'exact'
@@ -351,11 +395,16 @@ export default function DataPage() {
       { id: 'highValue', label: 'צבירה גבוהה', icon: '💎', count: highValueCount },
       { id: 'thisWeek', label: 'השבוע', icon: '📅', count: thisWeekCount },
     ];
-  }, [data, stats]);
+  }, [data, stats, getRowValue]);
 
   // Apply filters and search
   const filteredData = useMemo(() => {
     let result = [...displayData];
+
+    // Field name variations for filtering
+    const statusFields = ['סטטוס', 'סטטוס תהליך', 'status'];
+    const accumulationFields = ['סהכ_צבירה_צפויה_מניוד', 'total_expected_accumulation', 'צבירה צפויה', 'סכום צבירה'];
+    const dateFields = ['תאריך_פתיחת_תהליך', 'תאריך פתיחת תהליך', 'תאריך פתיחה', 'created_at'];
 
     // Quick view filter
     if (activeQuickView !== 'all') {
@@ -364,18 +413,30 @@ export default function DataPage() {
 
       switch (activeQuickView) {
         case 'active':
-          result = result.filter(r => r.סטטוס === 'פעיל' || r.סטטוס === 'בטיפול');
+          result = result.filter(r => {
+            const status = String(getRowValue(r, statusFields) || '').toLowerCase();
+            return status.includes('פעיל') || status.includes('בטיפול') || status.includes('active');
+          });
           break;
         case 'pending':
-          result = result.filter(r => r.סטטוס === 'ממתין');
+          result = result.filter(r => {
+            const status = String(getRowValue(r, statusFields) || '').toLowerCase();
+            return status.includes('ממתין') || status.includes('pending') || status.includes('המתנה');
+          });
           break;
         case 'highValue':
-          result = result.filter(r => Number(r.סהכ_צבירה_צפויה_מניוד) > 100000);
+          result = result.filter(r => {
+            const value = getRowValue(r, accumulationFields);
+            const num = typeof value === 'number' ? value : parseFloat(String(value || '').replace(/[^\d.-]/g, ''));
+            return !isNaN(num) && num > 100000;
+          });
           break;
         case 'thisWeek':
           result = result.filter(r => {
-            const date = r.תאריך_פתיחת_תהליך ? new Date(String(r.תאריך_פתיחת_תהליך)) : null;
-            return date && date >= weekAgo;
+            const dateVal = getRowValue(r, dateFields);
+            if (!dateVal) return false;
+            const date = new Date(String(dateVal));
+            return !isNaN(date.getTime()) && date >= weekAgo;
           });
           break;
       }
@@ -406,7 +467,7 @@ export default function DataPage() {
     }
 
     return result;
-  }, [displayData, filters, searchQuery, activeQuickView]);
+  }, [displayData, filters, searchQuery, activeQuickView, getRowValue]);
 
   // Active filters count - count non-null/empty values
   const activeFiltersCount = useMemo(() => {
@@ -655,25 +716,49 @@ export default function DataPage() {
   const groupedData = useMemo(() => {
     const groups: Record<string, Record<string, number>> = {};
 
-    // Group by common fields
-    const groupByFields = ['מפקח', 'יצרן_חדש', 'סוג_מוצר_חדש', 'מטפל'];
+    // Helper to get value from row - checks both direct fields and raw_data
+    const getValue = (row: Record<string, unknown>, field: string): unknown => {
+      // First try direct field
+      if (row[field] !== undefined && row[field] !== null && row[field] !== '') {
+        return row[field];
+      }
+      // Then try raw_data if it exists
+      const rawData = row.raw_data as Record<string, unknown> | undefined;
+      if (rawData && typeof rawData === 'object') {
+        // Try exact match
+        if (rawData[field] !== undefined) return rawData[field];
+        // Try partial match (field might have different naming)
+        for (const key of Object.keys(rawData)) {
+          if (key.includes(field) || field.includes(key)) {
+            return rawData[key];
+          }
+        }
+      }
+      return null;
+    };
 
-    groupByFields.forEach(field => {
+    // Group by common fields - try multiple variations
+    const groupByFieldsMap: Record<string, string[]> = {
+      'מפקח': ['מפקח', 'מפקח אחראי', 'שם מפקח'],
+      'יצרן_חדש': ['יצרן_חדש', 'יצרן חדש', 'יצרן', 'שם יצרן'],
+      'סוג_מוצר_חדש': ['סוג_מוצר_חדש', 'סוג מוצר חדש', 'סוג מוצר', 'סוג_מוצר'],
+      'מטפל': ['מטפל', 'שם מטפל', 'סוכן'],
+    };
+
+    Object.entries(groupByFieldsMap).forEach(([displayName, fieldVariations]) => {
       const fieldGroups: Record<string, number> = {};
       filteredData.forEach(row => {
-        let value: unknown;
-        if (field.startsWith('raw_data.')) {
-          const rawData = row.raw_data as Record<string, unknown> | undefined;
-          const nestedKey = field.replace('raw_data.', '');
-          value = rawData?.[nestedKey];
-        } else {
-          value = row[field];
+        let value: unknown = null;
+        // Try each variation until we find a value
+        for (const field of fieldVariations) {
+          value = getValue(row, field);
+          if (value !== null && value !== undefined && value !== '') break;
         }
 
         const key = String(value || 'לא מוגדר');
         fieldGroups[key] = (fieldGroups[key] || 0) + 1;
       });
-      groups[field] = fieldGroups;
+      groups[displayName] = fieldGroups;
     });
 
     return groups;

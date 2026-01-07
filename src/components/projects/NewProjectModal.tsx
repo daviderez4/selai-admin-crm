@@ -40,10 +40,12 @@ interface ProjectFormData {
   description: string;
   dashboardType: DashboardType;
   selectedTable: string;
-  // Database credentials - REQUIRED for all projects
+  // Database credentials - OPTIONAL (can create project from Excel only)
   supabaseUrl: string;
   anonKey: string;
   serviceKey: string;
+  // Mode: 'local' = Excel only, 'external' = Supabase connected
+  mode: 'local' | 'external';
 }
 
 interface DetectedColumn {
@@ -85,10 +87,11 @@ export function NewProjectModal({ open, onOpenChange, onProjectCreated }: NewPro
     description: '',
     dashboardType: 'accumulation',
     selectedTable: 'master_data',
-    // Database credentials - REQUIRED for all projects
+    // Database credentials - OPTIONAL
     supabaseUrl: '',
     anonKey: '',
     serviceKey: '',
+    mode: 'local', // Default to local (Excel only)
   });
 
   const selectedType = DASHBOARD_TYPES[formData.dashboardType];
@@ -313,19 +316,25 @@ export function NewProjectModal({ open, onOpenChange, onProjectCreated }: NewPro
     setError(null);
 
     try {
-      // Build payload - include external Supabase credentials if enabled
-      const payload = {
+      // Build payload - include external Supabase credentials only if external mode
+      const payload: Record<string, unknown> = {
         name: formData.name,
         description: formData.description,
         table_name: formData.selectedTable,
         data_type: formData.dashboardType,
         icon: selectedType.icon.displayName?.toLowerCase() || 'layout-dashboard',
         color: selectedType.color,
-        // Database credentials - REQUIRED
-        supabase_url: formData.supabaseUrl.trim(),
-        supabase_anon_key: formData.anonKey.trim(),
-        supabase_service_key: formData.serviceKey.trim() || undefined,
+        mode: formData.mode, // 'local' or 'external'
       };
+
+      // Only add Supabase credentials if external mode
+      if (formData.mode === 'external') {
+        payload.supabase_url = formData.supabaseUrl.trim();
+        payload.supabase_anon_key = formData.anonKey.trim();
+        if (formData.serviceKey.trim()) {
+          payload.supabase_service_key = formData.serviceKey.trim();
+        }
+      }
 
       console.log('=== Creating new project ===');
       console.log('Payload:', payload);
@@ -395,6 +404,7 @@ export function NewProjectModal({ open, onOpenChange, onProjectCreated }: NewPro
       supabaseUrl: '',
       anonKey: '',
       serviceKey: '',
+      mode: 'local',
     });
     setUploadedFile(null);
     setDetectedColumns([]);
@@ -410,13 +420,17 @@ export function NewProjectModal({ open, onOpenChange, onProjectCreated }: NewPro
       case 1:
         return !!formData.dashboardType;
       case 2:
-        // Validate name, table, and REQUIRED database credentials
+        // Validate name and table
         if (formData.name.trim().length === 0 || !formData.selectedTable) {
           return false;
         }
-        // Database credentials are REQUIRED for all projects
-        return formData.supabaseUrl.trim().length > 0 &&
-               formData.anonKey.trim().length > 0;
+        // If external mode, require Supabase credentials
+        if (formData.mode === 'external') {
+          return formData.supabaseUrl.trim().length > 0 &&
+                 formData.anonKey.trim().length > 0;
+        }
+        // Local mode - just need an Excel file or proceed without data
+        return true;
       case 3:
         return true;
       default:
@@ -565,63 +579,115 @@ export function NewProjectModal({ open, onOpenChange, onProjectCreated }: NewPro
                 </div>
               </div>
 
-              {/* Database Credentials - REQUIRED */}
+              {/* Database Mode Selection */}
               <div className="space-y-3 pt-3 border-t border-slate-700">
                 <div className="flex items-center gap-2">
                   <Database className="h-4 w-4 text-cyan-400" />
-                  <Label className="text-slate-300">פרטי חיבור ל-Supabase (חובה)</Label>
+                  <Label className="text-slate-300">מקור נתונים</Label>
                 </div>
-                <p className="text-xs text-slate-500">
-                  כל פרויקט חייב להיות מחובר למסד נתונים משלו
-                </p>
 
-                <div className="space-y-3 p-3 bg-slate-800/50 rounded-lg border border-cyan-500/30">
-                  <div className="space-y-2">
-                    <Label htmlFor="supabaseUrl" className="text-slate-300 text-sm">
-                      Supabase URL *
-                    </Label>
-                    <Input
-                      id="supabaseUrl"
-                      value={formData.supabaseUrl}
-                      onChange={(e) => setFormData(prev => ({ ...prev, supabaseUrl: e.target.value }))}
-                      placeholder="https://xxxxx.supabase.co"
-                      className="bg-slate-800 border-slate-600 text-white font-mono text-sm"
-                      dir="ltr"
-                    />
+                {/* Mode Toggle */}
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setFormData(prev => ({ ...prev, mode: 'local' }))}
+                    className={cn(
+                      'p-3 rounded-lg border transition-all text-right',
+                      formData.mode === 'local'
+                        ? 'border-emerald-500 bg-emerald-500/10'
+                        : 'border-slate-700 hover:border-slate-600 bg-slate-800/50'
+                    )}
+                  >
+                    <div className="flex items-center gap-2">
+                      <FileSpreadsheet className="h-5 w-5 text-emerald-400" />
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-white">קובץ אקסל בלבד</p>
+                        <p className="text-xs text-slate-500">ללא מסד נתונים חיצוני</p>
+                      </div>
+                      {formData.mode === 'local' && <Check className="h-4 w-4 text-emerald-400" />}
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFormData(prev => ({ ...prev, mode: 'external' }))}
+                    className={cn(
+                      'p-3 rounded-lg border transition-all text-right',
+                      formData.mode === 'external'
+                        ? 'border-cyan-500 bg-cyan-500/10'
+                        : 'border-slate-700 hover:border-slate-600 bg-slate-800/50'
+                    )}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Database className="h-5 w-5 text-cyan-400" />
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-white">Supabase מחובר</p>
+                        <p className="text-xs text-slate-500">מסד נתונים חיצוני</p>
+                      </div>
+                      {formData.mode === 'external' && <Check className="h-4 w-4 text-cyan-400" />}
+                    </div>
+                  </button>
+                </div>
+
+                {/* Supabase Credentials - only show in external mode */}
+                {formData.mode === 'external' && (
+                  <div className="space-y-3 p-3 bg-slate-800/50 rounded-lg border border-cyan-500/30">
+                    <div className="space-y-2">
+                      <Label htmlFor="supabaseUrl" className="text-slate-300 text-sm">
+                        Supabase URL *
+                      </Label>
+                      <Input
+                        id="supabaseUrl"
+                        value={formData.supabaseUrl}
+                        onChange={(e) => setFormData(prev => ({ ...prev, supabaseUrl: e.target.value }))}
+                        placeholder="https://xxxxx.supabase.co"
+                        className="bg-slate-800 border-slate-600 text-white font-mono text-sm"
+                        dir="ltr"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="anonKey" className="text-slate-300 text-sm">
+                        Anon Key *
+                      </Label>
+                      <Input
+                        id="anonKey"
+                        value={formData.anonKey}
+                        onChange={(e) => setFormData(prev => ({ ...prev, anonKey: e.target.value }))}
+                        placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                        className="bg-slate-800 border-slate-600 text-white font-mono text-sm"
+                        dir="ltr"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="serviceKey" className="text-slate-300 text-sm">
+                        Service Key (מומלץ לגישה מלאה)
+                      </Label>
+                      <Input
+                        id="serviceKey"
+                        type="password"
+                        value={formData.serviceKey}
+                        onChange={(e) => setFormData(prev => ({ ...prev, serviceKey: e.target.value }))}
+                        placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                        className="bg-slate-800 border-slate-600 text-white font-mono text-sm"
+                        dir="ltr"
+                      />
+                      <p className="text-xs text-slate-500">
+                        נדרש לגישה מלאה לטבלאות (יוצפן בשמירה)
+                      </p>
+                    </div>
                   </div>
+                )}
 
-                  <div className="space-y-2">
-                    <Label htmlFor="anonKey" className="text-slate-300 text-sm">
-                      Anon Key *
-                    </Label>
-                    <Input
-                      id="anonKey"
-                      value={formData.anonKey}
-                      onChange={(e) => setFormData(prev => ({ ...prev, anonKey: e.target.value }))}
-                      placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-                      className="bg-slate-800 border-slate-600 text-white font-mono text-sm"
-                      dir="ltr"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="serviceKey" className="text-slate-300 text-sm">
-                      Service Key (מומלץ לגישה מלאה)
-                    </Label>
-                    <Input
-                      id="serviceKey"
-                      type="password"
-                      value={formData.serviceKey}
-                      onChange={(e) => setFormData(prev => ({ ...prev, serviceKey: e.target.value }))}
-                      placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-                      className="bg-slate-800 border-slate-600 text-white font-mono text-sm"
-                      dir="ltr"
-                    />
-                    <p className="text-xs text-slate-500">
-                      נדרש לגישה מלאה לטבלאות (יוצפן בשמירה)
+                {/* Local mode info */}
+                {formData.mode === 'local' && (
+                  <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-lg">
+                    <p className="text-emerald-400 text-sm flex items-center gap-2">
+                      <FileSpreadsheet className="h-4 w-4" />
+                      הנתונים יאוחסנו במערכת המרכזית. תוכל לייבא קבצי אקסל ולעדכן את התאריך של כל ייבוא.
                     </p>
                   </div>
-                </div>
+                )}
               </div>
 
               {/* File Upload */}
@@ -761,21 +827,32 @@ export function NewProjectModal({ open, onOpenChange, onProjectCreated }: NewPro
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs text-slate-500 mb-1">Database</p>
+                    <p className="text-xs text-slate-500 mb-1">מצב אחסון</p>
                     <div className="flex items-center gap-2">
-                      <Database className="h-4 w-4 text-cyan-400" />
-                      <span className="text-sm text-cyan-400">מסד נתונים ייעודי</span>
+                      {formData.mode === 'local' ? (
+                        <>
+                          <FileSpreadsheet className="h-4 w-4 text-emerald-400" />
+                          <span className="text-sm text-emerald-400">אקסל מקומי</span>
+                        </>
+                      ) : (
+                        <>
+                          <Database className="h-4 w-4 text-cyan-400" />
+                          <span className="text-sm text-cyan-400">Supabase מחובר</span>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
 
-                {/* Supabase URL */}
-                <div>
-                  <p className="text-xs text-slate-500 mb-1">Supabase URL</p>
-                  <p className="text-sm text-slate-300 font-mono bg-slate-700/50 px-2 py-1 rounded" dir="ltr">
-                    {formData.supabaseUrl || 'לא הוגדר'}
-                  </p>
-                </div>
+                {/* Supabase URL - only show in external mode */}
+                {formData.mode === 'external' && formData.supabaseUrl && (
+                  <div>
+                    <p className="text-xs text-slate-500 mb-1">Supabase URL</p>
+                    <p className="text-sm text-slate-300 font-mono bg-slate-700/50 px-2 py-1 rounded" dir="ltr">
+                      {formData.supabaseUrl}
+                    </p>
+                  </div>
+                )}
 
                 {/* File */}
                 {uploadedFile && (

@@ -180,9 +180,9 @@ export function DataTable({
         </p>
       </div>
 
-      {/* Table */}
-      <div className="relative overflow-auto rounded-lg border border-slate-700 bg-slate-900/50">
-        <table className="w-full text-sm">
+      {/* Table - with horizontal scroll */}
+      <div className="relative overflow-x-auto overflow-y-auto max-h-[600px] rounded-lg border border-slate-700 bg-slate-900/50 scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-slate-800">
+        <table className="w-full text-sm min-w-max">
           <thead className="bg-slate-800/80 sticky top-0 z-10">
             <tr>
               {displayColumns.map((column) => (

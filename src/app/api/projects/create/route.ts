@@ -10,8 +10,10 @@ import {
 /**
  * POST /api/projects/create
  *
- * Creates a new project with REQUIRED database credentials.
- * NO FALLBACK to Central database - each project must have its own Supabase.
+ * Creates a new project with optional database credentials.
+ * Supports two modes:
+ * - 'local': Excel-only project without Supabase connection
+ * - 'external': Project connected to external Supabase database
  */
 export async function POST(request: Request) {
   try {
@@ -32,14 +34,15 @@ export async function POST(request: Request) {
       data_type,
       icon,
       color,
-      // Database credentials - REQUIRED (no fallback!)
+      mode = 'local', // 'local' (Excel only) or 'external' (Supabase connected)
+      // Database credentials - REQUIRED only for 'external' mode
       supabase_url,
       supabase_anon_key,
       supabase_service_key,
     } = await request.json();
 
     // =========================================================================
-    // Validation - ALL credentials are REQUIRED
+    // Validation
     // =========================================================================
 
     if (!name?.trim()) {
@@ -49,86 +52,94 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!supabase_url?.trim()) {
-      return NextResponse.json(
-        { error: 'Supabase URL הוא שדה חובה. כל פרויקט חייב להיות מחובר למסד נתונים משלו.' },
-        { status: 400 }
-      );
-    }
-
-    if (!supabase_anon_key?.trim()) {
-      return NextResponse.json(
-        { error: 'Anon Key הוא שדה חובה' },
-        { status: 400 }
-      );
-    }
-
-    // Normalize and validate URL
-    const normalizedUrl = normalizeSupabaseUrl(supabase_url.trim());
-    if (!isValidSupabaseUrl(normalizedUrl)) {
-      return NextResponse.json(
-        {
-          error: 'כתובת Supabase URL לא תקינה',
-          details: `נדרש פורמט: https://xxxxx.supabase.co`,
-          received: supabase_url
-        },
-        { status: 400 }
-      );
-    }
-
-    // Use service key if provided, otherwise use anon key (limited access)
-    const serviceKeyToUse = supabase_service_key?.trim() || supabase_anon_key.trim();
     const tableName = table_name?.trim() || 'master_data';
+    let normalizedUrl: string | null = null;
+    let testResult: { success: boolean; tableExists?: boolean; rowCount?: number; error?: string } | null = null;
+    let tableWarning: string | null = null;
+    let encryptedServiceKey: string | null = null;
 
     // =========================================================================
-    // Test Connection BEFORE creating project
+    // External Mode - Validate and test Supabase credentials
     // =========================================================================
 
-    console.log('Testing connection to:', normalizedUrl, 'table:', tableName);
+    if (mode === 'external') {
+      if (!supabase_url?.trim()) {
+        return NextResponse.json(
+          { error: 'Supabase URL הוא שדה חובה במצב חיבור חיצוני' },
+          { status: 400 }
+        );
+      }
 
-    const testResult = await testProjectConnection(
-      normalizedUrl,
-      supabase_anon_key.trim(),
-      serviceKeyToUse,
-      tableName
-    );
+      if (!supabase_anon_key?.trim()) {
+        return NextResponse.json(
+          { error: 'Anon Key הוא שדה חובה במצב חיבור חיצוני' },
+          { status: 400 }
+        );
+      }
 
-    if (!testResult.success) {
-      return NextResponse.json(
-        {
-          error: 'בדיקת החיבור נכשלה',
-          details: testResult.error,
-          action: 'check_credentials'
-        },
-        { status: 400 }
+      // Normalize and validate URL
+      normalizedUrl = normalizeSupabaseUrl(supabase_url.trim());
+      if (!isValidSupabaseUrl(normalizedUrl)) {
+        return NextResponse.json(
+          {
+            error: 'כתובת Supabase URL לא תקינה',
+            details: `נדרש פורמט: https://xxxxx.supabase.co`,
+            received: supabase_url
+          },
+          { status: 400 }
+        );
+      }
+
+      // Use service key if provided, otherwise use anon key (limited access)
+      const serviceKeyToUse = supabase_service_key?.trim() || supabase_anon_key.trim();
+
+      // Test Connection BEFORE creating project
+      console.log('Testing connection to:', normalizedUrl, 'table:', tableName);
+
+      testResult = await testProjectConnection(
+        normalizedUrl,
+        supabase_anon_key.trim(),
+        serviceKeyToUse,
+        tableName
       );
+
+      if (!testResult.success) {
+        return NextResponse.json(
+          {
+            error: 'בדיקת החיבור נכשלה',
+            details: testResult.error,
+            action: 'check_credentials'
+          },
+          { status: 400 }
+        );
+      }
+
+      // Warn if table doesn't exist but connection works
+      tableWarning = !testResult.tableExists
+        ? `הטבלה '${tableName}' לא קיימת עדיין במסד הנתונים. תוכל ליצור אותה בהמשך.`
+        : null;
+
+      encryptedServiceKey = encrypt(serviceKeyToUse);
     }
 
-    // Warn if table doesn't exist but connection works
-    const tableWarning = !testResult.tableExists
-      ? `הטבלה '${tableName}' לא קיימת עדיין במסד הנתונים. תוכל ליצור אותה בהמשך.`
-      : null;
-
     // =========================================================================
-    // Create Project with validated credentials
+    // Create Project
     // =========================================================================
-
-    const encryptedServiceKey = encrypt(serviceKeyToUse);
 
     const { data: project, error: projectError } = await supabase
       .from('projects')
       .insert({
         name: name.trim(),
-        supabase_url: normalizedUrl,
-        supabase_anon_key: supabase_anon_key.trim(),
-        supabase_service_key: encryptedServiceKey,
+        supabase_url: normalizedUrl, // null for local mode
+        supabase_anon_key: mode === 'external' ? supabase_anon_key.trim() : null,
+        supabase_service_key: encryptedServiceKey, // null for local mode
         description: description?.trim() || '',
         table_name: tableName,
         data_type: data_type || 'custom',
         icon: icon || 'layout-dashboard',
         color: color || 'slate',
-        is_configured: true, // Validated credentials
-        connection_last_tested: new Date().toISOString(),
+        is_configured: mode === 'external', // Only true if external DB validated
+        connection_last_tested: mode === 'external' ? new Date().toISOString() : null,
         connection_error: null,
         created_by: user.id,
       })
@@ -177,23 +188,25 @@ export async function POST(request: Request) {
       action: 'create_project',
       details: {
         project_name: name,
+        mode,
         table_name: tableName,
         supabase_url: normalizedUrl,
-        table_exists: testResult.tableExists,
-        row_count: testResult.rowCount,
+        table_exists: testResult?.tableExists ?? null,
+        row_count: testResult?.rowCount ?? null,
       },
     });
 
-    console.log('Project created successfully:', project.name, 'URL:', normalizedUrl);
+    console.log('Project created successfully:', project.name, 'Mode:', mode, 'URL:', normalizedUrl || 'local');
 
     return NextResponse.json({
       project,
       warning: tableWarning,
-      connection: {
+      mode,
+      connection: mode === 'external' ? {
         tested: true,
-        tableExists: testResult.tableExists,
-        rowCount: testResult.rowCount
-      }
+        tableExists: testResult?.tableExists,
+        rowCount: testResult?.rowCount
+      } : null
     });
 
   } catch (error) {
