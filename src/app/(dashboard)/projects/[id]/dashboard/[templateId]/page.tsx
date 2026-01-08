@@ -10,6 +10,9 @@ import {
   LayoutDashboard,
   FileSpreadsheet,
   AlertCircle,
+  Share2,
+  Copy,
+  Check,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { DashboardRenderer } from '@/components/DashboardRenderer';
@@ -21,6 +24,16 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import type { SmartDashboardTemplate } from '@/types/dashboard';
 
@@ -36,6 +49,14 @@ export default function DashboardViewPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingData, setIsLoadingData] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Share modal state
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [sharePassword, setSharePassword] = useState('');
+  const [shareName, setShareName] = useState('');
+  const [isCreatingShare, setIsCreatingShare] = useState(false);
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   // Fetch all templates for switcher
   const fetchTemplates = useCallback(async () => {
@@ -118,6 +139,66 @@ export default function DashboardViewPage() {
   const handleRefresh = () => {
     fetchData();
     toast.success('הנתונים רועננו');
+  };
+
+  // Handle create share
+  const handleCreateShare = async () => {
+    if (!sharePassword || sharePassword.length < 4) {
+      toast.error('יש להזין סיסמה באורך 4 תווים לפחות');
+      return;
+    }
+
+    setIsCreatingShare(true);
+
+    try {
+      const response = await fetch('/api/public-shares', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projectId,
+          templateId,
+          password: sharePassword,
+          name: shareName || template?.name || 'שיתוף דשבורד',
+          expiresInDays: 30,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to create share');
+      }
+
+      setShareUrl(result.share.url);
+      toast.success('לינק השיתוף נוצר בהצלחה');
+    } catch (err) {
+      console.error('Error creating share:', err);
+      toast.error('שגיאה ביצירת השיתוף');
+    } finally {
+      setIsCreatingShare(false);
+    }
+  };
+
+  // Copy share URL
+  const handleCopyUrl = async () => {
+    if (!shareUrl) return;
+
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setCopied(true);
+      toast.success('הלינק הועתק');
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast.error('שגיאה בהעתקה');
+    }
+  };
+
+  // Reset share modal
+  const resetShareModal = () => {
+    setSharePassword('');
+    setShareName('');
+    setShareUrl(null);
+    setCopied(false);
   };
 
   // Handle template switch
@@ -259,6 +340,19 @@ export default function DashboardViewPage() {
             </DropdownMenu>
           )}
 
+          {/* Share Button */}
+          <Button
+            variant="outline"
+            onClick={() => {
+              resetShareModal();
+              setShowShareModal(true);
+            }}
+            className="border-blue-600 text-blue-400 hover:bg-blue-600/10"
+          >
+            <Share2 className="h-4 w-4 ml-2" />
+            שיתוף
+          </Button>
+
           {/* Edit Button */}
           <Button
             variant="outline"
@@ -300,6 +394,125 @@ export default function DashboardViewPage() {
           />
         )}
       </div>
+
+      {/* Share Modal */}
+      <Dialog open={showShareModal} onOpenChange={setShowShareModal}>
+        <DialogContent className="bg-slate-800 border-slate-700 text-white" dir="rtl">
+          <DialogHeader>
+            <DialogTitle className="text-xl flex items-center gap-2">
+              <Share2 className="h-5 w-5 text-blue-400" />
+              שיתוף דשבורד
+            </DialogTitle>
+            <DialogDescription className="text-slate-400">
+              צור לינק מאובטח לשיתוף הדשבורד עם אנשים מחוץ למערכת
+            </DialogDescription>
+          </DialogHeader>
+
+          {!shareUrl ? (
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label className="text-slate-300">שם השיתוף (אופציונלי)</Label>
+                <Input
+                  value={shareName}
+                  onChange={(e) => setShareName(e.target.value)}
+                  placeholder={template?.name || 'דשבורד'}
+                  className="bg-slate-900 border-slate-700 text-white"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-slate-300">סיסמה לגישה *</Label>
+                <Input
+                  type="password"
+                  value={sharePassword}
+                  onChange={(e) => setSharePassword(e.target.value)}
+                  placeholder="לפחות 4 תווים"
+                  className="bg-slate-900 border-slate-700 text-white"
+                />
+                <p className="text-xs text-slate-500">
+                  הסיסמה תידרש מכל מי שיכנס ללינק
+                </p>
+              </div>
+
+              <div className="bg-slate-900/50 rounded-lg p-3 text-sm text-slate-400">
+                <p>הלינק יהיה תקף ל-30 יום</p>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4 py-4">
+              <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-4 text-center">
+                <Check className="h-8 w-8 text-emerald-500 mx-auto mb-2" />
+                <p className="text-emerald-400 font-medium">הלינק נוצר בהצלחה!</p>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-slate-300">לינק לשיתוף</Label>
+                <div className="flex gap-2">
+                  <Input
+                    value={shareUrl}
+                    readOnly
+                    className="bg-slate-900 border-slate-700 text-white text-sm"
+                    dir="ltr"
+                  />
+                  <Button
+                    onClick={handleCopyUrl}
+                    className={copied ? 'bg-emerald-600' : 'bg-blue-600 hover:bg-blue-700'}
+                  >
+                    {copied ? (
+                      <Check className="h-4 w-4" />
+                    ) : (
+                      <Copy className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
+              </div>
+
+              <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3 text-sm text-amber-300">
+                <p>שמור את הסיסמה! היא לא תוצג שוב.</p>
+                <p className="font-mono mt-1">סיסמה: {sharePassword}</p>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            {!shareUrl ? (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => setShowShareModal(false)}
+                  className="border-slate-700 text-slate-300"
+                >
+                  ביטול
+                </Button>
+                <Button
+                  onClick={handleCreateShare}
+                  disabled={isCreatingShare || !sharePassword}
+                  className="bg-blue-600 hover:bg-blue-700"
+                >
+                  {isCreatingShare ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin ml-2" />
+                      יוצר...
+                    </>
+                  ) : (
+                    <>
+                      <Share2 className="h-4 w-4 ml-2" />
+                      צור לינק
+                    </>
+                  )}
+                </Button>
+              </>
+            ) : (
+              <Button
+                onClick={() => setShowShareModal(false)}
+                className="bg-emerald-600 hover:bg-emerald-700"
+              >
+                סיום
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

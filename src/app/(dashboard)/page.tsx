@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import {
   Database,
   Plus,
@@ -131,8 +132,15 @@ export default function DashboardPage() {
 
           <div className="relative flex flex-col items-center text-center">
             {/* Logo */}
-            <div className="w-20 h-20 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-2xl flex items-center justify-center mb-4 shadow-lg shadow-cyan-500/20">
-              <span className="text-white font-bold text-4xl">ס</span>
+            <div className="mb-6">
+              <Image
+                src="/sela-logo.png"
+                alt="סלע ביטוח"
+                width={180}
+                height={180}
+                className="drop-shadow-2xl"
+                priority
+              />
             </div>
 
             {/* Title */}

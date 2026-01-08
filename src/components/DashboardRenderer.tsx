@@ -29,6 +29,7 @@ interface DashboardRendererProps {
   onRefresh?: () => void;
   onEditTemplate?: () => void;
   onExport?: (format: 'csv' | 'xlsx') => void;
+  isPublicView?: boolean;
 }
 
 export function DashboardRenderer({
@@ -38,6 +39,7 @@ export function DashboardRenderer({
   onRefresh,
   onEditTemplate,
   onExport,
+  isPublicView = false,
 }: DashboardRendererProps) {
   const [activeFilters, setActiveFilters] = useState<Record<string, unknown>>({});
   const [searchQuery, setSearchQuery] = useState('');

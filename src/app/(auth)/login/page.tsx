@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Database, Mail, Lock, Eye, EyeOff } from 'lucide-react';
+import Image from 'next/image';
+import { Mail, Lock, Eye, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -75,9 +76,15 @@ export default function LoginPage() {
     >
       <Card className="w-full max-w-md bg-slate-800/50 border-slate-700">
         <CardHeader className="text-center pb-2">
-          <div className="flex items-center justify-center gap-3 mb-4">
-            <Database className="h-10 w-10 text-emerald-500" />
-            <span className="text-2xl font-bold text-white">SELAI Admin Hub</span>
+          <div className="flex flex-col items-center justify-center gap-3 mb-4">
+            <Image
+              src="/sela-logo.png"
+              alt="סלע ביטוח"
+              width={120}
+              height={120}
+              priority
+            />
+            <span className="text-2xl font-bold text-white">סלע דשבורדים</span>
           </div>
           <p className="text-slate-400">התחבר לניהול הפרויקטים שלך</p>
         </CardHeader>
