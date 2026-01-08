@@ -56,6 +56,7 @@ export function ProjectCard({
             records: data.stats?.total || 0,
             tables: 1, // master_data table
             lastImport: null, // Would need to fetch from import_history
+            isConfigured: true,
           });
         }
       } catch (error) {
