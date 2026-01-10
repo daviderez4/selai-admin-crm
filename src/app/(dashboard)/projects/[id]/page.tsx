@@ -17,6 +17,7 @@ import {
   ArrowLeft,
   TrendingUp,
   Activity,
+  ChevronLeft,
 } from 'lucide-react';
 import { Header } from '@/components/layout/Header';
 import { Button } from '@/components/ui/button';
@@ -41,40 +42,41 @@ interface ProjectStats {
   }[];
 }
 
+// Navigation tabs for project
+interface NavTab {
+  id: string;
+  label: string;
+  href: string;
+  icon?: React.ElementType;
+}
+
 interface StatCardProps {
   title: string;
   value: string | number;
-  icon: React.ElementType;
-  color: 'blue' | 'emerald' | 'amber' | 'purple' | 'cyan';
+  icon: string;
   trend?: string;
+  trendUp?: boolean;
 }
 
-function StatCard({ title, value, icon: Icon, color, trend }: StatCardProps) {
-  const colorClasses = {
-    blue: 'from-blue-500/30 to-blue-600/10 text-blue-400',
-    emerald: 'from-emerald-500/30 to-emerald-600/10 text-emerald-400',
-    amber: 'from-amber-500/30 to-amber-600/10 text-amber-400',
-    purple: 'from-purple-500/30 to-purple-600/10 text-purple-400',
-    cyan: 'from-cyan-500/30 to-cyan-600/10 text-cyan-400',
-  };
-
+function StatCard({ title, value, icon, trend, trendUp }: StatCardProps) {
   return (
-    <Card className="bg-gradient-to-br from-slate-800 to-slate-900 border-slate-700 hover:border-slate-600 transition-all duration-300">
-      <CardContent className="pt-6">
-        <div className="flex items-center gap-4">
-          <div className={cn('w-14 h-14 bg-gradient-to-br rounded-xl flex items-center justify-center', colorClasses[color])}>
-            <Icon className="h-7 w-7" />
-          </div>
+    <Card className="bg-white border-slate-200 shadow-sm hover:shadow-md transition-all duration-200">
+      <CardContent className="pt-5 pb-4">
+        <div className="flex items-start justify-between">
           <div className="flex-1">
-            <p className="text-slate-400 text-sm">{title}</p>
-            <p className="text-2xl font-bold text-white">{value}</p>
+            <p className="text-xs font-medium text-slate-400 uppercase tracking-wide">{title}</p>
+            <p className="text-2xl font-bold text-slate-900 mt-1 tabular-nums">{value}</p>
             {trend && (
-              <p className="text-xs text-emerald-400 flex items-center gap-1 mt-1">
-                <TrendingUp className="h-3 w-3" />
+              <p className={cn(
+                'text-xs flex items-center gap-1 mt-1.5',
+                trendUp ? 'text-emerald-600' : 'text-red-500'
+              )}>
+                <TrendingUp className={cn('h-3 w-3', !trendUp && 'rotate-180')} />
                 {trend}
               </p>
             )}
           </div>
+          <div className="text-3xl">{icon}</div>
         </div>
       </CardContent>
     </Card>
@@ -86,41 +88,23 @@ interface QuickLinkProps {
   icon: React.ElementType;
   title: string;
   description: string;
-  color: 'cyan' | 'green' | 'purple' | 'amber';
 }
 
-function QuickLink({ href, icon: Icon, title, description, color }: QuickLinkProps) {
-  const colorClasses = {
-    cyan: 'hover:border-cyan-500/50 group-hover:from-cyan-500/20 group-hover:to-cyan-600/5',
-    green: 'hover:border-emerald-500/50 group-hover:from-emerald-500/20 group-hover:to-emerald-600/5',
-    purple: 'hover:border-purple-500/50 group-hover:from-purple-500/20 group-hover:to-purple-600/5',
-    amber: 'hover:border-amber-500/50 group-hover:from-amber-500/20 group-hover:to-amber-600/5',
-  };
-
-  const iconColors = {
-    cyan: 'text-cyan-400 bg-cyan-500/20',
-    green: 'text-emerald-400 bg-emerald-500/20',
-    purple: 'text-purple-400 bg-purple-500/20',
-    amber: 'text-amber-400 bg-amber-500/20',
-  };
-
+function QuickLink({ href, icon: Icon, title, description }: QuickLinkProps) {
   return (
     <Link
       href={href}
-      className={cn(
-        'group block p-5 bg-gradient-to-br from-slate-800/50 to-slate-900 border border-slate-700 rounded-xl transition-all duration-300',
-        colorClasses[color]
-      )}
+      className="group block p-4 bg-white border border-slate-200 rounded-lg shadow-sm hover:shadow-md hover:border-slate-300 transition-all duration-200"
     >
-      <div className="flex items-start gap-4">
-        <div className={cn('w-12 h-12 rounded-xl flex items-center justify-center', iconColors[color])}>
-          <Icon className="h-6 w-6" />
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center group-hover:bg-blue-50 transition-colors">
+          <Icon className="h-5 w-5 text-slate-500 group-hover:text-blue-600" />
         </div>
         <div className="flex-1">
-          <h3 className="text-white font-semibold mb-1 group-hover:text-white/90">{title}</h3>
-          <p className="text-slate-400 text-sm">{description}</p>
+          <h3 className="text-sm font-medium text-slate-800 group-hover:text-blue-700">{title}</h3>
+          <p className="text-xs text-slate-400">{description}</p>
         </div>
-        <ArrowLeft className="h-5 w-5 text-slate-500 group-hover:text-white transition-colors" />
+        <ArrowLeft className="h-4 w-4 text-slate-300 group-hover:text-blue-500 transition-colors" />
       </div>
     </Link>
   );
@@ -155,6 +139,16 @@ export default function ProjectHomePage() {
   const [stats, setStats] = useState<ProjectStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [projectNotFound, setProjectNotFound] = useState(false);
+  const [activeTab, setActiveTab] = useState('dashboard');
+
+  // Navigation tabs
+  const navTabs: NavTab[] = [
+    { id: 'dashboard', label: 'דשבורד', href: `/projects/${projectId}` },
+    { id: 'data', label: 'תצוגת נתונים', href: `/projects/${projectId}/data` },
+    { id: 'import', label: 'ייבוא נתונים', href: `/projects/${projectId}/import` },
+    { id: 'dashboard-builder', label: 'בונה דשבורד', href: `/projects/${projectId}/dashboard-builder` },
+    { id: 'settings', label: 'הגדרות', href: `/projects/${projectId}/settings` },
+  ];
 
   // Find and connect to project
   useEffect(() => {
@@ -219,15 +213,15 @@ export default function ProjectHomePage() {
 
   if (projectNotFound) {
     return (
-      <div className="flex items-center justify-center h-full">
+      <div className="flex items-center justify-center h-full bg-slate-50">
         <div className="text-center">
-          <Database className="h-12 w-12 text-red-500 mx-auto mb-4" />
-          <p className="text-red-400 mb-2">הפרויקט לא נמצא</p>
+          <Database className="h-12 w-12 text-red-400 mx-auto mb-4" />
+          <p className="text-red-600 mb-2">הפרויקט לא נמצא</p>
           <p className="text-slate-500 text-sm mb-4">ID: {projectId}</p>
           <Button
             variant="outline"
             onClick={() => router.push('/')}
-            className="border-slate-700 text-slate-300"
+            className="border-slate-300 text-slate-600"
           >
             חזור לדף הבית
           </Button>
@@ -238,10 +232,10 @@ export default function ProjectHomePage() {
 
   if (!selectedProject) {
     return (
-      <div className="flex items-center justify-center h-full">
+      <div className="flex items-center justify-center h-full bg-slate-50">
         <div className="text-center">
-          <Database className="h-12 w-12 text-slate-600 mx-auto mb-4 animate-pulse" />
-          <p className="text-slate-400">טוען פרויקט...</p>
+          <Database className="h-12 w-12 text-slate-400 mx-auto mb-4 animate-pulse" />
+          <p className="text-slate-500">טוען פרויקט...</p>
         </div>
       </div>
     );
@@ -255,19 +249,39 @@ export default function ProjectHomePage() {
     <div className="flex flex-col h-full">
       <Header breadcrumbs={breadcrumbs} />
 
-      <div className="flex-1 p-6 overflow-auto" dir="rtl">
+      {/* Horizontal Navigation Tabs */}
+      <div className="bg-white border-b border-slate-200 px-6" dir="rtl">
+        <nav className="flex items-center gap-1 -mb-px">
+          {navTabs.map((tab) => (
+            <Link
+              key={tab.id}
+              href={tab.href}
+              className={cn(
+                'px-4 py-3 text-sm font-medium border-b-2 transition-colors',
+                tab.id === activeTab
+                  ? 'border-blue-600 text-blue-600'
+                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+              )}
+            >
+              {tab.label}
+            </Link>
+          ))}
+        </nav>
+      </div>
+
+      <div className="flex-1 p-6 overflow-auto bg-slate-50/50" dir="rtl">
         <div className="max-w-7xl mx-auto space-y-6">
-          {/* Project Header */}
+          {/* Project Header - Clean & Professional */}
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-white">{selectedProject.name}</h1>
-              <p className="text-slate-400">{selectedProject.description || 'פרויקט Supabase'}</p>
+              <h1 className="text-xl font-semibold text-slate-800">{selectedProject.name}</h1>
+              <p className="text-sm text-slate-500">{selectedProject.description || 'פרויקט Supabase'}</p>
             </div>
             <div className="flex items-center gap-2">
               <Button
                 variant="outline"
                 size="sm"
-                className="border-slate-700 text-slate-300 hover:bg-slate-800"
+                className="border-slate-200 text-slate-600 hover:bg-slate-100 bg-white"
                 onClick={fetchStats}
                 disabled={loading}
               >
@@ -278,7 +292,7 @@ export default function ProjectHomePage() {
                 <Button
                   variant="outline"
                   size="icon"
-                  className="border-slate-700 text-slate-300 hover:bg-slate-800"
+                  className="border-slate-200 text-slate-600 hover:bg-slate-100 bg-white"
                 >
                   <Settings className="h-4 w-4" />
                 </Button>
@@ -286,31 +300,29 @@ export default function ProjectHomePage() {
             </div>
           </div>
 
-          {/* Stats Cards */}
+          {/* Stats Cards with Emoji Icons */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <StatCard
               title="סה״כ רשומות"
               value={stats ? formatNumber(stats.totalRecords) : '-'}
-              icon={FileText}
-              color="blue"
+              icon="📊"
             />
             <StatCard
               title="צבירה צפויה"
               value={stats ? `₪${formatNumber(stats.totalAccumulation)}` : '-'}
-              icon={DollarSign}
-              color="emerald"
+              icon="💰"
+              trend="+12.5%"
+              trendUp={true}
             />
             <StatCard
               title="מטפלים"
               value={stats?.handlers || '-'}
-              icon={Users}
-              color="amber"
+              icon="👥"
             />
             <StatCard
               title="עדכון אחרון"
               value={stats ? formatDate(stats.lastUpdate) : '-'}
-              icon={Clock}
-              color="purple"
+              icon="🕐"
             />
           </div>
 
@@ -321,70 +333,70 @@ export default function ProjectHomePage() {
               icon={BarChart3}
               title="תצוגת נתונים"
               description="צפה בנתונים עם פילטרים וסיכומים"
-              color="cyan"
             />
             <QuickLink
               href={`/projects/${projectId}/import`}
               icon={Upload}
               title="ייבוא נתונים"
               description="העלה קובץ אקסל חדש"
-              color="green"
             />
             <QuickLink
               href={`/projects/${projectId}/dashboard-builder`}
               icon={Layout}
               title="בונה דשבורד"
               description="צור דשבורדים מותאמים"
-              color="purple"
             />
           </div>
 
           {/* Recent Activity */}
-          <Card className="bg-slate-800/50 border-slate-700">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-lg text-white flex items-center gap-2">
-                <Activity className="h-5 w-5 text-emerald-400" />
+          <Card className="bg-white border-slate-200 shadow-sm">
+            <CardHeader className="flex flex-row items-center justify-between pb-3 border-b border-slate-100">
+              <CardTitle className="text-base font-semibold text-slate-800 flex items-center gap-2">
+                <span className="text-lg">📋</span>
                 פעילות אחרונה
               </CardTitle>
               {stats && stats.recentImports.length > 0 && (
-                <Badge variant="outline" className="border-slate-600 text-slate-400">
-                  {stats.recentImports.length} ייבואים אחרונים
+                <Badge variant="secondary" className="bg-slate-100 text-slate-600 font-normal">
+                  {stats.recentImports.length} ייבואים
                 </Badge>
               )}
             </CardHeader>
-            <CardContent>
+            <CardContent className="pt-4">
               {loading ? (
                 <div className="flex items-center justify-center py-8">
-                  <div className="h-6 w-6 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+                  <div className="h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
                 </div>
               ) : stats && stats.recentImports.length > 0 ? (
-                <div className="space-y-3">
-                  {stats.recentImports.map((item) => (
+                <div className="space-y-2">
+                  {stats.recentImports.map((item, index) => (
                     <div
                       key={item.id}
-                      className="flex items-center gap-4 p-3 bg-slate-900/50 rounded-lg border border-slate-700"
+                      className={cn(
+                        'flex items-center gap-4 p-3 rounded-lg transition-colors',
+                        index % 2 === 0 ? 'bg-slate-50' : 'bg-white'
+                      )}
                     >
-                      <div className="w-10 h-10 bg-emerald-500/20 rounded-lg flex items-center justify-center">
-                        <Upload className="h-5 w-5 text-emerald-400" />
+                      <div className="w-9 h-9 bg-emerald-100 rounded-lg flex items-center justify-center">
+                        <Upload className="h-4 w-4 text-emerald-600" />
                       </div>
                       <div className="flex-1">
-                        <p className="text-white text-sm font-medium">{item.file_name}</p>
-                        <p className="text-slate-500 text-xs">
+                        <p className="text-sm font-medium text-slate-800">{item.file_name}</p>
+                        <p className="text-xs text-slate-400">
                           {item.rows_imported.toLocaleString('he-IL')} שורות יובאו
                         </p>
                       </div>
                       <div className="text-left">
                         <Badge
                           className={cn(
-                            'text-xs',
+                            'text-xs font-normal',
                             item.status === 'completed'
-                              ? 'bg-emerald-500/20 text-emerald-400'
-                              : 'bg-amber-500/20 text-amber-400'
+                              ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-100'
+                              : 'bg-amber-100 text-amber-700 hover:bg-amber-100'
                           )}
                         >
                           {item.status === 'completed' ? 'הושלם' : item.status}
                         </Badge>
-                        <p className="text-slate-500 text-xs mt-1">
+                        <p className="text-xs text-slate-400 mt-1">
                           {formatDate(item.created_at)}
                         </p>
                       </div>
@@ -393,13 +405,13 @@ export default function ProjectHomePage() {
                 </div>
               ) : (
                 <div className="text-center py-8">
-                  <Activity className="h-10 w-10 text-slate-600 mx-auto mb-3" />
-                  <p className="text-slate-400">אין פעילות אחרונה</p>
+                  <div className="text-4xl mb-3">📭</div>
+                  <p className="text-slate-500 mb-2">אין פעילות אחרונה</p>
                   <Link href={`/projects/${projectId}/import`}>
                     <Button
                       variant="outline"
                       size="sm"
-                      className="mt-4 border-slate-700 text-slate-300"
+                      className="mt-2 border-slate-200 text-slate-600 hover:bg-slate-50"
                     >
                       <Upload className="h-4 w-4 ml-2" />
                       ייבא נתונים ראשונים
@@ -411,14 +423,14 @@ export default function ProjectHomePage() {
           </Card>
 
           {/* Connection Info */}
-          <Card className="bg-slate-800/30 border-slate-700/50">
-            <CardContent className="pt-6">
+          <Card className="bg-white border-slate-200 shadow-sm">
+            <CardContent className="py-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="w-3 h-3 bg-emerald-500 rounded-full animate-pulse" />
-                  <span className="text-slate-400 text-sm">מחובר ל-Supabase</span>
+                  <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse" />
+                  <span className="text-sm text-slate-600">מחובר ל-Supabase</span>
                 </div>
-                <code className="text-xs text-slate-500 bg-slate-900/50 px-3 py-1 rounded">
+                <code className="text-xs text-slate-400 bg-slate-100 px-3 py-1.5 rounded-md">
                   {selectedProject.supabase_url}
                 </code>
               </div>

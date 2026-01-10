@@ -29,18 +29,11 @@ interface FilterSidebarProps {
   onApply: (filters: DynamicFilterValues) => void;
 }
 
-// Meta columns to exclude from filtering (sheet_name is allowed for filtering!)
+// Meta columns to exclude from filtering
 const META_COLUMNS = [
   'id', 'created_at', 'updated_at', 'import_batch', 'import_date',
   'project_id', 'raw_data', 'total_expected_accumulation'
 ];
-
-// Special columns with custom labels
-const SPECIAL_COLUMN_LABELS: Record<string, string> = {
-  'sheet_name': 'גיליון',
-  'import_month': 'חודש ייבוא',
-  'import_year': 'שנת ייבוא',
-};
 
 // Hebrew month names
 const HEBREW_MONTHS: Record<string, string> = {
@@ -97,8 +90,8 @@ export function FilterSidebar({
   // Determine which columns are suitable for filtering (2-30 unique values)
   const filterableColumns = useMemo(() => {
     return columns.filter(col => {
-      // Skip import_month, import_year, and sheet_name - they're handled separately
-      if (col === 'import_month' || col === 'import_year' || col === 'sheet_name') return false;
+      // Skip import_month and import_year - they're handled separately
+      if (col === 'import_month' || col === 'import_year') return false;
 
       const uniqueValues = getUniqueValues(col);
       return uniqueValues.length >= 2 && uniqueValues.length <= 30;
@@ -107,18 +100,6 @@ export function FilterSidebar({
 
   // Check if import period columns exist
   const hasImportPeriod = columns.includes('import_month') || columns.includes('import_year');
-
-  // Check if sheet_name column exists (for multi-sheet Excel files)
-  const hasSheetName = columns.includes('sheet_name');
-
-  // Get available sheet names from data
-  const availableSheets = useMemo(() => {
-    if (!hasSheetName) return [];
-    return [...new Set(data.map(row => row.sheet_name))]
-      .filter(s => s !== null && s !== undefined && s !== '')
-      .map(s => String(s))
-      .sort();
-  }, [data, hasSheetName]);
 
   // Get available years from data
   const availableYears = useMemo(() => {
@@ -275,41 +256,8 @@ export function FilterSidebar({
             </>
           )}
 
-          {/* Sheet Name Filter - Show if multiple sheets imported */}
-          {hasSheetName && availableSheets.length > 1 && (
-            <>
-              <div className="border-t border-slate-200 pt-4 mt-4" />
-
-              <div className="space-y-4">
-                <h3 className="text-slate-700 font-semibold text-sm flex items-center gap-2">
-                  <span>📑</span> גיליון אקסל
-                </h3>
-
-                <div className="space-y-2">
-                  <Label className="text-slate-600 text-sm font-medium">בחר גיליון</Label>
-                  <Select
-                    value={String(localFilters.sheet_name || '__all__')}
-                    onValueChange={value => handleFilterChange('sheet_name', value === '__all__' ? '' : value)}
-                  >
-                    <SelectTrigger className="bg-white border-slate-200 text-slate-800 hover:border-slate-300 focus:border-blue-400">
-                      <SelectValue placeholder="כל הגיליונות" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-white border-slate-200 shadow-lg">
-                      <SelectItem value="__all__" className="text-slate-600">כל הגיליונות</SelectItem>
-                      {availableSheets.map(sheet => (
-                        <SelectItem key={sheet} value={sheet} className="text-slate-700">
-                          📊 {sheet}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </>
-          )}
-
           {/* Empty State */}
-          {filterableColumns.length === 0 && !hasImportPeriod && !hasSheetName && (
+          {filterableColumns.length === 0 && !hasImportPeriod && (
             <div className="text-center text-slate-500 py-8">
               <div className="text-4xl mb-3">🔍</div>
               <p className="font-medium">אין פילטרים זמינים</p>

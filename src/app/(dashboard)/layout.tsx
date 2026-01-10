@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import Image from 'next/image';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useProjectsStore } from '@/lib/stores/projectsStore';
@@ -59,22 +58,23 @@ export default function DashboardLayout({
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-900" dir="rtl">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100" dir="rtl">
         <div className="flex flex-col items-center gap-6">
-          <Image
-            src="/sela-logo.png"
-            alt="סלע ביטוח"
-            width={180}
-            height={180}
-            className="animate-pulse"
-            priority
-          />
-          <div className="flex items-center gap-2">
-            <div className="h-2 w-2 bg-blue-500 rounded-full animate-bounce [animation-delay:-0.3s]" />
-            <div className="h-2 w-2 bg-blue-500 rounded-full animate-bounce [animation-delay:-0.15s]" />
-            <div className="h-2 w-2 bg-blue-500 rounded-full animate-bounce" />
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-blue-700 rounded-xl flex items-center justify-center shadow-lg">
+              <span className="text-white font-bold text-xl">S</span>
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold text-slate-800">Selaboard</h1>
+              <p className="text-xs text-slate-500">חברת ביטוח סלע</p>
+            </div>
           </div>
-          <p className="text-slate-400 text-sm">טוען...</p>
+          <div className="flex items-center gap-2">
+            <div className="h-2 w-2 bg-blue-600 rounded-full animate-bounce [animation-delay:-0.3s]" />
+            <div className="h-2 w-2 bg-blue-600 rounded-full animate-bounce [animation-delay:-0.15s]" />
+            <div className="h-2 w-2 bg-blue-600 rounded-full animate-bounce" />
+          </div>
+          <p className="text-slate-600 text-sm">טוען...</p>
         </div>
       </div>
     );
@@ -85,7 +85,7 @@ export default function DashboardLayout({
   }
 
   return (
-    <div className="flex h-screen bg-slate-900" dir="rtl">
+    <div className="flex h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-slate-100" dir="rtl">
       <Sidebar />
       <main className="flex-1 overflow-auto">
         {children}

@@ -21,6 +21,10 @@ export interface Project {
   is_configured: boolean;
   connection_last_tested?: string;
   connection_error?: string;
+  // Update frequency settings
+  update_frequency?: 'manual' | 'daily' | 'weekly' | 'monthly';
+  auto_import_email?: string;
+  auto_import_enabled?: boolean;
   created_at: string;
   updated_at: string;
   created_by: string;
@@ -253,4 +257,164 @@ export interface ImportPreview {
   headers: string[];
   rows: string[][];
   totalRows: number;
+}
+
+// ============================================
+// SELAI Hierarchy Types (from main SELAI Supabase)
+// ============================================
+
+export type UserRole = 'admin' | 'supervisor' | 'agent' | 'client';
+
+// Hub user profile with role and SELAI connection
+export interface HubUserProfile {
+  id: string;
+  email: string;
+  full_name: string;
+  role: UserRole;
+  // Connection to SELAI entities
+  selai_user_id?: string;           // Link to users table in SELAI
+  external_agent_id?: string;        // Link to external_agents table (for agents)
+  supervisor_id?: string;            // Link to supervisors table (for supervisors)
+  // Permissions
+  can_manage_users: boolean;
+  can_import_data: boolean;
+  can_export_data: boolean;
+  can_view_all_agents: boolean;
+  // Settings
+  two_factor_enabled: boolean;
+  theme: 'dark' | 'light' | 'system';
+  language: 'he' | 'en';
+  // Metadata
+  is_active: boolean;
+  last_login_at?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+// Supervisor from SELAI
+export interface Supervisor {
+  id: string;
+  name: string;
+  selai_user_id?: string;
+  external_agent_id?: string;
+  email?: string;
+  phone?: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+// External Agent from SELAI (the 398 agents)
+export interface ExternalAgent {
+  id: string;
+  id_number: string;            // Israeli ID
+  license_number: string;       // Insurance license
+  full_name: string;
+  first_name?: string;
+  last_name?: string;
+  email?: string;
+  mobile_phone?: string;
+  office_phone?: string;
+  supervisor_id: string;        // Reference to supervisors table
+  business_unit_id: string;     // Reference to business_units table
+  matal?: string;
+  is_active_in_sela: boolean;
+  selai_user_id?: string;       // If registered in app
+  surense_agent_id?: string;
+  base44_user_id?: string;
+  onboarded_to_app: boolean;
+  onboarded_at?: string;
+  notes?: string;
+  source_file?: string;
+  imported_at: string;
+  created_at: string;
+  updated_at: string;
+}
+
+// Agent Producer Numbers (agent numbers at each insurance company)
+export interface AgentProducerNumber {
+  id: string;
+  external_agent_id: string;
+  producer_id: string;          // Reference to producers (insurance companies)
+  agent_number: string;         // The agent's number at this producer
+  agent_number_description: string;
+  parent_agent_number_1?: string;
+  parent_agent_number_2?: string;
+  is_active: boolean;
+  notes?: string;
+  created_by: string;
+  original_created_at?: string;
+  last_updated_by?: string;
+  original_updated_at?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+// Producer (Insurance Company)
+export interface Producer {
+  id: string;
+  name: string;
+  parent_company_id?: string;
+  producer_type?: string;
+  surense_producer_id?: string;
+  surense_producer_code?: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+// Business Unit
+export interface BusinessUnit {
+  id: string;
+  name: string;
+  description?: string;
+  is_active: boolean;
+  created_at: string;
+}
+
+// Client from SELAI
+export interface Client {
+  id: string;
+  agent_id: string;             // Which agent owns this client
+  first_name: string;
+  last_name: string;
+  email?: string;
+  phone?: string;
+  id_number?: string;
+  date_of_birth?: string;
+  address?: string;
+  is_active: boolean;
+  has_portal_access: boolean;
+  last_login_at?: string;
+  notes?: string;
+  tags?: string[];
+  created_date: string;
+  updated_date: string;
+  created_by: string;
+}
+
+// Contact from SELAI
+export interface Contact {
+  id: string;
+  agent_id: string;
+  first_name: string;
+  last_name: string;
+  full_name?: string;
+  email?: string;
+  phone?: string;
+  mobile?: string;
+  id_number?: string;
+  birth_date?: string;
+  address?: string;
+  city?: string;
+  postal_code?: string;
+  company_name?: string;
+  company?: string;
+  occupation?: string;
+  source?: string;
+  status: 'new' | 'active' | 'inactive';
+  notes?: string;
+  tags?: string[];
+  created_at: string;
+  updated_at: string;
 }

@@ -15,6 +15,9 @@ import {
   Eye,
   EyeOff,
   Trash2,
+  Clock,
+  Mail,
+  Calendar,
 } from 'lucide-react';
 import { Header } from '@/components/layout/Header';
 import { Button } from '@/components/ui/button';
@@ -60,6 +63,10 @@ export default function ProjectSettingsPage() {
     supabase_url: '',
     supabase_anon_key: '',
     supabase_service_key: '',
+    // Update frequency settings
+    update_frequency: 'manual' as 'manual' | 'daily' | 'weekly' | 'monthly',
+    auto_import_email: '',
+    auto_import_enabled: false,
   });
 
   // Load project data
@@ -84,6 +91,10 @@ export default function ProjectSettingsPage() {
           supabase_url: project.supabase_url || '',
           supabase_anon_key: project.supabase_anon_key || '',
           supabase_service_key: '', // Don't show encrypted key
+          // Update frequency settings
+          update_frequency: project.update_frequency || 'manual',
+          auto_import_email: project.auto_import_email || '',
+          auto_import_enabled: project.auto_import_enabled || false,
         });
       }
       setLoading(false);
@@ -141,6 +152,10 @@ export default function ProjectSettingsPage() {
         supabase_anon_key: formData.supabase_anon_key,
         table_name: formData.table_name,
         test_connection: false, // Don't test on every save
+        // Update frequency settings
+        update_frequency: formData.update_frequency,
+        auto_import_email: formData.auto_import_email || undefined,
+        auto_import_enabled: formData.auto_import_enabled,
       };
 
       // Only include service key if it was changed
@@ -412,6 +427,126 @@ export default function ProjectSettingsPage() {
                   )}
                 </div>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Update Frequency Card */}
+          <Card className="bg-slate-800/50 border-slate-700">
+            <CardHeader>
+              <CardTitle className="text-white flex items-center gap-2">
+                <Clock className="h-5 w-5 text-amber-400" />
+                תדירות עדכון נתונים
+              </CardTitle>
+              <CardDescription className="text-slate-400">
+                הגדר כיצד יתעדכנו הנתונים - ידנית או אוטומטית
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Update Frequency Selection */}
+              <div className="space-y-2">
+                <Label className="text-slate-300">תדירות עדכון</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { value: 'manual', label: 'ידני', description: 'עדכון בלחיצה בלבד', icon: '✋' },
+                    { value: 'daily', label: 'יומי', description: 'עדכון אוטומטי כל יום', icon: '📆' },
+                    { value: 'weekly', label: 'שבועי', description: 'עדכון פעם בשבוע', icon: '📅' },
+                    { value: 'monthly', label: 'חודשי', description: 'עדכון פעם בחודש', icon: '🗓️' },
+                  ].map(option => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => setFormData(prev => ({
+                        ...prev,
+                        update_frequency: option.value as typeof prev.update_frequency
+                      }))}
+                      className={cn(
+                        'p-3 rounded-lg border transition-all text-right flex items-center gap-2',
+                        formData.update_frequency === option.value
+                          ? 'border-amber-500 bg-amber-500/10'
+                          : 'border-slate-700 hover:border-slate-600 bg-slate-900/50'
+                      )}
+                    >
+                      <span className="text-lg">{option.icon}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-white">{option.label}</p>
+                        <p className="text-xs text-slate-500">{option.description}</p>
+                      </div>
+                      {formData.update_frequency === option.value && (
+                        <Check className="h-4 w-4 text-amber-400" />
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Auto Import Email - Only show if not manual */}
+              {formData.update_frequency !== 'manual' && (
+                <>
+                  <div className="pt-4 border-t border-slate-700 space-y-4">
+                    {/* Enable/Disable Toggle */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Mail className="h-4 w-4 text-slate-400" />
+                        <Label className="text-slate-300">ייבוא אוטומטי ממייל</Label>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setFormData(prev => ({ ...prev, auto_import_enabled: !prev.auto_import_enabled }))}
+                        className={cn(
+                          'w-12 h-6 rounded-full transition-colors relative',
+                          formData.auto_import_enabled ? 'bg-emerald-500' : 'bg-slate-600'
+                        )}
+                      >
+                        <div
+                          className={cn(
+                            'absolute top-1 w-4 h-4 rounded-full bg-white transition-transform',
+                            formData.auto_import_enabled ? 'left-7' : 'left-1'
+                          )}
+                        />
+                      </button>
+                    </div>
+
+                    {/* Email Input */}
+                    {formData.auto_import_enabled && (
+                      <div className="space-y-2">
+                        <Label htmlFor="auto_import_email" className="text-slate-300">
+                          כתובת מייל לניטור
+                        </Label>
+                        <Input
+                          id="auto_import_email"
+                          type="email"
+                          value={formData.auto_import_email}
+                          onChange={(e) => setFormData(prev => ({ ...prev, auto_import_email: e.target.value }))}
+                          placeholder="reports@company.com"
+                          className="bg-slate-900 border-slate-700 text-white"
+                          dir="ltr"
+                        />
+                        <p className="text-xs text-slate-500">
+                          קבצי אקסל שיתקבלו לכתובת זו ייובאו אוטומטית לפרויקט
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Info Box */}
+                  <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                    <p className="text-amber-400 text-sm flex items-center gap-2">
+                      <Calendar className="h-4 w-4" />
+                      {formData.update_frequency === 'daily' && 'הנתונים יתעדכנו מדי יום בשעה 06:00'}
+                      {formData.update_frequency === 'weekly' && 'הנתונים יתעדכנו כל יום ראשון בשעה 06:00'}
+                      {formData.update_frequency === 'monthly' && 'הנתונים יתעדכנו ב-1 לכל חודש בשעה 06:00'}
+                    </p>
+                  </div>
+                </>
+              )}
+
+              {formData.update_frequency === 'manual' && (
+                <div className="p-3 bg-slate-700/50 rounded-lg">
+                  <p className="text-slate-400 text-sm">
+                    במצב ידני, עליך לייבא קבצים דרך מסך הייבוא בכל פעם שתרצה לעדכן נתונים
+                  </p>
+                </div>
+              )}
             </CardContent>
           </Card>
 

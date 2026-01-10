@@ -67,19 +67,15 @@ const COLUMNS: ColumnConfig[] = [
   { key: 'מפקח', label: 'מפקח', icon: '👨‍💼', type: 'text', width: '120px', sortable: true },
 ];
 
-// Default visible columns - empty set means "show all" until user customizes
-// When this is empty, all columns will be shown
-const DEFAULT_VISIBLE_COLUMNS = new Set<string>();
-
-// Fallback for legacy master_data - used only if no dynamic columns
-const LEGACY_VISIBLE_COLUMNS = new Set([
+// Default visible columns
+const DEFAULT_VISIBLE_COLUMNS = new Set([
   'מספר_תהליך',
   'סוג_תהליך',
   'סטטוס',
   'מטפל',
   'לקוח',
   'סהכ_צבירה_צפויה_מניוד',
-  'total_expected_accumulation',
+  'total_expected_accumulation', // צבירה + הפקדה חד פעמית
   'יצרן_חדש',
   'תאריך_פתיחת_תהליך',
   'פרמיה_צפויה',
@@ -157,8 +153,6 @@ export default function DataPage() {
   // Save column preferences to localStorage when they change
   useEffect(() => {
     if (!columnPrefsLoaded) return; // Don't save before initial load
-    // Only save if user actually customized (not showing all)
-    if (visibleColumns.size === 0) return;
     const storageKey = `column_prefs_${projectId}`;
     try {
       localStorage.setItem(storageKey, JSON.stringify(Array.from(visibleColumns)));
@@ -166,21 +160,6 @@ export default function DataPage() {
       console.error('Failed to save column preferences:', e);
     }
   }, [visibleColumns, projectId, columnPrefsLoaded]);
-
-  // When dynamic columns are loaded and no preferences saved, show ALL columns
-  useEffect(() => {
-    if (!columnPrefsLoaded || dynamicColumns.length === 0) return;
-
-    // Check if user has saved preferences
-    const storageKey = `column_prefs_${projectId}`;
-    const saved = localStorage.getItem(storageKey);
-
-    // If no saved preferences, set visible columns to ALL dynamic columns
-    if (!saved) {
-      const allColumnKeys = dynamicColumns.map(c => c.key);
-      setVisibleColumns(new Set(allColumnKeys));
-    }
-  }, [dynamicColumns, columnPrefsLoaded, projectId]);
 
   // Fetch project info
   useEffect(() => {

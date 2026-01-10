@@ -199,6 +199,7 @@ export async function POST(
           import_date: importDate,
           import_month: importMonth,
           import_year: importYear,
+          sheet_name: selectedSheet, // Store which Excel sheet this row came from
         };
 
         // For master_data table, also extract specific calculated fields

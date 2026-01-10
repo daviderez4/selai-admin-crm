@@ -43,7 +43,11 @@ export async function PUT(
       supabase_anon_key,
       supabase_service_key,
       table_name,
-      test_connection = true // Default to testing connection
+      test_connection = true, // Default to testing connection
+      // Update frequency settings
+      update_frequency, // 'manual' | 'daily' | 'weekly' | 'monthly'
+      auto_import_email, // Email to monitor for auto imports
+      auto_import_enabled, // Boolean to enable/disable auto import
     } = await request.json();
 
     // Get current project data
@@ -87,6 +91,19 @@ export async function PUT(
 
     if (table_name?.trim()) {
       updateData.table_name = table_name.trim();
+    }
+
+    // Update frequency settings
+    if (update_frequency) {
+      updateData.update_frequency = update_frequency;
+    }
+
+    if (auto_import_email !== undefined) {
+      updateData.auto_import_email = auto_import_email?.trim() || null;
+    }
+
+    if (auto_import_enabled !== undefined) {
+      updateData.auto_import_enabled = auto_import_enabled;
     }
 
     // Test connection if requested and we have complete credentials

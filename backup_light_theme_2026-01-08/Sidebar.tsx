@@ -17,9 +17,6 @@ import {
   BarChart3,
   Layout,
   Home,
-  Building2,
-  Shield,
-  User,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -28,7 +25,6 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Badge } from '@/components/ui/badge';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useProjectsStore } from '@/lib/stores/projectsStore';
-import { useUserStore } from '@/stores/userStore';
 import { useState } from 'react';
 
 interface NavItem {
@@ -46,7 +42,6 @@ export function Sidebar() {
   const params = useParams();
   const { signOut, user } = useAuthStore();
   const { selectedProject } = useProjectsStore();
-  const { profile, isAdmin, isSupervisor } = useUserStore();
   const [collapsed, setCollapsed] = useState(false);
 
   const projectId = params?.id as string;
@@ -101,15 +96,8 @@ export function Sidebar() {
     },
   ] : [];
 
-  // System navigation items - filter based on role
+  // System navigation items
   const systemNavItems: NavItem[] = [
-    // Hierarchy page - only for admin and supervisors
-    ...(isAdmin() || isSupervisor() ? [{
-      id: 'hierarchy',
-      title: 'היררכיה ארגונית',
-      href: '/hierarchy',
-      icon: Building2,
-    }] : []),
     {
       id: 'users',
       title: 'משתמשים',
@@ -272,66 +260,33 @@ export function Sidebar() {
         </div>
 
         {/* User section */}
-        <div className="border-t border-slate-100">
-          {/* User Role Badge */}
-          {profile && !collapsed && (
-            <div className="p-2 bg-slate-50/50">
-              <div className="flex items-center gap-2 px-2 py-1.5">
-                <div className={cn(
-                  "p-1.5 rounded-full",
-                  profile.role === 'admin' ? 'bg-purple-100' :
-                  profile.role === 'supervisor' ? 'bg-blue-100' : 'bg-slate-100'
-                )}>
-                  {profile.role === 'admin' ? (
-                    <Shield className="h-3 w-3 text-purple-600" />
-                  ) : profile.role === 'supervisor' ? (
-                    <Shield className="h-3 w-3 text-blue-600" />
-                  ) : (
-                    <User className="h-3 w-3 text-slate-600" />
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium text-slate-700 truncate">
-                    {profile.full_name}
-                  </p>
-                  <p className="text-[10px] text-slate-500">
-                    {profile.role === 'admin' ? 'מנהל מערכת' :
-                     profile.role === 'supervisor' ? 'מפקח' : 'סוכן'}
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Logout Button */}
-          <div className="p-2">
-            {collapsed ? (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="w-full h-8 text-slate-400 hover:text-red-500 hover:bg-red-50"
-                    onClick={handleSignOut}
-                  >
-                    <LogOut className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="left" className="bg-slate-900 text-white border-0 text-xs">
-                  יציאה
-                </TooltipContent>
-              </Tooltip>
-            ) : (
-              <Button
-                variant="ghost"
-                className="w-full justify-start h-8 text-xs text-slate-500 hover:text-red-500 hover:bg-red-50"
-                onClick={handleSignOut}
-              >
-                <LogOut className="h-3.5 w-3.5 ml-2" />
+        <div className="p-2 border-t border-slate-100">
+          {collapsed ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="w-full h-8 text-slate-400 hover:text-red-500 hover:bg-red-50"
+                  onClick={handleSignOut}
+                >
+                  <LogOut className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="left" className="bg-slate-900 text-white border-0 text-xs">
                 יציאה
-              </Button>
-            )}
-          </div>
+              </TooltipContent>
+            </Tooltip>
+          ) : (
+            <Button
+              variant="ghost"
+              className="w-full justify-start h-8 text-xs text-slate-500 hover:text-red-500 hover:bg-red-50"
+              onClick={handleSignOut}
+            >
+              <LogOut className="h-3.5 w-3.5 ml-2" />
+              יציאה
+            </Button>
+          )}
         </div>
       </aside>
     </TooltipProvider>

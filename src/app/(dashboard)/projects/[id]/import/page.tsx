@@ -26,6 +26,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 import { AnalysisSummary, TemplateSuggestions, CategoryColumnSelector } from '@/components/import';
 import { ImportHistory } from '@/components/ImportHistory';
 import type { AnalyzedColumn, ColumnCategory } from '@/types/dashboard';
@@ -882,6 +883,46 @@ export default function ImportPage() {
                   </CardContent>
                 </Card>
               </div>
+
+              {/* Sheet Selection - Show if multiple sheets */}
+              {analysis.sheets.length > 1 && (
+                <Card className="bg-blue-500/10 border-blue-500/30">
+                  <CardContent className="pt-4 pb-4">
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xl">📑</span>
+                        <p className="text-white font-medium">בחירת גיליון לייבוא</p>
+                      </div>
+                      <p className="text-slate-400 text-sm">
+                        הקובץ מכיל {analysis.sheets.length} גיליונות. כל גיליון יישמר עם שם הגיליון לסינון בדשבורד.
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        <Badge
+                          className={cn(
+                            'cursor-pointer transition-colors px-3 py-1.5',
+                            analysis.sheetName === analysis.sheets[0]
+                              ? 'bg-blue-500 text-white'
+                              : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                          )}
+                        >
+                          📊 {analysis.sheetName} (נבחר)
+                        </Badge>
+                        {analysis.sheets.filter(s => s !== analysis.sheetName).map(sheet => (
+                          <Badge
+                            key={sheet}
+                            className="bg-slate-700/50 text-slate-400 px-3 py-1.5"
+                          >
+                            {sheet}
+                          </Badge>
+                        ))}
+                      </div>
+                      <p className="text-blue-400 text-xs">
+                        💡 טיפ: גיליון הנתונים נשמר בשדה sheet_name ותוכל לסנן לפי גיליון בדשבורד
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
 
               {/* Direct Import to Project Table */}
               <Card className="bg-emerald-500/10 border-emerald-500/30">

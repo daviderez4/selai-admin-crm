@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { createProjectClient } from '@/lib/utils/projectDatabase';
 import * as XLSX from 'xlsx';
 import type {
   ColumnCategory,
@@ -7,6 +8,103 @@ import type {
   ColumnStats,
   AnalyzedColumn,
 } from '@/types/dashboard';
+
+// Structure comparison result
+interface StructureComparison {
+  isMatch: boolean;
+  existingColumns: string[];
+  newColumns: string[];
+  missingColumns: string[];
+  addedColumns: string[];
+  maxColumns: string[]; // Union of all columns across all imports
+  hasStructureChange: boolean;
+}
+
+// Compare new file structure with existing data
+async function compareStructure(
+  projectId: string,
+  tableName: string,
+  newColumns: string[],
+  supabase: ReturnType<typeof createClient> extends Promise<infer T> ? T : never
+): Promise<StructureComparison | null> {
+  try {
+    // Get project credentials
+    const { data: project, error: projectError } = await supabase
+      .from('projects')
+      .select('supabase_url, supabase_service_key')
+      .eq('id', projectId)
+      .single();
+
+    if (projectError || !project?.supabase_url || !project?.supabase_service_key) {
+      return null;
+    }
+
+    // Create client for project's database
+    const clientResult = createProjectClient({
+      supabase_url: project.supabase_url,
+      supabase_service_key: project.supabase_service_key,
+      table_name: tableName
+    });
+
+    if (!clientResult.success || !clientResult.client) {
+      return null;
+    }
+
+    // Get existing columns from raw_data
+    const { data: existingData, error: dataError } = await clientResult.client
+      .from(tableName)
+      .select('raw_data')
+      .limit(1);
+
+    if (dataError || !existingData || existingData.length === 0) {
+      // No existing data - first import
+      return {
+        isMatch: true,
+        existingColumns: [],
+        newColumns,
+        missingColumns: [],
+        addedColumns: newColumns,
+        maxColumns: newColumns,
+        hasStructureChange: false,
+      };
+    }
+
+    // Extract existing columns from raw_data
+    const rawData = existingData[0].raw_data;
+    const existingColumns = rawData && typeof rawData === 'object' && !Array.isArray(rawData)
+      ? Object.keys(rawData)
+      : [];
+
+    // Compare columns
+    const existingSet = new Set(existingColumns.map(c => c.toLowerCase().trim()));
+    const newSet = new Set(newColumns.map(c => c.toLowerCase().trim()));
+
+    // Find missing (in existing but not in new)
+    const missingColumns = existingColumns.filter(c => !newSet.has(c.toLowerCase().trim()));
+
+    // Find added (in new but not in existing)
+    const addedColumns = newColumns.filter(c => !existingSet.has(c.toLowerCase().trim()));
+
+    // Calculate max columns (union of both)
+    const maxColumnsSet = new Set([...existingColumns, ...newColumns]);
+    const maxColumns = Array.from(maxColumnsSet);
+
+    const hasStructureChange = missingColumns.length > 0 || addedColumns.length > 0;
+
+    return {
+      isMatch: !hasStructureChange,
+      existingColumns,
+      newColumns,
+      missingColumns,
+      addedColumns,
+      maxColumns,
+      hasStructureChange,
+    };
+  } catch (error) {
+    console.error('Error comparing structure:', error);
+    return null;
+  }
+}
 
 // Category patterns for auto-detection (Hebrew + English)
 const CATEGORY_PATTERNS: Record<ColumnCategory, RegExp[]> = {
@@ -565,6 +663,15 @@ export async function POST(
     // Suggest templates
     const templateSuggestions = suggestTemplates(categories, recommendedFields, analyzedColumns);
 
+    // Compare with existing data structure
+    const tableName = formData.get('tableName') as string | null;
+    let structureComparison: StructureComparison | null = null;
+
+    if (tableName) {
+      const headerNames = headers.map(h => h.original);
+      structureComparison = await compareStructure(projectId, tableName, headerNames, supabase);
+    }
+
     return NextResponse.json({
       success: true,
       fileName: file.name,
@@ -578,6 +685,7 @@ export async function POST(
       keyFields,
       recommendedFields,
       templateSuggestions,
+      structureComparison,
       analyzedAt: new Date().toISOString(),
     });
   } catch (error) {

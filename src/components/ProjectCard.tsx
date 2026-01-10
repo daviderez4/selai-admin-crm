@@ -82,51 +82,51 @@ export function ProjectCard({
 
   return (
     <Card
-      className="bg-slate-800/50 border-slate-700 hover:border-cyan-500/50 transition-all duration-300 overflow-hidden group"
+      className="bg-white border-slate-200 hover:border-slate-300 hover:shadow-md transition-all duration-150 overflow-hidden"
       dir="rtl"
     >
-      {/* Color accent bar */}
-      <div className="h-1.5 bg-gradient-to-r from-cyan-500 to-emerald-500 group-hover:from-cyan-400 group-hover:to-emerald-400 transition-colors" />
+      {/* Top accent - thin line */}
+      <div className="h-0.5 bg-blue-600" />
 
-      <CardContent className="p-5">
+      <CardContent className="p-4">
         {/* Header */}
-        <div className="flex items-start justify-between mb-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-cyan-500/20 rounded-lg flex items-center justify-center">
-              <Database className="h-5 w-5 text-cyan-400" />
+        <div className="flex items-start justify-between mb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 bg-slate-100 rounded-md flex items-center justify-center">
+              <Database className="h-4 w-4 text-slate-500" />
             </div>
             <div>
-              <h3 className="font-semibold text-white">{project.name}</h3>
-              <p className="text-xs text-slate-500">{urlHost}</p>
+              <h3 className="text-sm font-medium text-slate-800">{project.name}</h3>
+              <p className="text-[10px] text-slate-400">{urlHost}</p>
             </div>
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="text-slate-400 hover:text-white h-8 w-8">
-                <MoreVertical className="h-4 w-4" />
+              <Button variant="ghost" size="icon" className="text-slate-400 hover:text-slate-600 h-7 w-7">
+                <MoreVertical className="h-3.5 w-3.5" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="bg-slate-800 border-slate-700">
+            <DropdownMenuContent align="end" className="w-40 bg-white border-slate-200 shadow-lg">
               <DropdownMenuItem
-                className="text-slate-300 focus:bg-slate-700 focus:text-white cursor-pointer"
+                className="text-xs text-slate-600 focus:bg-slate-50 cursor-pointer"
                 onClick={() => onSettings(project)}
               >
-                <Settings className="ml-2 h-4 w-4" />
+                <Settings className="ml-2 h-3.5 w-3.5" />
                 הגדרות
               </DropdownMenuItem>
               <DropdownMenuItem
-                className="text-slate-300 focus:bg-slate-700 focus:text-white cursor-pointer"
+                className="text-xs text-slate-600 focus:bg-slate-50 cursor-pointer"
                 onClick={() => window.open(project.supabase_url, '_blank')}
               >
-                <ExternalLink className="ml-2 h-4 w-4" />
+                <ExternalLink className="ml-2 h-3.5 w-3.5" />
                 פתח בסופהבייס
               </DropdownMenuItem>
-              <DropdownMenuSeparator className="bg-slate-700" />
+              <DropdownMenuSeparator className="bg-slate-100" />
               <DropdownMenuItem
-                className="text-red-400 focus:bg-red-500/10 focus:text-red-400 cursor-pointer"
+                className="text-xs text-red-500 focus:bg-red-50 cursor-pointer"
                 onClick={() => onDelete(project.id)}
               >
-                <Trash2 className="ml-2 h-4 w-4" />
+                <Trash2 className="ml-2 h-3.5 w-3.5" />
                 מחק פרויקט
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -135,55 +135,55 @@ export function ProjectCard({
 
         {/* Description */}
         {project.description && (
-          <p className="text-sm text-slate-400 mb-4 line-clamp-2">
+          <p className="text-xs text-slate-500 mb-3 line-clamp-2">
             {project.description}
           </p>
         )}
 
-        {/* Quick Stats */}
-        <div className="grid grid-cols-3 gap-2 mb-4">
-          <div className="bg-slate-900/50 rounded-lg p-2 text-center">
+        {/* Stats Row - Horizontal */}
+        <div className="flex items-center gap-4 py-2.5 px-3 bg-slate-50 rounded-md mb-3">
+          <div className="flex-1 text-center border-l border-slate-200">
             <p className={cn(
-              'text-lg font-bold',
-              loading ? 'text-slate-600' : 'text-white'
+              'text-base font-semibold tabular-nums',
+              loading ? 'text-slate-300' : 'text-slate-800'
             )}>
               {loading ? '-' : formatNumber(stats.records)}
             </p>
-            <p className="text-xs text-slate-500">רשומות</p>
+            <p className="text-[10px] text-slate-400 uppercase tracking-wide">רשומות</p>
           </div>
-          <div className="bg-slate-900/50 rounded-lg p-2 text-center">
+          <div className="flex-1 text-center border-l border-slate-200">
             <p className={cn(
-              'text-lg font-bold',
-              loading ? 'text-slate-600' : 'text-white'
+              'text-base font-semibold tabular-nums',
+              loading ? 'text-slate-300' : 'text-slate-800'
             )}>
               {loading ? '-' : formatNumber(stats.tables)}
             </p>
-            <p className="text-xs text-slate-500">טבלאות</p>
+            <p className="text-[10px] text-slate-400 uppercase tracking-wide">טבלאות</p>
           </div>
-          <div className="bg-slate-900/50 rounded-lg p-2 text-center">
+          <div className="flex-1 text-center">
             <p className={cn(
-              'text-lg font-bold',
-              loading ? 'text-slate-600' : 'text-white'
+              'text-base font-semibold tabular-nums',
+              loading ? 'text-slate-300' : 'text-slate-800'
             )}>
               {stats.lastImport || '-'}
             </p>
-            <p className="text-xs text-slate-500">ייבוא אחרון</p>
+            <p className="text-[10px] text-slate-400 uppercase tracking-wide">עדכון</p>
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="flex items-center justify-between text-sm text-slate-500 mb-4">
-          <span>נוצר: {format(new Date(project.created_at), 'dd/MM/yyyy', { locale: he })}</span>
+        {/* Footer Row */}
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] text-slate-400">
+            {format(new Date(project.created_at), 'dd/MM/yyyy', { locale: he })}
+          </span>
+          <Button
+            className="h-7 px-3 text-xs bg-blue-600 hover:bg-blue-700 text-white"
+            onClick={() => onConnect(project)}
+          >
+            פתח
+            <ArrowLeft className="h-3 w-3 mr-1.5" />
+          </Button>
         </div>
-
-        {/* Connect Button */}
-        <Button
-          className="w-full bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/30 border-0"
-          onClick={() => onConnect(project)}
-        >
-          התחבר
-          <ArrowLeft className="h-4 w-4 mr-2" />
-        </Button>
       </CardContent>
     </Card>
   );

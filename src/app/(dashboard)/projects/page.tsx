@@ -13,7 +13,7 @@ export default function ProjectsPage() {
 
   return (
     <div className="flex items-center justify-center h-full">
-      <div className="text-slate-400">מעביר לדף הראשי...</div>
+      <div className="text-slate-500">מעביר לדף הראשי...</div>
     </div>
   );
 }

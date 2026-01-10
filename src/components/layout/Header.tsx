@@ -46,133 +46,135 @@ export function Header({ title, subtitle, breadcrumbs, showBackButton = false }:
     ?.toUpperCase() || 'U';
 
   return (
-    <header className="h-16 border-b border-slate-800 bg-slate-900/50 backdrop-blur-sm" dir="rtl">
-      <div className="flex items-center justify-between h-full px-6">
+    <header className="h-12 border-b border-slate-200 bg-white" dir="rtl">
+      <div className="flex items-center justify-between h-full px-4">
         {/* Left Side: Back Button + Breadcrumbs/Title */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
           {/* Back Button */}
           {showBackButton && (
             <Button
               variant="ghost"
               size="sm"
               onClick={() => router.back()}
-              className="flex items-center gap-2 text-slate-400 hover:text-white hover:bg-slate-800"
+              className="flex items-center gap-1.5 h-7 px-2 text-xs text-slate-500 hover:text-slate-700 hover:bg-slate-50"
             >
-              <ArrowRight className="h-4 w-4" />
+              <ArrowRight className="h-3.5 w-3.5" />
               חזור
             </Button>
           )}
 
           {/* Breadcrumbs */}
           {breadcrumbs && breadcrumbs.length > 0 ? (
-            <nav className="flex items-center gap-2 text-sm">
+            <nav className="flex items-center gap-1.5 text-xs">
               <Link
                 href="/projects"
-                className="flex items-center gap-1 text-slate-400 hover:text-white transition-colors"
+                className="flex items-center gap-1 text-slate-400 hover:text-slate-600 transition-colors"
               >
-                <Home className="h-4 w-4" />
-                <span>דשבורד</span>
+                <Home className="h-3.5 w-3.5" />
               </Link>
               {breadcrumbs.map((item, index) => (
-                <div key={index} className="flex items-center gap-2">
-                  <ChevronLeft className="h-4 w-4 text-slate-600" />
+                <div key={index} className="flex items-center gap-1.5">
+                  <ChevronLeft className="h-3 w-3 text-slate-300" />
                   {item.href ? (
                     <Link
                       href={item.href}
-                      className="text-slate-400 hover:text-white transition-colors"
+                      className="text-slate-400 hover:text-slate-600 transition-colors"
                     >
                       {item.label}
                     </Link>
                   ) : (
-                    <span className="text-white font-medium">{item.label}</span>
+                    <span className="text-slate-700 font-medium">{item.label}</span>
                   )}
                 </div>
               ))}
             </nav>
           ) : (
             /* Fallback to Title & Subtitle */
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3">
               {title && (
                 <div className="flex items-center gap-2">
-                  <h1 className="text-xl font-semibold text-white">{title}</h1>
+                  <h1 className="text-sm font-medium text-slate-700">{title}</h1>
                   {subtitle && (
-                    <span className="text-sm text-slate-400">/ {subtitle}</span>
+                    <span className="text-xs text-slate-400">/ {subtitle}</span>
                   )}
                 </div>
               )}
               {selectedProject && !breadcrumbs && (
-                <Badge variant="outline" className="border-emerald-500/50 text-emerald-400">
+                <span className="text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded">
                   {selectedProject.name}
-                </Badge>
+                </span>
               )}
             </div>
           )}
         </div>
 
         {/* Right Side: Search & Actions */}
-        <div className="flex items-center gap-4">
-          {/* Search */}
+        <div className="flex items-center gap-2">
+          {/* Search with keyboard shortcut hint */}
           <div className="relative hidden md:block">
-            <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+            <Search className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
             <Input
               placeholder="חיפוש..."
-              className="w-64 pr-10 bg-slate-800 border-slate-700 text-white placeholder:text-slate-500 focus:border-emerald-500"
+              className="w-48 h-8 pr-8 pl-12 text-xs bg-slate-50 border-slate-200 text-slate-700 placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-1 focus:ring-blue-500/20"
             />
+            <kbd className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
+              ⌘K
+            </kbd>
           </div>
 
           {/* Notifications */}
           <Button
             variant="ghost"
             size="icon"
-            className="relative text-slate-400 hover:text-white"
+            className="relative h-8 w-8 text-slate-400 hover:text-slate-600 hover:bg-slate-50"
           >
-            <Bell className="h-5 w-5" />
-            <span className="absolute top-1 right-1 h-2 w-2 bg-emerald-500 rounded-full" />
+            <Bell className="h-4 w-4" />
+            <span className="absolute top-1.5 right-1.5 h-1.5 w-1.5 bg-blue-500 rounded-full" />
           </Button>
 
-          {/* User Menu */}
+          {/* User Menu - Compact */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
                 variant="ghost"
-                className="relative h-10 w-10 rounded-full"
+                className="relative h-8 w-8 rounded-full hover:bg-slate-50"
               >
-                <Avatar className="h-10 w-10 border-2 border-slate-700">
+                <Avatar className="h-7 w-7 border border-slate-200">
                   <AvatarImage
                     src={user?.user_metadata?.avatar_url}
                     alt={user?.email || ''}
                   />
-                  <AvatarFallback className="bg-slate-800 text-emerald-400">
+                  <AvatarFallback className="bg-blue-600 text-white text-xs font-medium">
                     {initials}
                   </AvatarFallback>
                 </Avatar>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent
-              className="w-56 bg-slate-800 border-slate-700"
+              className="w-48 bg-white border-slate-200 shadow-lg"
               align="end"
               forceMount
             >
-              <DropdownMenuLabel className="font-normal" dir="rtl">
-                <div className="flex flex-col space-y-1">
-                  <p className="text-sm font-medium leading-none text-white">
+              <DropdownMenuLabel className="font-normal py-1.5" dir="rtl">
+                <div className="flex flex-col">
+                  <p className="text-xs font-medium text-slate-700">
                     {user?.user_metadata?.full_name || 'משתמש'}
                   </p>
-                  <p className="text-xs leading-none text-slate-400">
+                  <p className="text-[10px] text-slate-400 truncate">
                     {user?.email}
                   </p>
                 </div>
               </DropdownMenuLabel>
-              <DropdownMenuSeparator className="bg-slate-700" />
-              <DropdownMenuItem asChild className="text-slate-300 focus:bg-slate-700 focus:text-white cursor-pointer">
+              <DropdownMenuSeparator className="bg-slate-100" />
+              <DropdownMenuItem asChild className="text-xs text-slate-600 focus:bg-slate-50 cursor-pointer">
                 <Link href="/settings">
-                  <User className="ml-2 h-4 w-4" />
+                  <User className="ml-2 h-3.5 w-3.5" />
                   הגדרות
                 </Link>
               </DropdownMenuItem>
-              <DropdownMenuSeparator className="bg-slate-700" />
+              <DropdownMenuSeparator className="bg-slate-100" />
               <DropdownMenuItem
-                className="text-red-400 focus:bg-red-500/10 focus:text-red-400 cursor-pointer"
+                className="text-xs text-red-500 focus:bg-red-50 cursor-pointer"
                 onClick={handleSignOut}
               >
                 יציאה
