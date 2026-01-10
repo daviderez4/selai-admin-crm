@@ -1,36 +1,99 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# SELAI Admin Hub
 
-## Getting Started
+מערכת דשבורדים לניהול סוכנים, מפקחים ונתונים עסקיים עבור סלע ביטוח.
 
-First, run the development server:
+## תכונות
+
+- ניהול פרויקטים ודשבורדים
+- ייבוא נתונים מקבצי Excel
+- היררכיה ארגונית (מנהלים, מפקחים, סוכנים)
+- מערכת הזמנות והרשמה
+- אימות זהות מול אפליקציית SELAI
+- תצוגות מותאמות לפי תפקיד
+
+## התקנה מהירה (Development)
 
 ```bash
+# Clone
+git clone https://github.com/selamagic/selai-admin-hub.git
+cd selai-admin-hub
+
+# התקנה
+npm install
+
+# הגדרת env
+cp .env.production.example .env.local
+# ערוך את .env.local עם המפתחות הנכונים
+
+# הרצה
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## פריסה (Production)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+ראה את המדריך המלא: [DEPLOYMENT.md](./DEPLOYMENT.md)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## מבנה הפרויקט
 
-## Learn More
+```
+src/
+├── app/                    # Next.js App Router
+│   ├── (auth)/            # דפי אימות (login, register)
+│   ├── (dashboard)/       # דפי הדשבורד
+│   │   ├── hierarchy/     # היררכיה ארגונית
+│   │   ├── projects/      # ניהול פרויקטים
+│   │   └── users/         # ניהול משתמשים
+│   └── api/               # API Routes
+│       ├── auth/          # APIs אימות
+│       ├── invitations/   # APIs הזמנות
+│       ├── projects/      # APIs פרויקטים
+│       └── selai/         # APIs מול SELAI
+├── components/            # React Components
+├── lib/                   # Utilities
+│   ├── supabase/         # Supabase clients
+│   ├── stores/           # Zustand stores
+│   └── utils/            # Helper functions
+└── types/                # TypeScript types
+```
 
-To learn more about Next.js, take a look at the following resources:
+## Environment Variables
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```env
+# Hub Supabase (Auth + Projects)
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+# SELAI Supabase (Agents Data)
+SELAI_SUPABASE_URL=
+SELAI_SERVICE_ROLE_KEY=
 
-## Deploy on Vercel
+# Encryption
+ENCRYPTION_KEY=
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+# App URL (for invitation links)
+NEXT_PUBLIC_APP_URL=
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## טכנולוגיות
+
+- **Framework**: Next.js 16 (App Router)
+- **UI**: Tailwind CSS, shadcn/ui, Radix
+- **Database**: Supabase (PostgreSQL)
+- **State**: Zustand
+- **Auth**: Supabase Auth
+- **Charts**: Recharts
+- **Excel**: xlsx
+
+## Scripts
+
+```bash
+npm run dev      # הרצה בפיתוח
+npm run build    # בנייה לפרודקשן
+npm run start    # הרצה בפרודקשן
+npm run lint     # בדיקת קוד
+```
+
+## תמיכה
+
+- **Issues**: https://github.com/selamagic/selai-admin-hub/issues
