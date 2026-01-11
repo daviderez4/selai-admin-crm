@@ -22,6 +22,7 @@ import {
   Calculator,
   PieChart,
   HelpCircle,
+  MessageCircle,
 } from 'lucide-react';
 import { Header } from '@/components/layout/Header';
 import { Card, CardContent } from '@/components/ui/card';
@@ -40,8 +41,19 @@ import { FilterSidebar, DynamicFilterValues } from '@/components/dashboard/Filte
 import { QuickViews } from '@/components/dashboard/QuickViews';
 import { RecordDetails } from '@/components/dashboard/RecordDetails';
 import { DrillDownModal } from '@/components/dashboard/DrillDownModal';
+import { BulkActionsToolbar } from '@/components/dashboard/BulkActionsToolbar';
+import { WhatsAppPreview, useWhatsAppPreview } from '@/components/automation/WhatsAppPreview';
 import { cn } from '@/lib/utils';
 import * as XLSX from 'xlsx';
+
+// Message template type
+interface MessageTemplate {
+  id: string;
+  name: string;
+  channel: string;
+  template_text: string;
+  placeholders?: string[];
+}
 
 // Column configuration for master_data
 const COLUMNS: ColumnConfig[] = [
@@ -90,12 +102,16 @@ const INITIAL_FILTERS: DynamicFilterValues = {};
 
 interface Stats {
   total: number;
-  byStatus: Record<string, number>;
-  byProcessType: Record<string, number>;
+  byStatus?: Record<string, number>;
+  byProcessType?: Record<string, number>;
+  byProvider?: Record<string, number>;
+  byBranch?: Record<string, number>;
   totalAccumulation: number;
   totalPremium: number;
-  uniqueHandlers: number;
-  uniqueSupervisors: number;
+  totalCommission?: number;
+  uniqueHandlers?: number;
+  uniqueSupervisors?: number;
+  uniqueAgents?: number;
 }
 
 export default function DataPage() {
@@ -136,6 +152,16 @@ export default function DataPage() {
 
   // Help modal
   const [showHelp, setShowHelp] = useState(false);
+
+  // Selection state for bulk actions
+  const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set());
+  const [bulkLoading, setBulkLoading] = useState(false);
+
+  // Message templates
+  const [templates, setTemplates] = useState<MessageTemplate[]>([]);
+
+  // WhatsApp preview hook
+  const whatsAppPreview = useWhatsAppPreview();
 
   // Load column preferences from localStorage
   useEffect(() => {
@@ -201,13 +227,15 @@ export default function DataPage() {
     fetchProjectInfo();
   }, [projectId]);
 
-  // Fetch data
+  // Fetch data - using data-stream API for complete dataset (NO 1000 LIMIT!)
   const fetchData = useCallback(async () => {
+    console.log('🚀 fetchData: Using data-stream API for project:', projectId);
     setLoading(true);
     setError(null);
 
     try {
-      const response = await fetch(`/api/projects/${projectId}/master-data`);
+      // Use data-stream API which fetches ALL records in chunks
+      const response = await fetch(`/api/projects/${projectId}/data-stream`);
 
       // Check content type to avoid parsing HTML as JSON
       const contentType = response.headers.get('content-type');
@@ -238,57 +266,150 @@ export default function DataPage() {
       }));
 
       // Extract dynamic columns from data
-      // Works for ALL tables - master_data, insurance_data, etc.
+      // Works for ALL tables - master_data, insurance_data, views (nifraim, gemel), etc.
       if (fetchedData.length > 0) {
         const firstRow = fetchedData[0];
+        const isView = result.isView;
+        const viewSchema = result.viewSchema;
 
         // Meta columns to exclude from display
-        // Note: total_expected_accumulation is included as it contains צבירה + הפקדה חד פעמית
         const metaColumns = ['id', 'raw_data', 'created_at', 'updated_at', 'import_batch',
           'import_date', 'import_month', 'import_year', 'project_id'];
 
-        // Check raw_data format
-        const rawData = firstRow.raw_data;
-        console.log('raw_data type:', typeof rawData, 'isArray:', Array.isArray(rawData));
-        console.log('raw_data sample:', rawData);
+        // =============================================
+        // VIEWS (nifraim, gemel) - direct columns with friendly labels
+        // =============================================
+        if (isView && viewSchema) {
+          console.log('Detected VIEW schema:', tableName, viewSchema.columns);
 
-        if (rawData && typeof rawData === 'object' && !Array.isArray(rawData)) {
-          // New format - raw_data is an object with Hebrew column names as keys
-          const columnKeys = Object.keys(rawData);
-          console.log('Hebrew column keys from raw_data:', columnKeys);
+          // Friendly labels for view columns
+          const columnLabels: Record<string, { label: string; icon: string; type: string }> = {
+            provider: { label: 'ספק', icon: '🏢', type: 'text' },
+            processing_month: { label: 'חודש עיבוד', icon: '📅', type: 'date' },
+            branch: { label: 'ענף', icon: '📁', type: 'text' },
+            agent_name: { label: 'שם סוכן', icon: '👤', type: 'text' },
+            premium: { label: 'פרמיה', icon: '💵', type: 'currency' },
+            comission: { label: 'עמלה', icon: '💰', type: 'currency' },
+            accumulation_balance: { label: 'צבירה', icon: '💎', type: 'currency' },
+          };
 
-          const dynamicCols: ColumnConfig[] = columnKeys.map(key => ({
-            key: `raw_data.${key}`, // Access nested property
-            label: key, // Hebrew column name directly
-            icon: '📄',
-            type: 'text' as const,
-            width: '150px',
-            sortable: true,
-          }));
+          const dynamicCols: ColumnConfig[] = viewSchema.columns.map((key: string) => {
+            const config = columnLabels[key] || { label: key, icon: '📄', type: 'text' };
+            return {
+              key,
+              label: config.label,
+              icon: config.icon,
+              type: config.type as 'text' | 'currency' | 'date' | 'status' | 'phone',
+              width: key === 'agent_name' ? '180px' : '130px',
+              sortable: true,
+            };
+          });
           setDynamicColumns(dynamicCols);
-        } else if (rawData && Array.isArray(rawData)) {
-          // Old format - raw_data is an array, create col_X columns
-          const rawColumns: ColumnConfig[] = rawData.map((_: unknown, index: number) => ({
-            key: `col_${index}`,
-            label: `עמודה ${index + 1}`,
-            icon: '📄',
-            type: 'text' as const,
-            width: '120px',
-            sortable: true,
-          }));
-          setDynamicColumns(rawColumns);
-        } else {
-          // Fallback - use row keys directly except meta columns
-          const columnKeys = Object.keys(firstRow).filter(key => !metaColumns.includes(key));
-          const dynamicCols: ColumnConfig[] = columnKeys.map(key => ({
-            key,
-            label: key.replace(/_/g, ' '),
-            icon: '📄',
-            type: 'text' as const,
-            width: '120px',
-            sortable: true,
-          }));
-          setDynamicColumns(dynamicCols);
+        }
+        // =============================================
+        // LEGACY TABLES - raw_data processing
+        // =============================================
+        else {
+          // Check raw_data format
+          const rawData = firstRow.raw_data;
+          console.log('raw_data type:', typeof rawData, 'isArray:', Array.isArray(rawData));
+
+          // Helper function to detect column type and icon based on Hebrew column name
+          const getColumnConfig = (key: string): { icon: string; type: 'text' | 'currency' | 'date' | 'status' | 'phone'; width: string } => {
+            // Agent/Handler fields
+            if (/סוכן|מטפל|agent|handler/i.test(key)) {
+              return { icon: '👤', type: 'text', width: '140px' };
+            }
+            // Supervisor fields
+            if (/מפקח|supervisor|manager/i.test(key)) {
+              return { icon: '👨‍💼', type: 'text', width: '140px' };
+            }
+            // Accumulation/Financial fields
+            if (/צבירה|הפקדה|accumulation|deposit|סכום/i.test(key)) {
+              return { icon: '💰', type: 'currency', width: '130px' };
+            }
+            // Premium fields
+            if (/פרמיה|premium/i.test(key)) {
+              return { icon: '💵', type: 'currency', width: '120px' };
+            }
+            // Commission fields
+            if (/עמלה|commission/i.test(key)) {
+              return { icon: '💎', type: 'currency', width: '120px' };
+            }
+            // Status fields
+            if (/סטטוס|status|מצב/i.test(key)) {
+              return { icon: '📋', type: 'status', width: '110px' };
+            }
+            // Product fields
+            if (/מוצר|product|יצרן|producer/i.test(key)) {
+              return { icon: '📦', type: 'text', width: '130px' };
+            }
+            // Date fields
+            if (/תאריך|date|תקופה/i.test(key)) {
+              return { icon: '📅', type: 'date', width: '110px' };
+            }
+            // Phone fields
+            if (/טלפון|סלולרי|phone|mobile/i.test(key)) {
+              return { icon: '📱', type: 'phone', width: '120px' };
+            }
+            // ID fields
+            if (/מספר|מזהה|id|ת\.?ז/i.test(key)) {
+              return { icon: '🔢', type: 'text', width: '100px' };
+            }
+            // Client fields
+            if (/לקוח|client|customer/i.test(key)) {
+              return { icon: '👥', type: 'text', width: '140px' };
+            }
+            // Default
+            return { icon: '📄', type: 'text', width: '120px' };
+          };
+
+          if (rawData && typeof rawData === 'object' && !Array.isArray(rawData)) {
+            // New format - raw_data is an object with Hebrew column names as keys
+            const columnKeys = Object.keys(rawData);
+            console.log('Hebrew column keys from raw_data:', columnKeys);
+
+            const dynamicCols: ColumnConfig[] = columnKeys.map(key => {
+              const config = getColumnConfig(key);
+              return {
+                key: `raw_data.${key}`, // Access nested property
+                label: key, // Hebrew column name directly
+                icon: config.icon,
+                type: config.type,
+                width: config.width,
+                sortable: true,
+              };
+            });
+            setDynamicColumns(dynamicCols);
+          } else if (rawData && Array.isArray(rawData)) {
+            // Old format - raw_data is an array, create col_X columns
+            const rawColumns: ColumnConfig[] = rawData.map((_: unknown, index: number) => ({
+              key: `col_${index}`,
+              label: `עמודה ${index + 1}`,
+              icon: '📄',
+              type: 'text' as const,
+              width: '120px',
+              sortable: true,
+            }));
+            setDynamicColumns(rawColumns);
+          } else {
+            // Fallback - data has Hebrew keys directly spread at top level (new master_data format)
+            const columnKeys = Object.keys(firstRow).filter(key => !metaColumns.includes(key));
+            console.log('Direct Hebrew column keys:', columnKeys);
+
+            const dynamicCols: ColumnConfig[] = columnKeys.map(key => {
+              const config = getColumnConfig(key);
+              return {
+                key,
+                label: key.replace(/_/g, ' '),
+                icon: config.icon,
+                type: config.type,
+                width: config.width,
+                sortable: true,
+              };
+            });
+            setDynamicColumns(dynamicCols);
+          }
         }
       } else {
         setDynamicColumns([]);
@@ -310,6 +431,27 @@ export default function DataPage() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // Fetch message templates
+  useEffect(() => {
+    const fetchTemplates = async () => {
+      try {
+        const response = await fetch(`/api/projects/${projectId}/message-templates`);
+        if (response.ok) {
+          const result = await response.json();
+          setTemplates(result.templates || []);
+        }
+      } catch (err) {
+        console.error('Failed to fetch templates:', err);
+      }
+    };
+    fetchTemplates();
+  }, [projectId]);
+
+  // Clear selection when data changes
+  useEffect(() => {
+    setSelectedRows(new Set());
+  }, [data]);
 
   // Determine which columns to use - dynamic columns for all tables!
   const activeColumns = useMemo(() => {
@@ -472,8 +614,15 @@ export default function DataPage() {
         const numValue = Number(filterValue);
         result = result.filter(r => Number(r[columnName]) === numValue);
       } else {
-        // String comparison for other columns
-        result = result.filter(r => String(r[columnName]) === String(filterValue));
+        // String comparison for other columns - handle null/undefined values
+        const filterStr = String(filterValue).toLowerCase().trim();
+        result = result.filter(r => {
+          const rowValue = r[columnName];
+          // Skip rows with null/undefined values
+          if (rowValue === null || rowValue === undefined) return false;
+          // Case-insensitive comparison with trimming
+          return String(rowValue).toLowerCase().trim() === filterStr;
+        });
       }
     });
 
@@ -623,6 +772,131 @@ export default function DataPage() {
       toast.error('שגיאה בהעתקת הקישור');
     });
   }, []);
+
+  // Helper to get phone from row
+  const getPhoneFromRow = useCallback((row: Record<string, unknown>): string => {
+    // Try common phone field names
+    const phoneFields = ['סלולרי_לקוח', 'טלפון', 'phone', 'mobile', 'סלולרי', 'נייד'];
+    for (const field of phoneFields) {
+      if (row[field]) return String(row[field]);
+    }
+    return '';
+  }, []);
+
+  // Helper to get name from row
+  const getNameFromRow = useCallback((row: Record<string, unknown>): string => {
+    const nameFields = ['לקוח', 'שם_לקוח', 'שם', 'name', 'client_name', 'customer'];
+    for (const field of nameFields) {
+      if (row[field]) return String(row[field]);
+    }
+    return '';
+  }, []);
+
+  // Handle bulk WhatsApp send
+  const handleBulkWhatsApp = useCallback(async (templateId: string, records: Record<string, unknown>[]) => {
+    setBulkLoading(true);
+    try {
+      // Find template
+      const template = templates.find(t => t.id === templateId);
+      if (!template) {
+        toast.error('תבנית לא נמצאה');
+        return;
+      }
+
+      // Prepare records for API
+      const apiRecords = records.map(row => ({
+        phone: getPhoneFromRow(row),
+        name: getNameFromRow(row),
+        placeholders: {
+          'שם_לקוח': getNameFromRow(row),
+          'לקוח': getNameFromRow(row),
+          'סטטוס': String(row['סטטוס'] || row['status'] || ''),
+          'סכום': String(row['סהכ_צבירה_צפויה_מניוד'] || row['total_expected_accumulation'] || ''),
+          'מספר_תהליך': String(row['מספר_תהליך'] || row['id'] || ''),
+        },
+      })).filter(r => r.phone); // Filter out records without phone
+
+      if (apiRecords.length === 0) {
+        toast.error('לא נמצאו מספרי טלפון ברשומות שנבחרו');
+        return;
+      }
+
+      // Call API to generate messages
+      const response = await fetch(`/api/projects/${projectId}/whatsapp/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          templateId,
+          records: apiRecords,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to generate messages');
+      }
+
+      const result = await response.json();
+
+      if (result.messages && result.messages.length > 0) {
+        // Open WhatsApp preview
+        whatsAppPreview.openPreview(result.messages, template.name);
+        toast.success(`נוצרו ${result.messages.length} הודעות`);
+      } else {
+        toast.error('לא נוצרו הודעות');
+      }
+
+    } catch (err) {
+      console.error('Bulk WhatsApp error:', err);
+      toast.error('שגיאה ביצירת הודעות WhatsApp');
+    } finally {
+      setBulkLoading(false);
+    }
+  }, [projectId, templates, whatsAppPreview, getPhoneFromRow, getNameFromRow]);
+
+  // Handle bulk export
+  const handleBulkExport = useCallback((format: 'excel' | 'whatsapp-ready') => {
+    const selectedData = filteredData.filter(row => selectedRows.has(row.id as number));
+
+    if (selectedData.length === 0) {
+      toast.error('לא נבחרו רשומות');
+      return;
+    }
+
+    try {
+      if (format === 'whatsapp-ready') {
+        // Export only phone and name for WhatsApp
+        const exportData = selectedData.map(row => ({
+          'שם': getNameFromRow(row),
+          'טלפון': getPhoneFromRow(row),
+        })).filter(r => r['טלפון']); // Filter out records without phone
+
+        const worksheet = XLSX.utils.json_to_sheet(exportData);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, 'רשימת טלפונים');
+        XLSX.writeFile(workbook, `whatsapp_contacts_${new Date().toISOString().split('T')[0]}.xlsx`);
+        toast.success(`יוצאו ${exportData.length} אנשי קשר`);
+      } else {
+        // Export all visible columns
+        const visibleKeys = activeColumns.filter(c => visibleColumns.has(c.key)).map(c => c.key);
+        const exportData = selectedData.map(row => {
+          const exportRow: Record<string, unknown> = {};
+          visibleKeys.forEach(key => {
+            const column = activeColumns.find(c => c.key === key);
+            exportRow[column?.label || key] = row[key];
+          });
+          return exportRow;
+        });
+
+        const worksheet = XLSX.utils.json_to_sheet(exportData);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, 'נתונים נבחרים');
+        XLSX.writeFile(workbook, `selected_data_${new Date().toISOString().split('T')[0]}.xlsx`);
+        toast.success(`יוצאו ${selectedData.length} רשומות`);
+      }
+    } catch {
+      toast.error('שגיאה בייצוא');
+    }
+  }, [filteredData, selectedRows, activeColumns, visibleColumns, getPhoneFromRow, getNameFromRow]);
 
   // Load summary columns from localStorage
   useEffect(() => {
@@ -841,7 +1115,7 @@ export default function DataPage() {
         {/* Stats Cards - Light Theme with Emojis */}
         {stats && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-            {/* Total Records */}
+            {/* Total Records - Always show */}
             <Card
               className="bg-white border-slate-200 hover:border-blue-300 hover:shadow-md transition-all duration-200 group cursor-pointer shadow-sm"
               onClick={() => openDrillDown('records')}
@@ -859,85 +1133,190 @@ export default function DataPage() {
               </CardContent>
             </Card>
 
-            {/* Total Accumulation */}
-            <Card
-              className="bg-white border-slate-200 hover:border-emerald-300 hover:shadow-md transition-all duration-200 group cursor-pointer shadow-sm"
-              onClick={() => openDrillDown('accumulation')}
-            >
-              <CardContent className="pt-5 pb-4">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="text-xs font-medium text-slate-400 uppercase tracking-wide">צבירה צפויה</p>
-                    <p className="text-2xl font-bold text-slate-900 mt-1 tabular-nums">
-                      {stats.totalAccumulation.toLocaleString('he-IL', {
-                        style: 'currency',
-                        currency: 'ILS',
-                        maximumFractionDigits: 0,
-                      })}
-                    </p>
+            {/* Commission - For views (nifraim/gemel) */}
+            {stats.totalCommission !== undefined && (
+              <Card className="bg-white border-slate-200 hover:border-emerald-300 hover:shadow-md transition-all duration-200 shadow-sm">
+                <CardContent className="pt-5 pb-4">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="text-xs font-medium text-slate-400 uppercase tracking-wide">סה״כ עמלות</p>
+                      <p className="text-2xl font-bold text-slate-900 mt-1 tabular-nums">
+                        {stats.totalCommission.toLocaleString('he-IL', {
+                          style: 'currency',
+                          currency: 'ILS',
+                          maximumFractionDigits: 0,
+                        })}
+                      </p>
+                    </div>
+                    <div className="text-3xl">💎</div>
                   </div>
-                  <div className="text-3xl">💰</div>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            )}
 
-            {/* Total Premium */}
-            <Card
-              className="bg-white border-slate-200 hover:border-cyan-300 hover:shadow-md transition-all duration-200 group cursor-pointer shadow-sm"
-              onClick={() => openDrillDown('accumulation')}
-            >
-              <CardContent className="pt-5 pb-4">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="text-xs font-medium text-slate-400 uppercase tracking-wide">פרמיה צפויה</p>
-                    <p className="text-2xl font-bold text-slate-900 mt-1 tabular-nums">
-                      {stats.totalPremium.toLocaleString('he-IL', {
-                        style: 'currency',
-                        currency: 'ILS',
-                        maximumFractionDigits: 0,
-                      })}
-                    </p>
+            {/* Total Accumulation - For legacy tables */}
+            {stats.uniqueHandlers !== undefined && (
+              <Card
+                className="bg-white border-slate-200 hover:border-emerald-300 hover:shadow-md transition-all duration-200 group cursor-pointer shadow-sm"
+                onClick={() => openDrillDown('accumulation')}
+              >
+                <CardContent className="pt-5 pb-4">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="text-xs font-medium text-slate-400 uppercase tracking-wide">צבירה צפויה</p>
+                      <p className="text-2xl font-bold text-slate-900 mt-1 tabular-nums">
+                        {stats.totalAccumulation.toLocaleString('he-IL', {
+                          style: 'currency',
+                          currency: 'ILS',
+                          maximumFractionDigits: 0,
+                        })}
+                      </p>
+                    </div>
+                    <div className="text-3xl">💰</div>
                   </div>
-                  <div className="text-3xl">💵</div>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            )}
 
-            {/* Unique Handlers */}
-            <Card
-              className="bg-white border-slate-200 hover:border-purple-300 hover:shadow-md transition-all duration-200 group cursor-pointer shadow-sm"
-              onClick={() => openDrillDown('handlers')}
-            >
-              <CardContent className="pt-5 pb-4">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="text-xs font-medium text-slate-400 uppercase tracking-wide">מטפלים</p>
-                    <p className="text-2xl font-bold text-slate-900 mt-1 tabular-nums">
-                      {stats.uniqueHandlers.toLocaleString('he-IL')}
-                    </p>
+            {/* Premium - For nifraim view */}
+            {projectInfo?.table_name === 'nifraim' && (
+              <Card className="bg-white border-slate-200 hover:border-cyan-300 hover:shadow-md transition-all duration-200 shadow-sm">
+                <CardContent className="pt-5 pb-4">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="text-xs font-medium text-slate-400 uppercase tracking-wide">סה״כ פרמיה</p>
+                      <p className="text-2xl font-bold text-slate-900 mt-1 tabular-nums">
+                        {stats.totalPremium.toLocaleString('he-IL', {
+                          style: 'currency',
+                          currency: 'ILS',
+                          maximumFractionDigits: 0,
+                        })}
+                      </p>
+                    </div>
+                    <div className="text-3xl">💵</div>
                   </div>
-                  <div className="text-3xl">👥</div>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            )}
 
-            {/* Unique Supervisors */}
-            <Card
-              className="bg-white border-slate-200 hover:border-amber-300 hover:shadow-md transition-all duration-200 group cursor-pointer shadow-sm"
-              onClick={() => openDrillDown('supervisors')}
-            >
-              <CardContent className="pt-5 pb-4">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="text-xs font-medium text-slate-400 uppercase tracking-wide">מפקחים</p>
-                    <p className="text-2xl font-bold text-slate-900 mt-1 tabular-nums">
-                      {stats.uniqueSupervisors.toLocaleString('he-IL')}
-                    </p>
+            {/* Accumulation - For gemel view */}
+            {projectInfo?.table_name === 'gemel' && (
+              <Card className="bg-white border-slate-200 hover:border-purple-300 hover:shadow-md transition-all duration-200 shadow-sm">
+                <CardContent className="pt-5 pb-4">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="text-xs font-medium text-slate-400 uppercase tracking-wide">סה״כ צבירה</p>
+                      <p className="text-2xl font-bold text-slate-900 mt-1 tabular-nums">
+                        {stats.totalAccumulation.toLocaleString('he-IL', {
+                          style: 'currency',
+                          currency: 'ILS',
+                          maximumFractionDigits: 0,
+                        })}
+                      </p>
+                    </div>
+                    <div className="text-3xl">💰</div>
                   </div>
-                  <div className="text-3xl">👨‍💼</div>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Total Premium - For legacy tables */}
+            {stats.uniqueHandlers !== undefined && (
+              <Card
+                className="bg-white border-slate-200 hover:border-cyan-300 hover:shadow-md transition-all duration-200 group cursor-pointer shadow-sm"
+                onClick={() => openDrillDown('accumulation')}
+              >
+                <CardContent className="pt-5 pb-4">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="text-xs font-medium text-slate-400 uppercase tracking-wide">פרמיה צפויה</p>
+                      <p className="text-2xl font-bold text-slate-900 mt-1 tabular-nums">
+                        {stats.totalPremium.toLocaleString('he-IL', {
+                          style: 'currency',
+                          currency: 'ILS',
+                          maximumFractionDigits: 0,
+                        })}
+                      </p>
+                    </div>
+                    <div className="text-3xl">💵</div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Unique Agents - For views */}
+            {stats.uniqueAgents !== undefined && (
+              <Card className="bg-white border-slate-200 hover:border-purple-300 hover:shadow-md transition-all duration-200 shadow-sm">
+                <CardContent className="pt-5 pb-4">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="text-xs font-medium text-slate-400 uppercase tracking-wide">סוכנים</p>
+                      <p className="text-2xl font-bold text-slate-900 mt-1 tabular-nums">
+                        {stats.uniqueAgents.toLocaleString('he-IL')}
+                      </p>
+                    </div>
+                    <div className="text-3xl">👥</div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Unique Handlers - For legacy tables */}
+            {stats.uniqueHandlers !== undefined && (
+              <Card
+                className="bg-white border-slate-200 hover:border-purple-300 hover:shadow-md transition-all duration-200 group cursor-pointer shadow-sm"
+                onClick={() => openDrillDown('handlers')}
+              >
+                <CardContent className="pt-5 pb-4">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="text-xs font-medium text-slate-400 uppercase tracking-wide">מטפלים</p>
+                      <p className="text-2xl font-bold text-slate-900 mt-1 tabular-nums">
+                        {stats.uniqueHandlers.toLocaleString('he-IL')}
+                      </p>
+                    </div>
+                    <div className="text-3xl">👥</div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Unique Supervisors - For legacy tables */}
+            {stats.uniqueSupervisors !== undefined && (
+              <Card
+                className="bg-white border-slate-200 hover:border-amber-300 hover:shadow-md transition-all duration-200 group cursor-pointer shadow-sm"
+                onClick={() => openDrillDown('supervisors')}
+              >
+                <CardContent className="pt-5 pb-4">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="text-xs font-medium text-slate-400 uppercase tracking-wide">מפקחים</p>
+                      <p className="text-2xl font-bold text-slate-900 mt-1 tabular-nums">
+                        {stats.uniqueSupervisors.toLocaleString('he-IL')}
+                      </p>
+                    </div>
+                    <div className="text-3xl">👨‍💼</div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Providers count - For views */}
+            {stats.byProvider && Object.keys(stats.byProvider).length > 0 && (
+              <Card className="bg-white border-slate-200 hover:border-amber-300 hover:shadow-md transition-all duration-200 shadow-sm">
+                <CardContent className="pt-5 pb-4">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <p className="text-xs font-medium text-slate-400 uppercase tracking-wide">יצרנים</p>
+                      <p className="text-2xl font-bold text-slate-900 mt-1 tabular-nums">
+                        {Object.keys(stats.byProvider).length.toLocaleString('he-IL')}
+                      </p>
+                    </div>
+                    <div className="text-3xl">🏢</div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </div>
         )}
 
@@ -1150,6 +1529,21 @@ export default function DataPage() {
           </Card>
         )}
 
+        {/* Bulk Actions Toolbar */}
+        {selectedRows.size > 0 && (
+          <BulkActionsToolbar
+            selectedCount={selectedRows.size}
+            selectedRows={selectedRows}
+            data={filteredData}
+            rowIdKey="id"
+            templates={templates}
+            onClearSelection={() => setSelectedRows(new Set())}
+            onSendWhatsApp={handleBulkWhatsApp}
+            onExport={handleBulkExport}
+            loading={bulkLoading}
+          />
+        )}
+
         {/* View Content Based on Mode */}
         {viewMode === 'table' ? (
           /* Data Table */
@@ -1157,10 +1551,14 @@ export default function DataPage() {
             data={filteredData}
             columns={activeColumns}
             loading={loading}
-            pageSize={50}
+            pageSize={100}
             onRowClick={handleRowClick}
             visibleColumns={visibleColumns}
             totalCount={stats?.total}
+            selectable={true}
+            selectedRows={selectedRows}
+            onSelectionChange={setSelectedRows}
+            rowIdKey="id"
           />
         ) : (
           /* Dashboard View */
@@ -1478,6 +1876,14 @@ export default function DataPage() {
         onClose={() => setDrillDownOpen(false)}
         type={drillDownType}
         projectId={projectId}
+      />
+
+      {/* WhatsApp Preview Modal */}
+      <WhatsAppPreview
+        isOpen={whatsAppPreview.isOpen}
+        onClose={whatsAppPreview.closePreview}
+        messages={whatsAppPreview.messages}
+        templateName={whatsAppPreview.templateName}
       />
 
       {/* Help Modal */}

@@ -482,7 +482,7 @@ export function InsuranceDashboard({
             showPresets={true}
             showSummary={true}
             showExport={true}
-            pageSize={25}
+            pageSize={100}
           />
         </CardContent>
       </Card>

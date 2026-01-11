@@ -1,0 +1,1 @@
+export { MessageInbox } from './MessageInbox';

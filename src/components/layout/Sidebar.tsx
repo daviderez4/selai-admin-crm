@@ -20,6 +20,13 @@ import {
   Building2,
   Shield,
   User,
+  Contact,
+  Target,
+  TrendingUp,
+  CheckSquare,
+  Calendar,
+  MessageSquare,
+  Megaphone,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -51,6 +58,68 @@ export function Sidebar() {
 
   const projectId = params?.id as string;
 
+  // Get project-specific dashboards based on table_name
+  const getProjectDashboards = (): NavItem[] => {
+    if (!projectId || !selectedProject) return [];
+
+    const tableName = selectedProject.table_name || '';
+    const dashboards: NavItem[] = [];
+
+    switch (tableName) {
+      case 'master_data':
+        // מכירות - Sales dashboards
+        dashboards.push(
+          {
+            id: 'sales-dashboard',
+            title: 'דשבורד מכירות',
+            href: `/projects/${projectId}/sales-dashboard`,
+            icon: BarChart3,
+            requiresProject: true,
+          },
+          {
+            id: 'reports',
+            title: 'דוחות מכירות',
+            href: `/projects/${projectId}/reports`,
+            icon: FileText,
+            requiresProject: true,
+          }
+        );
+        break;
+      case 'nifraim':
+        // נפרעים dashboard
+        dashboards.push({
+          id: 'view-dashboard',
+          title: 'דשבורד נפרעים',
+          href: `/projects/${projectId}/view-dashboard`,
+          icon: BarChart3,
+          requiresProject: true,
+        });
+        break;
+      case 'gemel':
+        // גמל dashboard
+        dashboards.push({
+          id: 'gemel-dashboard',
+          title: 'דשבורד גמל',
+          href: `/projects/${projectId}/view-dashboard`,
+          icon: BarChart3,
+          requiresProject: true,
+        });
+        break;
+      case 'commissions_data':
+        // עמלות - Commissions dashboard
+        dashboards.push({
+          id: 'commission-dashboard',
+          title: 'דשבורד עמלות',
+          href: `/projects/${projectId}/commission-dashboard`,
+          icon: BarChart3,
+          requiresProject: true,
+        });
+        break;
+    }
+
+    return dashboards;
+  };
+
   // Main navigation items (always visible)
   const mainNavItems: NavItem[] = [
     {
@@ -75,9 +144,11 @@ export function Sidebar() {
       id: 'data',
       title: 'תצוגת נתונים',
       href: `/projects/${projectId}/data`,
-      icon: BarChart3,
+      icon: Database,
       requiresProject: true,
     },
+    // Add project-specific dashboards based on table_name
+    ...getProjectDashboards(),
     {
       id: 'import',
       title: 'ייבוא נתונים',
@@ -97,6 +168,73 @@ export function Sidebar() {
       title: 'הגדרות פרויקט',
       href: `/projects/${projectId}/settings`,
       icon: Settings,
+      requiresProject: true,
+    },
+  ] : [];
+
+  // CRM Navigation items
+  const crmNavItems: NavItem[] = projectId ? [
+    {
+      id: 'crm',
+      title: 'CRM',
+      href: `/projects/${projectId}/crm`,
+      icon: Contact,
+      requiresProject: true,
+    },
+    {
+      id: 'contacts',
+      title: 'אנשי קשר',
+      href: `/projects/${projectId}/crm/contacts`,
+      icon: Users,
+      requiresProject: true,
+    },
+    {
+      id: 'leads',
+      title: 'לידים',
+      href: `/projects/${projectId}/crm/leads`,
+      icon: Target,
+      requiresProject: true,
+    },
+    {
+      id: 'deals',
+      title: 'עסקאות',
+      href: `/projects/${projectId}/crm/deals`,
+      icon: TrendingUp,
+      requiresProject: true,
+    },
+    {
+      id: 'tasks',
+      title: 'משימות',
+      href: `/projects/${projectId}/crm/tasks`,
+      icon: CheckSquare,
+      requiresProject: true,
+    },
+    {
+      id: 'calendar',
+      title: 'יומן',
+      href: `/projects/${projectId}/crm/calendar`,
+      icon: Calendar,
+      requiresProject: true,
+    },
+    {
+      id: 'messages',
+      title: 'הודעות',
+      href: `/projects/${projectId}/crm/messages`,
+      icon: MessageSquare,
+      requiresProject: true,
+    },
+    {
+      id: 'campaigns',
+      title: 'קמפיינים',
+      href: `/projects/${projectId}/crm/campaigns`,
+      icon: Megaphone,
+      requiresProject: true,
+    },
+    {
+      id: 'policies',
+      title: 'פוליסות',
+      href: `/projects/${projectId}/crm/policies`,
+      icon: FileText,
       requiresProject: true,
     },
   ] : [];
@@ -251,6 +389,25 @@ export function Sidebar() {
               )}
               <nav className="space-y-0.5">
                 {projectNavItems.map(renderNavItem)}
+              </nav>
+            </>
+          )}
+
+          {/* CRM Navigation */}
+          {crmNavItems.length > 0 && (
+            <>
+              <div className="my-3">
+                <Separator className="bg-slate-100" />
+              </div>
+              {!collapsed && (
+                <div className="px-3 mb-1.5">
+                  <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">
+                    CRM
+                  </p>
+                </div>
+              )}
+              <nav className="space-y-0.5">
+                {crmNavItems.map(renderNavItem)}
               </nav>
             </>
           )}

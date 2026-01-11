@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   X,
   Filter,
@@ -40,6 +40,14 @@ const SPECIAL_COLUMN_LABELS: Record<string, string> = {
   'sheet_name': 'גיליון',
   'import_month': 'חודש ייבוא',
   'import_year': 'שנת ייבוא',
+  // View columns (nifraim/gemel)
+  'provider': 'ספק',
+  'processing_month': 'חודש עיבוד',
+  'branch': 'ענף',
+  'agent_name': 'שם סוכן',
+  'premium': 'פרמיה',
+  'comission': 'עמלה',
+  'accumulation_balance': 'צבירה',
 };
 
 // Hebrew month names
@@ -80,8 +88,8 @@ export function FilterSidebar({
     return Object.keys(firstRow).filter(key => !META_COLUMNS.includes(key));
   }, [data]);
 
-  // Get unique values for a column
-  const getUniqueValues = (columnName: string): string[] => {
+  // Get unique values for a column - memoized to use current data
+  const getUniqueValues = useCallback((columnName: string): string[] => {
     const values = data.map(row => {
       const value = row[columnName];
       return value;
@@ -89,21 +97,23 @@ export function FilterSidebar({
 
     return [...new Set(values)]
       .filter(v => v !== null && v !== undefined && v !== '')
-      .map(v => String(v))
+      .map(v => String(v).trim()) // Trim whitespace from values
+      .filter(v => v !== '') // Remove empty strings after trimming
       .sort((a, b) => a.localeCompare(b, 'he'))
       .slice(0, 50); // Limit to 50 values
-  };
+  }, [data]);
 
-  // Determine which columns are suitable for filtering (2-30 unique values)
+  // Determine which columns are suitable for filtering (2-50 unique values)
   const filterableColumns = useMemo(() => {
     return columns.filter(col => {
       // Skip import_month, import_year, and sheet_name - they're handled separately
       if (col === 'import_month' || col === 'import_year' || col === 'sheet_name') return false;
 
       const uniqueValues = getUniqueValues(col);
-      return uniqueValues.length >= 2 && uniqueValues.length <= 30;
+      // Allow more unique values for view columns (50 instead of 30)
+      return uniqueValues.length >= 2 && uniqueValues.length <= 50;
     });
-  }, [columns, data]);
+  }, [columns, getUniqueValues]);
 
   // Check if import period columns exist
   const hasImportPeriod = columns.includes('import_month') || columns.includes('import_year');
@@ -192,8 +202,8 @@ export function FilterSidebar({
 
               {filterableColumns.map(column => {
                 const uniqueValues = getUniqueValues(column);
-                // Create a nice label - replace underscores with spaces
-                const label = column.replace(/_/g, ' ');
+                // Use custom label if available, otherwise replace underscores with spaces
+                const label = SPECIAL_COLUMN_LABELS[column] || column.replace(/_/g, ' ');
 
                 return (
                   <div key={column} className="space-y-2">

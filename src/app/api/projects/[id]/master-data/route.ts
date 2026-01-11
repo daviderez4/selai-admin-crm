@@ -2,7 +2,32 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createProjectClient } from '@/lib/utils/projectDatabase';
 
-// Excel column indices (0-based) for field extraction from raw_data
+// Known view schemas - when table is one of these, use direct column mapping
+const VIEW_SCHEMAS: Record<string, { columns: string[], numericFields: string[], aggregateFields: Record<string, string> }> = {
+  nifraim: {
+    columns: ['provider', 'processing_month', 'branch', 'agent_name', 'premium', 'comission'],
+    numericFields: ['premium', 'comission'],
+    aggregateFields: {
+      totalPremium: 'premium',
+      totalCommission: 'comission',
+      byProvider: 'provider',
+      byBranch: 'branch',
+      byAgent: 'agent_name'
+    }
+  },
+  gemel: {
+    columns: ['provider', 'processing_month', 'branch', 'agent_name', 'accumulation_balance', 'comission'],
+    numericFields: ['accumulation_balance', 'comission'],
+    aggregateFields: {
+      totalAccumulation: 'accumulation_balance',
+      totalCommission: 'comission',
+      byProvider: 'provider',
+      byAgent: 'agent_name'
+    }
+  }
+};
+
+// Excel column indices (0-based) for field extraction from raw_data (legacy format)
 const COLUMN_INDICES = {
   מספר_תהליך: 1,           // B
   סוג_תהליך: 4,            // E
@@ -101,11 +126,15 @@ export async function GET(
     const projectClient = clientResult.client!;
     console.log('Connected to project database:', project.name, 'table:', tableName);
 
-    // First verify connection by checking if the table exists
-    const { error: tableCheckError } = await projectClient
+    // Check if this is a known view schema
+    const viewSchema = VIEW_SCHEMAS[tableName];
+    const isKnownView = !!viewSchema;
+
+    // First verify connection by checking if the table/view exists
+    // For views without 'id' column, just check count
+    const { count: checkCount, error: tableCheckError } = await projectClient
       .from(tableName)
-      .select('id', { count: 'exact', head: true })
-      .limit(1);
+      .select('*', { count: 'exact', head: true });
 
     if (tableCheckError) {
       console.error('Table check error:', tableCheckError);
@@ -134,7 +163,6 @@ export async function GET(
     // RLS filtering based on role
     if (access.role === 'agent') {
       // Agent sees only their own records
-      // Get user's associated handler name from user metadata or lookup
       const { data: userProfile } = await supabase
         .from('user_profiles')
         .select('handler_name')
@@ -142,8 +170,13 @@ export async function GET(
         .single();
 
       if (userProfile?.handler_name) {
-        // Filter by handler name in raw_data
-        query = query.contains('raw_data', { מטפל: userProfile.handler_name });
+        // For known views, filter by agent_name column
+        if (isKnownView) {
+          query = query.eq('agent_name', userProfile.handler_name);
+        } else {
+          // For legacy tables, filter by raw_data
+          query = query.contains('raw_data', { מטפל: userProfile.handler_name });
+        }
       }
     } else if (access.role === 'supervisor') {
       // Supervisor sees their team's records
@@ -154,7 +187,9 @@ export async function GET(
 
       if (teamMembers && teamMembers.length > 0) {
         const handlerNames = teamMembers.map(m => m.handler_name).filter(Boolean);
-        // This is a simplified approach - for production, you'd want to use OR conditions
+        if (isKnownView && handlerNames.length > 0) {
+          query = query.in('agent_name', handlerNames);
+        }
       }
     }
     // Admin sees all records
@@ -162,8 +197,10 @@ export async function GET(
     // Note: Each project uses its own table (master_data, insurance_data, etc.)
     // No need to filter by project_id since tables are now separate
 
-    // Order first
-    query = query.order(sortKey, { ascending: sortDir === 'asc' });
+    // Order - use appropriate column for views vs legacy tables
+    const defaultSortKey = isKnownView ? 'processing_month' : 'created_at';
+    const actualSortKey = sortKey === 'created_at' && isKnownView ? defaultSortKey : sortKey;
+    query = query.order(actualSortKey, { ascending: sortDir === 'asc' });
 
     // Get total count first to know how many records exist
     const { count: totalCount } = await projectClient
@@ -223,7 +260,21 @@ export async function GET(
     };
 
     // Process data - different handling based on table type
-    const processedData = (rawData || []).map(row => {
+    const processedData = (rawData || []).map((row, index) => {
+      // =============================================
+      // KNOWN VIEWS (nifraim, gemel) - direct columns
+      // =============================================
+      if (isKnownView) {
+        // Views have direct columns, no raw_data processing needed
+        return {
+          id: index, // Views don't have ID, use index
+          ...row,
+        };
+      }
+
+      // =============================================
+      // LEGACY TABLES - raw_data processing
+      // =============================================
       let rawDataParsed: unknown = null;
 
       // Parse raw_data - could be array (old format) or object (new format)
@@ -319,13 +370,51 @@ export async function GET(
       total: totalCount || count || processedData.length,
       byStatus: {} as Record<string, number>,
       byProcessType: {} as Record<string, number>,
+      byProvider: {} as Record<string, number>,
+      byBranch: {} as Record<string, number>,
       totalAccumulation: 0,
       totalPremium: 0,
+      totalCommission: 0,
       uniqueHandlers: new Set<string>(),
       uniqueSupervisors: new Set<string>(),
+      uniqueAgents: new Set<string>(),
     };
 
     processedData.forEach(row => {
+      // =============================================
+      // KNOWN VIEWS - use view-specific fields
+      // =============================================
+      if (isKnownView) {
+        // Provider breakdown
+        if (row.provider) {
+          stats.byProvider[row.provider] = (stats.byProvider[row.provider] || 0) + 1;
+        }
+        // Branch breakdown
+        if (row.branch) {
+          stats.byBranch[row.branch] = (stats.byBranch[row.branch] || 0) + 1;
+        }
+        // Commission total
+        if (row.comission) {
+          stats.totalCommission += Number(row.comission) || 0;
+        }
+        // Premium total (nifraim view)
+        if (row.premium) {
+          stats.totalPremium += Number(row.premium) || 0;
+        }
+        // Accumulation total (gemel view)
+        if (row.accumulation_balance) {
+          stats.totalAccumulation += Number(row.accumulation_balance) || 0;
+        }
+        // Unique agents
+        if (row.agent_name) {
+          stats.uniqueAgents.add(String(row.agent_name));
+        }
+        return;
+      }
+
+      // =============================================
+      // LEGACY TABLES - use Hebrew field names
+      // =============================================
       // Status count
       const status = String(row.סטטוס || 'לא ידוע');
       stats.byStatus[status] = (stats.byStatus[status] || 0) + 1;
@@ -358,18 +447,31 @@ export async function GET(
 
     const totalRecords = totalCount || count || processedData.length;
 
+    // Build response with view-appropriate stats
+    const responseStats = isKnownView ? {
+      total: totalRecords,
+      byProvider: stats.byProvider,
+      byBranch: stats.byBranch,
+      totalCommission: stats.totalCommission,
+      totalPremium: stats.totalPremium,
+      totalAccumulation: stats.totalAccumulation,
+      uniqueAgents: stats.uniqueAgents.size,
+    } : {
+      total: totalRecords,
+      byStatus: stats.byStatus,
+      byProcessType: stats.byProcessType,
+      totalAccumulation: stats.totalAccumulation,
+      totalPremium: stats.totalPremium,
+      uniqueHandlers: stats.uniqueHandlers.size,
+      uniqueSupervisors: stats.uniqueSupervisors.size,
+    };
+
     return NextResponse.json({
       data: processedData,
       tableName, // Include table name for frontend to know the table type
-      stats: {
-        total: totalRecords,
-        byStatus: stats.byStatus,
-        byProcessType: stats.byProcessType,
-        totalAccumulation: stats.totalAccumulation,
-        totalPremium: stats.totalPremium,
-        uniqueHandlers: stats.uniqueHandlers.size,
-        uniqueSupervisors: stats.uniqueSupervisors.size,
-      },
+      isView: isKnownView,
+      viewSchema: viewSchema || null,
+      stats: responseStats,
       pagination: {
         page,
         limit: limit || totalRecords,

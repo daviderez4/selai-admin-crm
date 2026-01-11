@@ -141,14 +141,38 @@ export default function ProjectHomePage() {
   const [projectNotFound, setProjectNotFound] = useState(false);
   const [activeTab, setActiveTab] = useState('dashboard');
 
-  // Navigation tabs
-  const navTabs: NavTab[] = [
-    { id: 'dashboard', label: 'דשבורד', href: `/projects/${projectId}` },
-    { id: 'data', label: 'תצוגת נתונים', href: `/projects/${projectId}/data` },
-    { id: 'import', label: 'ייבוא נתונים', href: `/projects/${projectId}/import` },
-    { id: 'dashboard-builder', label: 'בונה דשבורד', href: `/projects/${projectId}/dashboard-builder` },
-    { id: 'settings', label: 'הגדרות', href: `/projects/${projectId}/settings` },
-  ];
+  // Dynamic navigation tabs based on project type
+  const getNavTabs = (): NavTab[] => {
+    const tableName = selectedProject?.table_name || ''; console.log("DEBUG tableName:", tableName);
+    const baseTabs: NavTab[] = [
+      { id: 'dashboard', label: 'דשבורד', href: `/projects/${projectId}` },
+    ];
+
+    // Add specific dashboard based on project type
+    if (tableName === 'master_data') {
+      baseTabs.push(
+        { id: 'sales-dashboard', label: 'דשבורד מכירות', href: `/projects/${projectId}/sales-dashboard` },
+        { id: 'reports', label: 'דוחות מכירות', href: `/projects/${projectId}/reports` }
+      );
+    } else if (tableName === 'nifraim') {
+      baseTabs.push({ id: 'view-dashboard', label: 'דשבורד נפרעים', href: `/projects/${projectId}/view-dashboard` });
+    } else if (tableName === 'gemel') {
+      baseTabs.push({ id: 'view-dashboard', label: 'דשבורד גמל', href: `/projects/${projectId}/view-dashboard` });
+    } else if (tableName === 'commissions_data') {
+      baseTabs.push({ id: 'commission-dashboard', label: 'דשבורד עמלות', href: `/projects/${projectId}/commission-dashboard` });
+    }
+
+    // Common tabs for all projects
+    baseTabs.push(
+      { id: 'data', label: 'תצוגת נתונים', href: `/projects/${projectId}/data` },
+      { id: 'import', label: 'ייבוא נתונים', href: `/projects/${projectId}/import` },
+      { id: 'settings', label: 'הגדרות', href: `/projects/${projectId}/settings` },
+    );
+
+    return baseTabs;
+  };
+
+  const navTabs = getNavTabs();
 
   // Find and connect to project
   useEffect(() => {

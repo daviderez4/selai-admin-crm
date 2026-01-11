@@ -102,7 +102,7 @@ export function SmartTable({
   showPresets = true,
   showSummary = true,
   showExport = true,
-  pageSize: initialPageSize = 25,
+  pageSize: initialPageSize = 100,
 }: SmartTableProps) {
   // State
   const [analysis, setAnalysis] = useState<TableAnalysis | null>(null);

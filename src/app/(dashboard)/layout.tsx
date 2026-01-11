@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useProjectsStore } from '@/lib/stores/projectsStore';
@@ -14,11 +14,9 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const router = useRouter();
-  const pathname = usePathname();
   const { fetchUser, isAuthenticated, isLoading, requires2FA, user } = useAuthStore();
-  const { fetchProjects, projects, connectToProject } = useProjectsStore();
-  const { defaultProjectId, loadFromSupabase, setDefaultProject } = useUserPreferencesStore();
-  const [hasAutoLoaded, setHasAutoLoaded] = useState(false);
+  const { fetchProjects } = useProjectsStore();
+  const { loadFromSupabase } = useUserPreferencesStore();
 
   useEffect(() => {
     fetchUser();
@@ -38,23 +36,9 @@ export default function DashboardLayout({
     }
   }, [isLoading, isAuthenticated, requires2FA, router, fetchProjects, user?.id, loadFromSupabase]);
 
-  // Auto-load default project on login (only on main dashboard)
-  useEffect(() => {
-    if (
-      !hasAutoLoaded &&
-      isAuthenticated &&
-      projects.length > 0 &&
-      pathname === '/' &&
-      defaultProjectId
-    ) {
-      const defaultProject = projects.find(p => p.id === defaultProjectId);
-      if (defaultProject) {
-        setHasAutoLoaded(true);
-        connectToProject(defaultProject);
-        router.push(`/projects/${defaultProjectId}`);
-      }
-    }
-  }, [hasAutoLoaded, isAuthenticated, projects, pathname, defaultProjectId, connectToProject, router]);
+  // NOTE: Auto-redirect to default project has been DISABLED
+  // Users should land on the homepage and manually choose where to go
+  // This prevents the confusing "glitch" behavior where the homepage keeps redirecting
 
   if (isLoading) {
     return (

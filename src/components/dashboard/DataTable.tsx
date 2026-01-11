@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   ChevronUp,
   ChevronDown,
@@ -9,6 +9,9 @@ import {
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
+  CheckSquare,
+  Square,
+  MinusSquare,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -32,6 +35,11 @@ interface DataTableProps {
   onRowClick?: (row: Record<string, unknown>) => void;
   visibleColumns: Set<string>;
   totalCount?: number; // Total count from DB (for accurate display even with client-side filtering)
+  // Selection props
+  selectable?: boolean;
+  selectedRows?: Set<number>;
+  onSelectionChange?: (selected: Set<number>) => void;
+  rowIdKey?: string; // Key to use for row identification (default: 'id')
 }
 
 // Light theme status colors
@@ -53,14 +61,34 @@ export function DataTable({
   data,
   columns,
   loading = false,
-  pageSize = 50,
+  pageSize = 100,
   onRowClick,
   visibleColumns,
   totalCount,
+  selectable = false,
+  selectedRows = new Set(),
+  onSelectionChange,
+  rowIdKey = 'id',
 }: DataTableProps) {
   const [currentPage, setCurrentPage] = useState(1);
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+
+  // Reset selection when data changes significantly
+  useEffect(() => {
+    if (selectable && onSelectionChange && selectedRows.size > 0) {
+      // Verify selected rows still exist in data
+      const validSelection = new Set<number>();
+      selectedRows.forEach(id => {
+        if (data.some(row => row[rowIdKey] === id)) {
+          validSelection.add(id);
+        }
+      });
+      if (validSelection.size !== selectedRows.size) {
+        onSelectionChange(validSelection);
+      }
+    }
+  }, [data, rowIdKey, selectable, onSelectionChange, selectedRows]);
 
   // Sort handler
   const handleSort = useCallback((key: string) => {
@@ -181,14 +209,108 @@ export function DataTable({
   // Visible columns for display
   const displayColumns = columns.filter(c => visibleColumns.has(c.key));
 
+  // Selection handlers
+  const handleSelectRow = useCallback((rowId: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!onSelectionChange) return;
+
+    const newSelection = new Set(selectedRows);
+    if (newSelection.has(rowId)) {
+      newSelection.delete(rowId);
+    } else {
+      newSelection.add(rowId);
+    }
+    onSelectionChange(newSelection);
+  }, [selectedRows, onSelectionChange]);
+
+  const handleSelectAll = useCallback(() => {
+    if (!onSelectionChange) return;
+
+    const pageRowIds = paginatedData
+      .map(row => row[rowIdKey])
+      .filter((id): id is number => id !== null && id !== undefined) as number[];
+
+    const allSelected = pageRowIds.every(id => selectedRows.has(id));
+
+    if (allSelected) {
+      // Deselect all on current page
+      const newSelection = new Set(selectedRows);
+      pageRowIds.forEach(id => newSelection.delete(id));
+      onSelectionChange(newSelection);
+    } else {
+      // Select all on current page
+      const newSelection = new Set(selectedRows);
+      pageRowIds.forEach(id => newSelection.add(id));
+      onSelectionChange(newSelection);
+    }
+  }, [paginatedData, rowIdKey, selectedRows, onSelectionChange]);
+
+  const handleSelectAllData = useCallback(() => {
+    if (!onSelectionChange) return;
+
+    const allRowIds = processedData
+      .map(row => row[rowIdKey])
+      .filter((id): id is number => id !== null && id !== undefined) as number[];
+
+    const allSelected = allRowIds.every(id => selectedRows.has(id));
+
+    if (allSelected) {
+      // Clear all selection
+      onSelectionChange(new Set());
+    } else {
+      // Select all rows
+      onSelectionChange(new Set(allRowIds));
+    }
+  }, [processedData, rowIdKey, selectedRows, onSelectionChange]);
+
+  // Selection state for current page
+  const pageSelectionState = useMemo(() => {
+    if (!selectable) return 'none';
+
+    const pageRowIds = paginatedData
+      .map(row => row[rowIdKey])
+      .filter((id): id is number => id !== null && id !== undefined) as number[];
+
+    if (pageRowIds.length === 0) return 'none';
+
+    const selectedCount = pageRowIds.filter(id => selectedRows.has(id)).length;
+    if (selectedCount === 0) return 'none';
+    if (selectedCount === pageRowIds.length) return 'all';
+    return 'partial';
+  }, [paginatedData, rowIdKey, selectedRows, selectable]);
+
   return (
     <div className="flex flex-col gap-4">
       {/* Results count - professional styling */}
       <div className="flex items-center justify-between px-1">
-        <p className="text-sm text-slate-500">
-          מציג <span className="font-medium text-slate-700">{paginatedData.length.toLocaleString('he-IL')}</span> מתוך{' '}
-          <span className="font-medium text-slate-700">{(totalCount ?? processedData.length).toLocaleString('he-IL')}</span> רשומות
-        </p>
+        <div className="flex items-center gap-4">
+          <p className="text-sm text-slate-500">
+            מציג <span className="font-medium text-slate-700">{paginatedData.length.toLocaleString('he-IL')}</span> מתוך{' '}
+            <span className="font-medium text-slate-700">{(totalCount ?? processedData.length).toLocaleString('he-IL')}</span> רשומות
+          </p>
+          {/* Selection info */}
+          {selectable && selectedRows.size > 0 && (
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-blue-600 font-medium">
+                {selectedRows.size.toLocaleString('he-IL')} נבחרו
+              </span>
+              <button
+                onClick={() => onSelectionChange?.(new Set())}
+                className="text-xs text-slate-500 hover:text-slate-700 underline"
+              >
+                בטל הכל
+              </button>
+              {processedData.length > selectedRows.size && (
+                <button
+                  onClick={handleSelectAllData}
+                  className="text-xs text-blue-600 hover:text-blue-700 underline"
+                >
+                  בחר את כל {processedData.length.toLocaleString('he-IL')}
+                </button>
+              )}
+            </div>
+          )}
+        </div>
         {sortKey && (
           <p className="text-xs text-slate-400">
             ממוין לפי: {columns.find(c => c.key === sortKey)?.label} ({sortDirection === 'asc' ? 'עולה' : 'יורד'})
@@ -201,6 +323,24 @@ export function DataTable({
         <table className="w-full text-sm min-w-max">
           <thead className="bg-slate-50 sticky top-0 z-10">
             <tr>
+              {/* Selection checkbox column */}
+              {selectable && (
+                <th className="px-3 py-3 text-center border-b border-slate-200 w-12">
+                  <button
+                    onClick={handleSelectAll}
+                    className="p-1 rounded hover:bg-slate-200 transition-colors"
+                    title={pageSelectionState === 'all' ? 'בטל בחירה בעמוד' : 'בחר את כל העמוד'}
+                  >
+                    {pageSelectionState === 'all' ? (
+                      <CheckSquare className="h-5 w-5 text-blue-600" />
+                    ) : pageSelectionState === 'partial' ? (
+                      <MinusSquare className="h-5 w-5 text-blue-600" />
+                    ) : (
+                      <Square className="h-5 w-5 text-slate-400" />
+                    )}
+                  </button>
+                </th>
+              )}
               {displayColumns.map((column) => (
                 <th
                   key={column.key}
@@ -238,7 +378,7 @@ export function DataTable({
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={displayColumns.length} className="text-center py-16">
+                <td colSpan={displayColumns.length + (selectable ? 1 : 0)} className="text-center py-16">
                   <div className="flex items-center justify-center gap-3 text-slate-500">
                     <div className="animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full" />
                     <span>טוען נתונים...</span>
@@ -247,34 +387,55 @@ export function DataTable({
               </tr>
             ) : paginatedData.length === 0 ? (
               <tr>
-                <td colSpan={displayColumns.length} className="text-center py-16 text-slate-500">
+                <td colSpan={displayColumns.length + (selectable ? 1 : 0)} className="text-center py-16 text-slate-500">
                   <div className="text-4xl mb-2">📭</div>
                   לא נמצאו תוצאות
                 </td>
               </tr>
             ) : (
-              paginatedData.map((row, idx) => (
-                <tr
-                  key={idx}
-                  className={cn(
-                    'border-b border-slate-100 transition-colors',
-                    // Zebra striping
-                    idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50',
-                    onRowClick && 'cursor-pointer hover:bg-blue-50/50'
-                  )}
-                  onClick={() => onRowClick?.(row)}
-                >
-                  {displayColumns.map((column) => (
-                    <td
-                      key={column.key}
-                      className="px-4 py-3"
-                      style={{ maxWidth: column.width }}
-                    >
-                      {formatCell(column, row[column.key])}
-                    </td>
-                  ))}
-                </tr>
-              ))
+              paginatedData.map((row, idx) => {
+                const rowId = row[rowIdKey] as number;
+                const isSelected = selectable && selectedRows.has(rowId);
+
+                return (
+                  <tr
+                    key={idx}
+                    className={cn(
+                      'border-b border-slate-100 transition-colors',
+                      // Zebra striping
+                      idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50',
+                      onRowClick && 'cursor-pointer hover:bg-blue-50/50',
+                      isSelected && 'bg-blue-50 hover:bg-blue-100'
+                    )}
+                    onClick={() => onRowClick?.(row)}
+                  >
+                    {/* Selection checkbox */}
+                    {selectable && (
+                      <td className="px-3 py-3 text-center">
+                        <button
+                          onClick={(e) => handleSelectRow(rowId, e)}
+                          className="p-1 rounded hover:bg-slate-200 transition-colors"
+                        >
+                          {isSelected ? (
+                            <CheckSquare className="h-5 w-5 text-blue-600" />
+                          ) : (
+                            <Square className="h-5 w-5 text-slate-400" />
+                          )}
+                        </button>
+                      </td>
+                    )}
+                    {displayColumns.map((column) => (
+                      <td
+                        key={column.key}
+                        className="px-4 py-3"
+                        style={{ maxWidth: column.width }}
+                      >
+                        {formatCell(column, row[column.key])}
+                      </td>
+                    ))}
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>
