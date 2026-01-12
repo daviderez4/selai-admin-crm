@@ -36,7 +36,9 @@
       "Bash(timeout:*)",
       "Bash(ping:*)",
       "Bash(xargs:*)",
-      "Bash(git tag:*)"
+      "Bash(git tag:*)",
+      "Bash(npx vercel:*)",
+      "Bash(echo:*)"
     ]
   }
 }

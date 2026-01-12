@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Mail, Lock, Eye, EyeOff } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, LogIn } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -47,24 +47,46 @@ export default function LoginPage() {
       }
 
       if (data.user) {
-        // Check user profile and redirect accordingly
+        // Check if user exists in users table (existing users)
         const { data: userProfile } = await supabase
           .from('users')
-          .select('is_profile_complete, is_approved, user_type')
-          .eq('auth_id', data.user.id)
+          .select('id, role, is_active')
+          .eq('email', email)
           .single();
 
-        if (userProfile) {
-          if (!userProfile.is_profile_complete) {
-            router.push('/complete-profile');
-          } else if (!userProfile.is_approved) {
+        if (userProfile && userProfile.is_active) {
+          // User exists and is active - go to dashboard
+          router.push('/');
+          return;
+        }
+
+        // Check registration_requests for pending/needs_review status
+        const { data: regRequest } = await supabase
+          .from('registration_requests')
+          .select('id, status, matched_external_id')
+          .eq('email', email)
+          .single();
+
+        if (regRequest) {
+          if (regRequest.status === 'approved') {
+            // Approved but not yet verified - go to verify profile
+            router.push('/verify-profile');
+          } else if (regRequest.status === 'pending' || regRequest.status === 'needs_review') {
+            // Still waiting for approval
             router.push('/pending-approval');
+          } else if (regRequest.status === 'rejected') {
+            toast.error('בקשת ההרשמה שלך נדחתה. פנה למנהל המערכת.');
+            await supabase.auth.signOut();
           } else {
+            // Unknown status or completed - go to dashboard
             router.push('/');
           }
+        } else if (userProfile) {
+          // User exists in users table but not active - still let them in
+          router.push('/');
         } else {
-          // New user - redirect to complete profile
-          router.push('/complete-profile');
+          // No user and no registration request - need to register
+          router.push('/signup');
         }
       }
     } catch (err) {
@@ -94,86 +116,76 @@ export default function LoginPage() {
   };
 
   return (
-    <div
-      className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-600 via-slate-500 to-purple-900/40 p-4"
-      dir="rtl"
-    >
-      {/* לוגו בצד שמאל למעלה */}
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-purple-50 to-indigo-100 p-4" dir="rtl">
+      {/* Logo */}
       <div className="fixed top-6 left-6">
-        <Image
-          src="/sela-logo.png"
-          alt="סלע ביטוח"
-          width={180}
-          height={180}
-          priority
-        />
+        <Image src="/sela-logo.png" alt="סלע ביטוח" width={120} height={120} priority />
       </div>
 
-      <Card className="w-full max-w-md bg-white/10 backdrop-blur-sm border-white/20">
+      <Card className="w-full max-w-md bg-white/80 backdrop-blur-sm border-slate-200 shadow-xl">
         <CardHeader className="text-center pb-2">
           <div className="flex flex-col items-center justify-center gap-3 mb-4">
-            <span className="text-3xl font-bold text-white">סלע דשבורדים</span>
+            <div className="w-16 h-16 rounded-2xl bg-indigo-100 flex items-center justify-center">
+              <LogIn className="h-8 w-8 text-indigo-600" />
+            </div>
+            <span className="text-3xl font-bold text-slate-800">סלע דשבורדים</span>
           </div>
-          <p className="text-slate-300">התחבר לניהול הפרויקטים שלך</p>
+          <p className="text-slate-500">התחבר לניהול הפרויקטים שלך</p>
         </CardHeader>
 
         <CardContent>
           <form onSubmit={handleLogin} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email" className="text-slate-300">
+              <Label htmlFor="email" className="text-slate-700 font-medium">
                 אימייל
               </Label>
               <div className="relative">
-                <Mail className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/60" />
+                <Mail className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
                 <Input
                   id="email"
                   type="email"
                   placeholder="your@email.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="pr-10 bg-white/20 border-white/30 text-white placeholder:text-slate-300 focus:border-emerald-400"
+                  className="pr-11 h-12 bg-white border-slate-200 text-slate-800 placeholder:text-slate-400 focus:border-indigo-500 focus:ring-indigo-500/20"
                   disabled={isLoading}
                 />
               </div>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="password" className="text-slate-300">
+              <Label htmlFor="password" className="text-slate-700 font-medium">
                 סיסמה
               </Label>
               <div className="relative">
-                <Lock className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/60" />
+                <Lock className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
                 <Input
                   id="password"
                   type={showPassword ? 'text' : 'password'}
                   placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="pr-10 pl-10 bg-white/20 border-white/30 text-white placeholder:text-slate-300 focus:border-emerald-400"
+                  className="pr-11 pl-11 h-12 bg-white border-slate-200 text-slate-800 placeholder:text-slate-400 focus:border-indigo-500 focus:ring-indigo-500/20"
                   disabled={isLoading}
                 />
                 <button
                   type="button"
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-white/60 hover:text-white"
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
                   onClick={() => setShowPassword(!showPassword)}
                 >
-                  {showPassword ? (
-                    <EyeOff className="h-4 w-4" />
-                  ) : (
-                    <Eye className="h-4 w-4" />
-                  )}
+                  {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                 </button>
               </div>
             </div>
 
             <Button
               type="submit"
-              className="w-full bg-emerald-500 hover:bg-emerald-600 text-white"
+              className="w-full h-12 bg-indigo-600 hover:bg-indigo-700 text-white font-medium text-lg shadow-lg shadow-indigo-600/20"
               disabled={isLoading}
             >
               {isLoading ? (
                 <>
-                  <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin ml-2" />
+                  <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin ml-2" />
                   מתחבר...
                 </>
               ) : (
@@ -182,19 +194,19 @@ export default function LoginPage() {
             </Button>
           </form>
 
-          <div className="relative my-4">
+          <div className="relative my-5">
             <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t border-white/20" />
+              <span className="w-full border-t border-slate-200" />
             </div>
             <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-transparent px-2 text-slate-400">או</span>
+              <span className="bg-white px-3 text-slate-400">או</span>
             </div>
           </div>
 
           <Button
             type="button"
             variant="outline"
-            className="w-full bg-white/10 border-white/30 text-white hover:bg-white/20"
+            className="w-full h-12 bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300"
             onClick={handleGoogleLogin}
             disabled={isLoading}
           >
@@ -208,15 +220,15 @@ export default function LoginPage() {
           </Button>
 
           <div className="mt-6 text-center space-y-2">
-            <p className="text-sm text-slate-400">
+            <p className="text-slate-600">
               אין לך חשבון?{' '}
-              <Link href="/register" className="text-emerald-400 hover:text-emerald-300 font-medium">
+              <Link href="/signup" className="text-indigo-600 hover:text-indigo-700 font-medium">
                 הירשם עכשיו
               </Link>
             </p>
-            <p className="text-sm text-slate-500">
+            <p className="text-slate-500 text-sm">
               שכחת סיסמה?{' '}
-              <button className="text-emerald-500 hover:text-emerald-400">
+              <button className="text-indigo-500 hover:text-indigo-600">
                 לחץ כאן
               </button>
             </p>

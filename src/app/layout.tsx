@@ -13,12 +13,26 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "סלע דשבורדים | Selaboard",
-  description: "מערכת ניהול דשבורדים מרכזית - סלע סוכנות לביטוח",
+  title: "SelaiOS - InsuranceAI System",
+  description: "פלטפורמת ה-AI המתקדמת לניהול סוכנויות ביטוח. שילוב של סוכנים וירטואליים, אוטומציה ודאטה בזמן אמת.",
+  metadataBase: new URL('https://selai.app'),
   icons: {
     icon: "/sela-logo.png",
     shortcut: "/sela-logo.png",
     apple: "/sela-logo-full.png",
+  },
+  openGraph: {
+    title: "SelaiOS - InsuranceAI System",
+    description: "פלטפורמת ה-AI המתקדמת לניהול סוכנויות ביטוח",
+    url: "https://selai.app",
+    siteName: "SelaiOS",
+    locale: "he_IL",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "SelaiOS - InsuranceAI System",
+    description: "פלטפורמת ה-AI המתקדמת לניהול סוכנויות ביטוח",
   },
 };
 

@@ -3,6 +3,20 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   output: "standalone",
 
+  // Image domains
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'selai.app',
+      },
+      {
+        protocol: 'http',
+        hostname: 'localhost',
+      },
+    ],
+  },
+
   // Security headers
   headers: async () => [
     {
