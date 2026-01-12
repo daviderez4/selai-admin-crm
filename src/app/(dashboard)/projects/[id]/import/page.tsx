@@ -696,10 +696,10 @@ export default function ImportPage() {
                 <div
                   className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
                     currentStepIndex === i
-                      ? 'bg-emerald-500 text-white'
+                      ? 'bg-emerald-500 text-slate-900 dark:text-white'
                       : currentStepIndex > i
                       ? 'bg-emerald-500/20 text-emerald-500'
-                      : 'bg-slate-800 text-slate-400'
+                      : 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
                   }`}
                 >
                   <s.icon className="h-4 w-4" />
@@ -719,7 +719,7 @@ export default function ImportPage() {
           {step === 'upload' && (
             <div className="space-y-6">
               {/* Current Stats Card */}
-              <Card className="bg-slate-800/50 border-slate-700">
+              <Card className="bg-white border-slate-200 dark:bg-slate-200 dark:bg-slate-800/50 dark:border-slate-200 dark:border-slate-700">
                 <CardContent className="pt-6">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-4">
@@ -727,12 +727,12 @@ export default function ImportPage() {
                         <Database className="h-6 w-6 text-blue-400" />
                       </div>
                       <div>
-                        <h3 className="text-white font-bold">נתונים קיימים</h3>
-                        <p className="text-slate-400 text-sm">
+                        <h3 className="text-slate-900 dark:text-white font-bold">נתונים קיימים</h3>
+                        <p className="text-slate-600 dark:text-slate-400 text-sm">
                           {currentStats.totalRecords.toLocaleString('he-IL')} רשומות בטבלת {projectInfo?.table_name || 'master_data'}
                         </p>
                         {currentStats.lastImport && (
-                          <p className="text-slate-500 text-xs">
+                          <p className="text-slate-500 dark:text-slate-500 text-xs">
                             ייבוא אחרון: {new Date(currentStats.lastImport).toLocaleDateString('he-IL')}
                           </p>
                         )}
@@ -756,20 +756,20 @@ export default function ImportPage() {
 
                   {/* Import History */}
                   {showHistory && importHistory.length > 0 && (
-                    <div className="mt-4 pt-4 border-t border-slate-700">
-                      <h4 className="text-slate-300 text-sm font-medium mb-3">היסטוריית ייבואים</h4>
+                    <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+                      <h4 className="text-slate-700 dark:text-slate-300 text-sm font-medium mb-3">היסטוריית ייבואים</h4>
                       <div className="space-y-2 max-h-40 overflow-y-auto">
                         {importHistory.slice(0, 5).map((item) => (
                           <div
                             key={item.id}
-                            className="flex items-center justify-between p-2 bg-slate-900/50 rounded-lg text-sm"
+                            className="flex items-center justify-between p-2 bg-slate-100 dark:bg-slate-900/50 rounded-lg text-sm"
                           >
                             <div className="flex items-center gap-3">
-                              <FileSpreadsheet className="h-4 w-4 text-slate-500" />
-                              <span className="text-slate-300">{item.file_name}</span>
+                              <FileSpreadsheet className="h-4 w-4 text-slate-500 dark:text-slate-500" />
+                              <span className="text-slate-700 dark:text-slate-300">{item.file_name}</span>
                             </div>
                             <div className="flex items-center gap-4">
-                              <span className="text-slate-400">
+                              <span className="text-slate-600 dark:text-slate-400">
                                 {item.rows_imported.toLocaleString('he-IL')} שורות
                               </span>
                               <Badge
@@ -781,7 +781,7 @@ export default function ImportPage() {
                               >
                                 {item.status === 'completed' ? 'הושלם' : 'חלקי'}
                               </Badge>
-                              <span className="text-slate-500 text-xs">
+                              <span className="text-slate-500 dark:text-slate-500 text-xs">
                                 {new Date(item.created_at).toLocaleDateString('he-IL')}
                               </span>
                             </div>
@@ -794,13 +794,13 @@ export default function ImportPage() {
               </Card>
 
               {/* Upload Area */}
-              <Card className="bg-slate-800/50 border-slate-700">
+              <Card className="bg-white border-slate-200 dark:bg-slate-200 dark:bg-slate-800/50 dark:border-slate-200 dark:border-slate-700">
                 <CardContent className="pt-6">
                   <div
                     className={`border-2 border-dashed rounded-lg p-12 text-center transition-colors ${
                       isDragging
                         ? 'border-emerald-500 bg-emerald-500/10'
-                        : 'border-slate-600 hover:border-slate-500'
+                        : 'border-slate-300 dark:border-slate-600 hover:border-slate-500'
                     }`}
                     onDragOver={(e) => {
                       e.preventDefault();
@@ -812,14 +812,14 @@ export default function ImportPage() {
                     {isLoading ? (
                       <div className="flex flex-col items-center gap-4">
                         <Loader2 className="h-12 w-12 text-emerald-500 animate-spin" />
-                        <p className="text-slate-300">מנתח את הקובץ...</p>
-                        <p className="text-slate-500 text-sm">זיהוי סוגי עמודות וקטגוריות</p>
+                        <p className="text-slate-700 dark:text-slate-300">מנתח את הקובץ...</p>
+                        <p className="text-slate-500 dark:text-slate-500 text-sm">זיהוי סוגי עמודות וקטגוריות</p>
                       </div>
                     ) : (
                       <>
-                        <Upload className="h-12 w-12 text-slate-500 mx-auto mb-4" />
-                        <p className="text-slate-300 mb-2">גרור ושחרר קובץ אקסל כאן</p>
-                        <p className="text-slate-500 text-sm mb-4">או לחץ לבחירת קובץ</p>
+                        <Upload className="h-12 w-12 text-slate-500 dark:text-slate-500 mx-auto mb-4" />
+                        <p className="text-slate-700 dark:text-slate-300 mb-2">גרור ושחרר קובץ אקסל כאן</p>
+                        <p className="text-slate-500 dark:text-slate-500 text-sm mb-4">או לחץ לבחירת קובץ</p>
                         <input
                           type="file"
                           accept=".xlsx,.xls,.csv"
@@ -830,7 +830,7 @@ export default function ImportPage() {
                         <label htmlFor="file-upload">
                           <Button
                             variant="outline"
-                            className="border-slate-600 text-slate-300 hover:bg-slate-700"
+                            className="border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700"
                             asChild
                           >
                             <span>בחר קובץ</span>
@@ -850,7 +850,7 @@ export default function ImportPage() {
           {/* Analysis Step */}
           {step === 'analysis' && analysis && (
             <div className="space-y-6">
-              <Card className="bg-slate-800/50 border-slate-700">
+              <Card className="bg-white border-slate-200 dark:bg-slate-200 dark:bg-slate-800/50 dark:border-slate-200 dark:border-slate-700">
                 <CardContent className="pt-6">
                   <AnalysisSummary
                     fileName={analysis.fileName}
@@ -864,22 +864,22 @@ export default function ImportPage() {
 
               {/* File Stats */}
               <div className="grid grid-cols-3 gap-4">
-                <Card className="bg-slate-800/50 border-slate-700">
+                <Card className="bg-white border-slate-200 dark:bg-slate-200 dark:bg-slate-800/50 dark:border-slate-200 dark:border-slate-700">
                   <CardContent className="pt-4 pb-4 text-center">
-                    <p className="text-3xl font-bold text-white">{analysis.totalRows.toLocaleString('he-IL')}</p>
-                    <p className="text-slate-400 text-sm">שורות</p>
+                    <p className="text-3xl font-bold text-slate-900 dark:text-white">{analysis.totalRows.toLocaleString('he-IL')}</p>
+                    <p className="text-slate-600 dark:text-slate-400 text-sm">שורות</p>
                   </CardContent>
                 </Card>
-                <Card className="bg-slate-800/50 border-slate-700">
+                <Card className="bg-white border-slate-200 dark:bg-slate-200 dark:bg-slate-800/50 dark:border-slate-200 dark:border-slate-700">
                   <CardContent className="pt-4 pb-4 text-center">
-                    <p className="text-3xl font-bold text-white">{analysis.totalColumns.toLocaleString('he-IL')}</p>
-                    <p className="text-slate-400 text-sm">עמודות</p>
+                    <p className="text-3xl font-bold text-slate-900 dark:text-white">{analysis.totalColumns.toLocaleString('he-IL')}</p>
+                    <p className="text-slate-600 dark:text-slate-400 text-sm">עמודות</p>
                   </CardContent>
                 </Card>
-                <Card className="bg-slate-800/50 border-slate-700">
+                <Card className="bg-white border-slate-200 dark:bg-slate-200 dark:bg-slate-800/50 dark:border-slate-200 dark:border-slate-700">
                   <CardContent className="pt-4 pb-4 text-center">
-                    <p className="text-3xl font-bold text-white">{analysis.sheets.length}</p>
-                    <p className="text-slate-400 text-sm">גיליונות</p>
+                    <p className="text-3xl font-bold text-slate-900 dark:text-white">{analysis.sheets.length}</p>
+                    <p className="text-slate-600 dark:text-slate-400 text-sm">גיליונות</p>
                   </CardContent>
                 </Card>
               </div>
@@ -891,9 +891,9 @@ export default function ImportPage() {
                     <div className="space-y-3">
                       <div className="flex items-center gap-2">
                         <span className="text-xl">📑</span>
-                        <p className="text-white font-medium">בחירת גיליון לייבוא</p>
+                        <p className="text-slate-900 dark:text-white font-medium">בחירת גיליון לייבוא</p>
                       </div>
-                      <p className="text-slate-400 text-sm">
+                      <p className="text-slate-600 dark:text-slate-400 text-sm">
                         הקובץ מכיל {analysis.sheets.length} גיליונות. כל גיליון יישמר עם שם הגיליון לסינון בדשבורד.
                       </p>
                       <div className="flex flex-wrap gap-2">
@@ -901,8 +901,8 @@ export default function ImportPage() {
                           className={cn(
                             'cursor-pointer transition-colors px-3 py-1.5',
                             analysis.sheetName === analysis.sheets[0]
-                              ? 'bg-blue-500 text-white'
-                              : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                              ? 'bg-blue-500 text-slate-900 dark:text-white'
+                              : 'bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-600'
                           )}
                         >
                           📊 {analysis.sheetName} (נבחר)
@@ -910,7 +910,7 @@ export default function ImportPage() {
                         {analysis.sheets.filter(s => s !== analysis.sheetName).map(sheet => (
                           <Badge
                             key={sheet}
-                            className="bg-slate-700/50 text-slate-400 px-3 py-1.5"
+                            className="bg-slate-700/50 text-slate-600 dark:text-slate-400 px-3 py-1.5"
                           >
                             {sheet}
                           </Badge>
@@ -934,17 +934,17 @@ export default function ImportPage() {
                           <Database className="h-6 w-6 text-emerald-400" />
                         </div>
                         <div>
-                          <h3 className="text-white font-bold text-lg">
+                          <h3 className="text-slate-900 dark:text-white font-bold text-lg">
                             ייבוא לטבלת {projectInfo?.table_name || 'master_data'}
                           </h3>
-                          <p className="text-slate-400 text-sm">
+                          <p className="text-slate-600 dark:text-slate-400 text-sm">
                             {tableDescriptions[projectInfo?.table_name || 'master_data'] || 'נתונים'}
                           </p>
                           <div className="flex gap-2 mt-2 flex-wrap">
                             <Badge className="bg-emerald-500/20 text-emerald-300 text-xs">
                               {currentStats.totalRecords.toLocaleString('he-IL')} רשומות קיימות
                             </Badge>
-                            <Badge className="bg-slate-600/50 text-slate-300 text-xs font-mono">
+                            <Badge className="bg-slate-600/50 text-slate-700 dark:text-slate-300 text-xs font-mono">
                               {projectInfo?.table_name || 'master_data'}
                             </Badge>
                           </div>
@@ -952,7 +952,7 @@ export default function ImportPage() {
                       </div>
                       <Button
                         onClick={handleImportClick}
-                        className="bg-emerald-500 hover:bg-emerald-600 text-white"
+                        className="bg-emerald-500 hover:bg-emerald-600 text-slate-900 dark:text-white"
                         disabled={isLoading}
                       >
                         <Upload className="h-4 w-4 ml-2" />
@@ -962,24 +962,24 @@ export default function ImportPage() {
 
                     {/* Import Period Selection */}
                     <div className="space-y-3">
-                      <p className="text-slate-300 font-medium text-sm">בחר תקופת הייבוא:</p>
+                      <p className="text-slate-700 dark:text-slate-300 font-medium text-sm">בחר תקופת הייבוא:</p>
 
-                      <div className="flex gap-3 items-center p-3 bg-slate-900/50 rounded-lg border border-slate-700">
-                        <span className="text-slate-400 text-sm">חודש:</span>
+                      <div className="flex gap-3 items-center p-3 bg-slate-100 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
+                        <span className="text-slate-600 dark:text-slate-400 text-sm">חודש:</span>
                         <select
                           value={importMonth}
                           onChange={(e) => setImportMonth(Number(e.target.value))}
-                          className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm"
+                          className="bg-slate-200 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-slate-900 dark:text-white text-sm"
                         >
                           {hebrewMonths.map((month, i) => (
                             <option key={i + 1} value={i + 1}>{month}</option>
                           ))}
                         </select>
-                        <span className="text-slate-400 text-sm">שנה:</span>
+                        <span className="text-slate-600 dark:text-slate-400 text-sm">שנה:</span>
                         <select
                           value={importYear}
                           onChange={(e) => setImportYear(Number(e.target.value))}
-                          className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm"
+                          className="bg-slate-200 dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-slate-900 dark:text-white text-sm"
                         >
                           {[2023, 2024, 2025, 2026, 2027].map(year => (
                             <option key={year} value={year}>{year}</option>
@@ -1001,7 +1001,7 @@ export default function ImportPage() {
               {/* Divider */}
               <div className="flex items-center gap-4">
                 <div className="flex-1 h-px bg-slate-700" />
-                <span className="text-slate-500 text-sm">או</span>
+                <span className="text-slate-500 dark:text-slate-500 text-sm">או</span>
                 <div className="flex-1 h-px bg-slate-700" />
               </div>
 
@@ -1010,7 +1010,7 @@ export default function ImportPage() {
                 <Button
                   variant="outline"
                   onClick={handleReset}
-                  className="border-slate-600 text-slate-300"
+                  className="border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300"
                 >
                   <ArrowRight className="h-4 w-4 ml-2" />
                   חזור
@@ -1018,7 +1018,7 @@ export default function ImportPage() {
                 <Button
                   onClick={() => setStep('template')}
                   variant="outline"
-                  className="border-slate-600 text-slate-300"
+                  className="border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300"
                 >
                   מיפוי ידני מתקדם
                   <ArrowLeft className="h-4 w-4 mr-2" />
@@ -1030,7 +1030,7 @@ export default function ImportPage() {
           {/* Template Selection Step */}
           {step === 'template' && analysis && !showCustomSelector && (
             <div className="space-y-6">
-              <Card className="bg-slate-800/50 border-slate-700">
+              <Card className="bg-white border-slate-200 dark:bg-slate-200 dark:bg-slate-800/50 dark:border-slate-200 dark:border-slate-700">
                 <CardContent className="pt-6">
                   <TemplateSuggestions
                     suggestions={analysis.templateSuggestions}
@@ -1054,12 +1054,12 @@ export default function ImportPage() {
                           ))}
                         </div>
                         <div>
-                          <p className="text-white font-medium">
+                          <p className="text-slate-900 dark:text-white font-medium">
                             {selectedTemplates.length === 1
                               ? selectedTemplates[0].name
                               : `${selectedTemplates.length} תבניות נבחרו`}
                           </p>
-                          <p className="text-slate-400 text-sm">
+                          <p className="text-slate-600 dark:text-slate-400 text-sm">
                             {selectedColumns.length} עמודות יובאו (ללא כפילויות)
                           </p>
                         </div>
@@ -1077,7 +1077,7 @@ export default function ImportPage() {
                 <Button
                   variant="outline"
                   onClick={() => setStep('analysis')}
-                  className="border-slate-600 text-slate-300"
+                  className="border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300"
                 >
                   <ArrowRight className="h-4 w-4 ml-2" />
                   חזור
@@ -1116,11 +1116,11 @@ export default function ImportPage() {
 
           {/* Importing Step */}
           {step === 'importing' && (
-            <Card className="bg-slate-800/50 border-slate-700">
+            <Card className="bg-white border-slate-200 dark:bg-slate-200 dark:bg-slate-800/50 dark:border-slate-200 dark:border-slate-700">
               <CardContent className="py-12">
                 <div className="flex flex-col items-center gap-6 max-w-md mx-auto">
                   <Loader2 className="h-16 w-16 text-emerald-500 animate-spin" />
-                  <p className="text-xl text-white">
+                  <p className="text-xl text-slate-900 dark:text-white">
                     {importProgress?.status || 'מייבא נתונים...'}
                   </p>
 
@@ -1134,7 +1134,7 @@ export default function ImportPage() {
                         <span className="text-emerald-400 font-medium">
                           {importProgress.imported.toLocaleString('he-IL')} שורות
                         </span>
-                        <span className="text-slate-400">
+                        <span className="text-slate-600 dark:text-slate-400">
                           מתוך {importProgress.total.toLocaleString('he-IL')}
                         </span>
                       </div>
@@ -1147,16 +1147,16 @@ export default function ImportPage() {
 
           {/* Complete Step */}
           {step === 'complete' && (
-            <Card className="bg-slate-800/50 border-slate-700">
+            <Card className="bg-white border-slate-200 dark:bg-slate-200 dark:bg-slate-800/50 dark:border-slate-200 dark:border-slate-700">
               <CardContent className="py-12">
                 <div className="flex flex-col items-center gap-4">
                   <div className="w-20 h-20 bg-emerald-500/20 rounded-full flex items-center justify-center">
                     <Check className="h-10 w-10 text-emerald-500" />
                   </div>
-                  <p className="text-2xl font-bold text-white">הייבוא הושלם בהצלחה!</p>
+                  <p className="text-2xl font-bold text-slate-900 dark:text-white">הייבוא הושלם בהצלחה!</p>
 
                   {importProgress && (
-                    <div className="flex items-center gap-4 text-slate-400">
+                    <div className="flex items-center gap-4 text-slate-600 dark:text-slate-400">
                       <span>{importProgress.imported.toLocaleString('he-IL')} שורות יובאו</span>
                       <span>•</span>
                       <span>{selectedColumns.length || 19} עמודות</span>
@@ -1176,7 +1176,7 @@ export default function ImportPage() {
                     <Button
                       variant="outline"
                       onClick={handleReset}
-                      className="border-slate-600 text-slate-300"
+                      className="border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300"
                     >
                       ייבוא נוסף
                     </Button>
@@ -1198,18 +1198,18 @@ export default function ImportPage() {
       {/* Delete Confirmation Modal */}
       {showDeleteConfirm && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-800 rounded-xl border border-slate-700 max-w-md w-full p-6">
+          <div className="bg-slate-200 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 max-w-md w-full p-6">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-12 h-12 bg-red-500/20 rounded-full flex items-center justify-center">
                 <AlertTriangle className="h-6 w-6 text-red-400" />
               </div>
               <div>
-                <h3 className="text-xl font-bold text-white">אישור מחיקה</h3>
-                <p className="text-slate-400 text-sm">פעולה זו בלתי הפיכה!</p>
+                <h3 className="text-xl font-bold text-slate-900 dark:text-white">אישור מחיקה</h3>
+                <p className="text-slate-600 dark:text-slate-400 text-sm">פעולה זו בלתי הפיכה!</p>
               </div>
             </div>
 
-            <p className="text-slate-300 mb-6">
+            <p className="text-slate-700 dark:text-slate-300 mb-6">
               האם אתה בטוח שברצונך למחוק את כל {currentStats.totalRecords.toLocaleString('he-IL')} הרשומות מטבלת {projectInfo?.table_name || 'master_data'}?
             </p>
 
@@ -1217,7 +1217,7 @@ export default function ImportPage() {
               <Button
                 onClick={handleDeleteAll}
                 disabled={isDeleting}
-                className="flex-1 bg-red-500 hover:bg-red-600 text-white"
+                className="flex-1 bg-red-500 hover:bg-red-600 text-slate-900 dark:text-white"
               >
                 {isDeleting ? (
                   <Loader2 className="h-4 w-4 animate-spin ml-2" />
@@ -1229,7 +1229,7 @@ export default function ImportPage() {
               <Button
                 onClick={() => setShowDeleteConfirm(false)}
                 variant="outline"
-                className="flex-1 border-slate-600 text-slate-300"
+                className="flex-1 border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300"
               >
                 ביטול
               </Button>
@@ -1241,32 +1241,32 @@ export default function ImportPage() {
       {/* Import Confirmation Modal */}
       {showImportConfirm && analysis && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-800 rounded-xl border border-slate-700 max-w-lg w-full p-6">
+          <div className="bg-slate-200 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 max-w-lg w-full p-6">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-12 h-12 bg-emerald-500/20 rounded-full flex items-center justify-center">
                 <FileSpreadsheet className="h-6 w-6 text-emerald-400" />
               </div>
               <div>
-                <h3 className="text-xl font-bold text-white">אישור ייבוא</h3>
-                <p className="text-slate-400 text-sm">סיכום פרטי הייבוא</p>
+                <h3 className="text-xl font-bold text-slate-900 dark:text-white">אישור ייבוא</h3>
+                <p className="text-slate-600 dark:text-slate-400 text-sm">סיכום פרטי הייבוא</p>
               </div>
             </div>
 
             <div className="space-y-3 mb-6">
-              <div className="flex items-center justify-between p-3 bg-slate-900/50 rounded-lg">
-                <span className="text-slate-400">קובץ</span>
-                <span className="text-white font-medium">{file?.name}</span>
+              <div className="flex items-center justify-between p-3 bg-slate-100 dark:bg-slate-900/50 rounded-lg">
+                <span className="text-slate-600 dark:text-slate-400">קובץ</span>
+                <span className="text-slate-900 dark:text-white font-medium">{file?.name}</span>
               </div>
-              <div className="flex items-center justify-between p-3 bg-slate-900/50 rounded-lg">
-                <span className="text-slate-400">שורות לייבוא</span>
+              <div className="flex items-center justify-between p-3 bg-slate-100 dark:bg-slate-900/50 rounded-lg">
+                <span className="text-slate-600 dark:text-slate-400">שורות לייבוא</span>
                 <span className="text-emerald-400 font-bold">{analysis.totalRows.toLocaleString('he-IL')}</span>
               </div>
-              <div className="flex items-center justify-between p-3 bg-slate-900/50 rounded-lg">
-                <span className="text-slate-400">טבלת יעד</span>
-                <span className="text-white font-mono">{projectInfo?.table_name || 'master_data'}</span>
+              <div className="flex items-center justify-between p-3 bg-slate-100 dark:bg-slate-900/50 rounded-lg">
+                <span className="text-slate-600 dark:text-slate-400">טבלת יעד</span>
+                <span className="text-slate-900 dark:text-white font-mono">{projectInfo?.table_name || 'master_data'}</span>
               </div>
-              <div className="flex items-center justify-between p-3 bg-slate-900/50 rounded-lg">
-                <span className="text-slate-400">תקופת ייבוא</span>
+              <div className="flex items-center justify-between p-3 bg-slate-100 dark:bg-slate-900/50 rounded-lg">
+                <span className="text-slate-600 dark:text-slate-400">תקופת ייבוא</span>
                 <Badge className="bg-emerald-500/20 text-emerald-400">
                   {hebrewMonths[importMonth - 1]} {importYear}
                 </Badge>
@@ -1282,7 +1282,7 @@ export default function ImportPage() {
             <div className="flex gap-3">
               <Button
                 onClick={handleDirectImport}
-                className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white"
+                className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-slate-900 dark:text-white"
               >
                 <Check className="h-4 w-4 ml-2" />
                 אשר וייבא
@@ -1290,7 +1290,7 @@ export default function ImportPage() {
               <Button
                 onClick={() => setShowImportConfirm(false)}
                 variant="outline"
-                className="flex-1 border-slate-600 text-slate-300"
+                className="flex-1 border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300"
               >
                 ביטול
               </Button>
@@ -1302,13 +1302,13 @@ export default function ImportPage() {
       {/* SQL Modal for manual table creation */}
       {showSqlModal && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-800 rounded-xl border border-slate-700 max-w-3xl w-full max-h-[90vh] overflow-hidden">
+          <div className="bg-slate-200 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 max-w-3xl w-full max-h-[90vh] overflow-hidden">
             {/* Header */}
-            <div className="flex items-center justify-between p-4 border-b border-slate-700">
-              <h3 className="text-lg font-bold text-white">יצירת טבלה ידנית נדרשת</h3>
+            <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-700">
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white">יצירת טבלה ידנית נדרשת</h3>
               <button
                 onClick={() => setShowSqlModal(false)}
-                className="text-slate-400 hover:text-white"
+                className="text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:text-white"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -1324,8 +1324,8 @@ export default function ImportPage() {
 
               {/* Instructions */}
               <div className="space-y-2">
-                <p className="text-slate-300 text-sm font-medium">שלבים:</p>
-                <ol className="list-decimal list-inside text-slate-400 text-sm space-y-1 mr-2">
+                <p className="text-slate-700 dark:text-slate-300 text-sm font-medium">שלבים:</p>
+                <ol className="list-decimal list-inside text-slate-600 dark:text-slate-400 text-sm space-y-1 mr-2">
                   <li>לחץ על הכפתור למטה להעתקת ה-SQL</li>
                   <li>לך לפרויקט Supabase שלך</li>
                   <li>פתח את SQL Editor</li>
@@ -1336,19 +1336,19 @@ export default function ImportPage() {
 
               {/* SQL Code */}
               <div className="relative">
-                <pre className="bg-slate-900 border border-slate-700 rounded-lg p-4 text-xs text-slate-300 overflow-x-auto whitespace-pre-wrap font-mono">
+                <pre className="bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-4 text-xs text-slate-700 dark:text-slate-300 overflow-x-auto whitespace-pre-wrap font-mono">
                   {manualSql}
                 </pre>
               </div>
             </div>
 
             {/* Footer */}
-            <div className="flex items-center justify-between p-4 border-t border-slate-700 bg-slate-800/50">
+            <div className="flex items-center justify-between p-4 border-t border-slate-200 dark:border-slate-700 bg-slate-200 dark:bg-slate-800/50">
               <div className="flex gap-2">
                 <Button
                   variant="outline"
                   onClick={handleCopySql}
-                  className="border-slate-600 text-slate-300"
+                  className="border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300"
                 >
                   <Copy className="h-4 w-4 ml-2" />
                   העתק SQL
@@ -1356,7 +1356,7 @@ export default function ImportPage() {
                 <Button
                   variant="outline"
                   onClick={() => window.open('https://supabase.com/dashboard', '_blank')}
-                  className="border-slate-600 text-slate-300"
+                  className="border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300"
                 >
                   <ExternalLink className="h-4 w-4 ml-2" />
                   פתח Supabase
