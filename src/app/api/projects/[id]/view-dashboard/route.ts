@@ -283,8 +283,10 @@ export async function GET(
       .filter(p => p.name !== 'לא ידוע')
       .sort((a, b) => b.commission - a.commission);
 
+    // Filter branches to show only the main 4 branches for nifraim dashboard
+    const mainBranches = ['בריאות', 'פנסיה', 'גמל', 'חיים'];
     const branches = Array.from(branchMap.values())
-      .filter(b => b.name !== 'לא ידוע')
+      .filter(b => b.name !== 'לא ידוע' && mainBranches.includes(b.name))
       .sort((a, b) => b.commission - a.commission);
 
     const monthlyTrend = Array.from(monthMap.values())
@@ -293,7 +295,8 @@ export async function GET(
 
     // Get unique values for filters
     const uniqueProviders = [...new Set(data.map((r: Record<string, unknown>) => String(r.provider || '')))].filter(Boolean);
-    const uniqueBranches = [...new Set(data.map((r: Record<string, unknown>) => String(r.branch || '')))].filter(Boolean);
+    const uniqueBranches = [...new Set(data.map((r: Record<string, unknown>) => String(r.branch || '')))]
+      .filter(b => b && mainBranches.includes(b));
     const uniqueAgents = [...new Set(data.map((r: Record<string, unknown>) => String(r.agent_name || '')))].filter(Boolean);
     const uniqueMonths = [...new Set(data.map((r: Record<string, unknown>) => {
       const date = String(r.processing_month || '');
