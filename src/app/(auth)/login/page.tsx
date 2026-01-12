@@ -194,6 +194,7 @@ export default function LoginPage() {
             </Button>
           </form>
 
+          {/* Google login temporarily disabled - enable in Supabase Dashboard first
           <div className="relative my-5">
             <div className="absolute inset-0 flex items-center">
               <span className="w-full border-t border-slate-200" />
@@ -218,6 +219,7 @@ export default function LoginPage() {
             </svg>
             התחבר עם Google
           </Button>
+          */}
 
           <div className="mt-6 text-center space-y-2">
             <p className="text-slate-600">
