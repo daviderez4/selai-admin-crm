@@ -51,7 +51,7 @@ import {
   Filter,
   Building2,
   User,
-  DollarSign,
+  Banknote,
   TrendingUp,
   RefreshCw,
 } from 'lucide-react';
@@ -321,7 +321,7 @@ export function PolicyList() {
           <CardContent className="pt-4">
             <div className="flex items-center gap-3">
               <div className="h-10 w-10 rounded-lg bg-yellow-100 flex items-center justify-center">
-                <DollarSign className="h-5 w-5 text-yellow-600" />
+                <Banknote className="h-5 w-5 text-yellow-600" />
               </div>
               <div>
                 <div className="text-2xl font-bold">{formatCurrency(totalPremium)}</div>

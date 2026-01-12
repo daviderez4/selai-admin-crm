@@ -30,7 +30,7 @@ import {
   Calendar,
   Phone,
   Mail,
-  DollarSign,
+  Banknote,
   Percent,
   Check,
   AlertCircle,
@@ -54,7 +54,7 @@ interface DataPreviewProps {
 const typeIcons: Record<ColumnDataType, React.ReactNode> = {
   text: <Type className="h-4 w-4" />,
   number: <Hash className="h-4 w-4" />,
-  currency: <DollarSign className="h-4 w-4" />,
+  currency: <Banknote className="h-4 w-4" />,
   date: <Calendar className="h-4 w-4" />,
   phone: <Phone className="h-4 w-4" />,
   email: <Mail className="h-4 w-4" />,

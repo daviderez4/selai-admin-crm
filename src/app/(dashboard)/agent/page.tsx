@@ -23,7 +23,7 @@ import {
   ArrowLeft,
   Loader2,
   UserPlus,
-  DollarSign,
+  Banknote,
   Briefcase,
 } from 'lucide-react';
 import { toast } from 'sonner';

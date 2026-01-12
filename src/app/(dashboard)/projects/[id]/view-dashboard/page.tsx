@@ -5,7 +5,6 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import {
   TrendingUp,
-  DollarSign,
   Users,
   Building2,
   PieChart,
@@ -368,7 +367,7 @@ export default function ViewDashboardPage() {
                         <p className="text-xs font-medium text-emerald-100 uppercase">סה״כ עמלות</p>
                         <p className="text-2xl font-bold mt-1">{formatCurrency(stats.totalCommission)}</p>
                       </div>
-                      <DollarSign className="h-8 w-8 text-emerald-200" />
+                      <Banknote className="h-8 w-8 text-emerald-200" />
                     </div>
                   </CardContent>
                 </Card>

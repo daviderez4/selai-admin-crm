@@ -35,7 +35,8 @@
       "Bash(dir \"C:\\\\dev\\\\selai-admin-hub\\\\src\\\\app\\\\api\\\\projects\\\\[id]\")",
       "Bash(timeout:*)",
       "Bash(ping:*)",
-      "Bash(xargs:*)"
+      "Bash(xargs:*)",
+      "Bash(git tag:*)"
     ]
   }
 }

@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import {
   TrendingUp,
-  DollarSign,
+  Banknote,
   Users,
   Building2,
   PieChart,
@@ -302,7 +302,7 @@ export default function CommissionDashboardPage() {
                     </p>
                   </div>
                   <div className="bg-emerald-400/30 p-3 rounded-lg">
-                    <DollarSign className="h-6 w-6" />
+                    <Banknote className="h-6 w-6" />
                   </div>
                 </div>
               </CardContent>

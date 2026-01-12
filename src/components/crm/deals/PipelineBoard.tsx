@@ -19,7 +19,7 @@ import {
   Loader2,
   GripVertical,
   TrendingUp,
-  DollarSign,
+  Banknote,
 } from 'lucide-react';
 
 const statusConfig: Record<
@@ -165,7 +165,7 @@ export function PipelineBoard() {
           <CardContent className="pt-4">
             <div className="flex items-center gap-3">
               <div className="h-10 w-10 rounded-lg bg-purple-100 flex items-center justify-center">
-                <DollarSign className="h-5 w-5 text-purple-600" />
+                <Banknote className="h-5 w-5 text-purple-600" />
               </div>
               <div>
                 <div className="text-2xl font-bold">
@@ -197,7 +197,7 @@ export function PipelineBoard() {
           <CardContent className="pt-4">
             <div className="flex items-center gap-3">
               <div className="h-10 w-10 rounded-lg bg-green-100 flex items-center justify-center">
-                <DollarSign className="h-5 w-5 text-green-600" />
+                <Banknote className="h-5 w-5 text-green-600" />
               </div>
               <div>
                 <div className="text-2xl font-bold">

@@ -11,7 +11,7 @@ import {
   BarChart3,
   Layout,
   Users,
-  DollarSign,
+  Banknote,
   Clock,
   FileText,
   ArrowLeft,
