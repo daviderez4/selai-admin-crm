@@ -114,7 +114,23 @@ export const useProjectsStore = create<ProjectsState>((set, get) => ({
 
   connectToProject: async (project) => {
     try {
-      // Decrypt the service key (in production, this should be done server-side)
+      // Check if this is a local project (no external Supabase connection)
+      const isLocalProject = !project.supabase_url || project.storage_mode === 'local';
+
+      if (isLocalProject) {
+        // For local projects, we don't need an external client
+        // Data is stored in the main Supabase instance
+        set({
+          selectedProject: project,
+          projectClient: null, // No external client needed
+        });
+
+        // Fetch tables after connecting
+        await get().fetchTables();
+        return;
+      }
+
+      // External project - decrypt the service key
       const response = await fetch('/api/projects/decrypt-key', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -127,9 +143,9 @@ export const useProjectsStore = create<ProjectsState>((set, get) => ({
 
       const { serviceKey } = await response.json();
 
-      // Create a Supabase client for the connected project
+      // Create a Supabase client for the connected external project
       const projectClient = createSupabaseClient(
-        project.supabase_url,
+        project.supabase_url!,
         serviceKey,
         {
           auth: {

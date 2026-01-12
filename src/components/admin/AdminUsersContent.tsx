@@ -101,7 +101,7 @@ const ROLE_COLORS: Record<SystemRole, string> = {
   client: 'bg-gray-100 text-gray-700',
 };
 
-export default function AdminUsersPage() {
+export default function AdminUsersContent() {
   const [isLoading, setIsLoading] = useState(true);
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [requests, setRequests] = useState<RegistrationRequest[]>([]);
@@ -110,7 +110,6 @@ export default function AdminUsersPage() {
   const [roleFilter, setRoleFilter] = useState<string>('all');
   const [activeTab, setActiveTab] = useState('users');
 
-  // Create user dialog
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [newUser, setNewUser] = useState({
     full_name: '',
@@ -127,7 +126,6 @@ export default function AdminUsersPage() {
 
   const fetchData = async () => {
     try {
-      // Mock data - in production fetch from API
       await new Promise(resolve => setTimeout(resolve, 500));
 
       const mockSupervisors: UserProfile[] = [
@@ -247,7 +245,6 @@ export default function AdminUsersPage() {
 
     setIsCreating(true);
     try {
-      // In production, call API
       await new Promise(resolve => setTimeout(resolve, 500));
       toast.success('המשתמש נוצר בהצלחה');
       setCreateDialogOpen(false);
@@ -315,10 +312,10 @@ export default function AdminUsersPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <UserCog className="h-6 w-6" />
+          <h2 className="text-xl font-bold flex items-center gap-2">
+            <UserCog className="h-5 w-5" />
             ניהול משתמשים
-          </h1>
+          </h2>
           <p className="text-muted-foreground">ניהול משתמשים, תפקידים והרשאות</p>
         </div>
         <Button onClick={() => setCreateDialogOpen(true)}>

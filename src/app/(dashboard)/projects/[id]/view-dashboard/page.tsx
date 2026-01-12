@@ -99,6 +99,7 @@ interface FilterOptions {
   providers: string[];
   branches: string[];
   agents: string[];
+  months: string[];
 }
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];
@@ -135,12 +136,13 @@ export default function ViewDashboardPage() {
   const [branches, setBranches] = useState<BranchStats[]>([]);
   const [monthlyTrend, setMonthlyTrend] = useState<MonthlyData[]>([]);
   const [recentRecords, setRecentRecords] = useState<RecentRecord[]>([]);
-  const [filterOptions, setFilterOptions] = useState<FilterOptions>({ providers: [], branches: [], agents: [] });
+  const [filterOptions, setFilterOptions] = useState<FilterOptions>({ providers: [], branches: [], agents: [], months: [] });
   const [error, setError] = useState<string | null>(null);
 
   // Filters
   const [selectedProvider, setSelectedProvider] = useState<string>('all');
   const [selectedBranch, setSelectedBranch] = useState<string>('all');
+  const [selectedMonth, setSelectedMonth] = useState<string>('all');
   const [agentSearch, setAgentSearch] = useState('');
   const [showTable, setShowTable] = useState(false);
 
@@ -161,6 +163,7 @@ export default function ViewDashboardPage() {
       const searchParams = new URLSearchParams();
       if (selectedProvider !== 'all') searchParams.append('provider', selectedProvider);
       if (selectedBranch !== 'all') searchParams.append('branch', selectedBranch);
+      if (selectedMonth !== 'all') searchParams.append('month', selectedMonth);
       if (agentSearch) searchParams.append('agent', agentSearch);
 
       const response = await fetch(
@@ -181,14 +184,14 @@ export default function ViewDashboardPage() {
       setBranches(data.branches || []);
       setMonthlyTrend(data.monthlyTrend || []);
       setRecentRecords(data.recentRecords || []);
-      setFilterOptions(data.filterOptions || { providers: [], branches: [], agents: [] });
+      setFilterOptions(data.filterOptions || { providers: [], branches: [], agents: [], months: [] });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error loading dashboard');
       toast.error('שגיאה בטעינת הדשבורד');
     } finally {
       setLoading(false);
     }
-  }, [projectId, selectedProvider, selectedBranch, agentSearch]);
+  }, [projectId, selectedProvider, selectedBranch, selectedMonth, agentSearch]);
 
   useEffect(() => {
     fetchDashboard();
@@ -280,6 +283,19 @@ export default function ViewDashboardPage() {
                   </SelectContent>
                 </Select>
 
+                <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                  <SelectTrigger className="w-[160px] h-9">
+                    <Calendar className="h-4 w-4 ml-2 text-slate-400" />
+                    <SelectValue placeholder="חודש" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">כל החודשים</SelectItem>
+                    {filterOptions.months.map((m) => (
+                      <SelectItem key={m} value={m}>{m}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
                 <Input
                   placeholder="חיפוש סוכן..."
                   value={agentSearch}
@@ -287,13 +303,14 @@ export default function ViewDashboardPage() {
                   className="w-48 h-9"
                 />
 
-                {(selectedProvider !== 'all' || selectedBranch !== 'all' || agentSearch) && (
+                {(selectedProvider !== 'all' || selectedBranch !== 'all' || selectedMonth !== 'all' || agentSearch) && (
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={() => {
                       setSelectedProvider('all');
                       setSelectedBranch('all');
+                      setSelectedMonth('all');
                       setAgentSearch('');
                     }}
                     className="text-slate-500"

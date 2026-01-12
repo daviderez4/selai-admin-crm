@@ -30,7 +30,7 @@ export async function GET(
     // Get project details
     const { data: project, error: projectError } = await supabase
       .from('projects')
-      .select('supabase_url, supabase_service_key, table_name, is_configured')
+      .select('supabase_url, supabase_service_key, table_name, is_configured, storage_mode')
       .eq('id', projectId)
       .single();
 
@@ -38,7 +38,33 @@ export async function GET(
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
     }
 
-    // STRICT PROJECT ISOLATION - No Central fallback!
+    // Check if this is a LOCAL project (data stored in main Supabase)
+    const isLocalProject = !project.supabase_url || project.storage_mode === 'local';
+
+    if (isLocalProject) {
+      // For local projects, return the project's configured table
+      // Data tables available in local mode
+      const localTables = [
+        { name: project.table_name || 'master_data', schema: 'public' },
+        { name: 'master_data', schema: 'public' },
+        { name: 'insurance_data', schema: 'public' },
+        { name: 'processes_data', schema: 'public' },
+        { name: 'commissions_data', schema: 'public' },
+      ];
+
+      // Remove duplicates
+      const uniqueTables = localTables.filter((table, index, self) =>
+        index === self.findIndex((t) => t.name === table.name)
+      );
+
+      return NextResponse.json({
+        tables: uniqueTables,
+        mode: 'local',
+        message: 'פרויקט מקומי - נתונים מאוחסנים במערכת המרכזית'
+      });
+    }
+
+    // EXTERNAL PROJECT - STRICT PROJECT ISOLATION
     const clientResult = createProjectClient({
       supabase_url: project.supabase_url,
       supabase_service_key: project.supabase_service_key,
@@ -57,7 +83,7 @@ export async function GET(
 
     const projectClient = clientResult.client!;
     const serviceKey = decrypt(project.supabase_service_key);
-    const normalizedUrl = normalizeSupabaseUrl(project.supabase_url);
+    const normalizedUrl = normalizeSupabaseUrl(project.supabase_url || '');
 
     // Try to get tables using RPC function (if exists)
     const { data: rpcData, error: rpcError } = await projectClient.rpc('get_public_tables');

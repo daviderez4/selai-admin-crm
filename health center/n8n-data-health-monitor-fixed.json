@@ -1,0 +1,401 @@
+{
+  "name": "SELAI - Data Health Monitor",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 1
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [100, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT \n  'contacts' as table_name,\n  COUNT(*) as total_records,\n  COUNT(*) FILTER (WHERE updated_at > NOW() - INTERVAL '24 hours') as updated_24h,\n  COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '24 hours') as created_24h\nFROM contacts\nUNION ALL\nSELECT \n  'leads' as table_name,\n  COUNT(*) as total_records,\n  COUNT(*) FILTER (WHERE updated_at > NOW() - INTERVAL '24 hours') as updated_24h,\n  COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '24 hours') as created_24h\nFROM leads\nUNION ALL\nSELECT \n  'policies' as table_name,\n  COUNT(*) as total_records,\n  COUNT(*) FILTER (WHERE updated_at > NOW() - INTERVAL '24 hours') as updated_24h,\n  COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '24 hours') as created_24h\nFROM policies;",
+        "options": {}
+      },
+      "id": "check-sync-status",
+      "name": "Check Sync Status",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [320, 300],
+      "credentials": {
+        "supabaseApi": {
+          "id": "YOUR_SUPABASE_CREDENTIAL_ID",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.total_records > 0 }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "has-data",
+      "name": "Has Data?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [540, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT \n  'duplicate_phones' as issue_type,\n  'contacts' as table_name,\n  COUNT(*) as count,\n  'critical' as severity\nFROM (\n  SELECT phone, COUNT(*) as cnt \n  FROM contacts \n  WHERE phone IS NOT NULL AND phone != ''\n  GROUP BY phone \n  HAVING COUNT(*) > 1\n) duplicates\nUNION ALL\nSELECT \n  'missing_email' as issue_type,\n  'contacts' as table_name,\n  COUNT(*) as count,\n  'warning' as severity\nFROM contacts \nWHERE email IS NULL OR email = ''\nUNION ALL\nSELECT \n  'invalid_phone_format' as issue_type,\n  'contacts' as table_name,\n  COUNT(*) as count,\n  'warning' as severity\nFROM contacts \nWHERE phone IS NOT NULL \n  AND phone != '' \n  AND phone !~ '^0[0-9]{8,9}$'\n  AND phone !~ '^\\+972[0-9]{8,9}$';",
+        "options": {}
+      },
+      "id": "get-quality-issues",
+      "name": "Get Quality Issues",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [760, 200],
+      "credentials": {
+        "supabaseApi": {
+          "id": "YOUR_SUPABASE_CREDENTIAL_ID",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare data for AI analysis\nconst syncData = $('Check Sync Status').all();\nconst issues = $('Get Quality Issues').all();\n\nconst summary = {\n  tables: syncData.map(item => ({\n    name: item.json.table_name,\n    total: item.json.total_records,\n    updated24h: item.json.updated_24h,\n    created24h: item.json.created_24h\n  })),\n  issues: issues.map(item => ({\n    type: item.json.issue_type,\n    table: item.json.table_name,\n    count: item.json.count,\n    severity: item.json.severity\n  })).filter(i => i.count > 0),\n  timestamp: new Date().toISOString()\n};\n\nconst criticalCount = summary.issues.filter(i => i.severity === 'critical').length;\nconst warningCount = summary.issues.filter(i => i.severity === 'warning').length;\n\nreturn [{\n  json: {\n    summary,\n    criticalCount,\n    warningCount,\n    needsAlert: criticalCount > 0,\n    prompt: `אתה אנליסט מערכות SELAI. נתח את בעיות תקינות הנתונים הבאות ותן המלצות קצרות בעברית:\n\nסיכום טבלאות:\n${JSON.stringify(summary.tables, null, 2)}\n\nבעיות שזוהו:\n${JSON.stringify(summary.issues, null, 2)}\n\nתן:\n1. סיכום קצר של המצב\n2. 3 המלצות מעשיות לתיקון`\n  }\n}];"
+      },
+      "id": "prepare-analysis",
+      "name": "Prepare Analysis",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [980, 200]
+    },
+    {
+      "parameters": {
+        "resource": "chat",
+        "model": "gpt-4o",
+        "messages": {
+          "values": [
+            {
+              "content": "={{ $json.prompt }}"
+            }
+          ]
+        },
+        "options": {
+          "maxTokens": 1000,
+          "temperature": 0.3
+        }
+      },
+      "id": "ai-analysis",
+      "name": "AI Analysis",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [1200, 200],
+      "credentials": {
+        "openAiApi": {
+          "id": "YOUR_OPENAI_CREDENTIAL_ID",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "tableId": "sync_history",
+        "fieldsToSend": "defineBelow",
+        "fieldValues": {
+          "values": [
+            {
+              "fieldName": "check_type",
+              "fieldValue": "scheduled"
+            },
+            {
+              "fieldName": "tables_checked",
+              "fieldValue": "={{ JSON.stringify($('Check Sync Status').all().map(i => i.json.table_name)) }}"
+            },
+            {
+              "fieldName": "issues_found",
+              "fieldValue": "={{ $('Prepare Analysis').item.json.criticalCount + $('Prepare Analysis').item.json.warningCount }}"
+            },
+            {
+              "fieldName": "ai_summary",
+              "fieldValue": "={{ $json.message?.content || $json.text || 'No analysis available' }}"
+            },
+            {
+              "fieldName": "status",
+              "fieldValue": "completed"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "log-health-check",
+      "name": "Log Health Check",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [1420, 200],
+      "credentials": {
+        "supabaseApi": {
+          "id": "YOUR_SUPABASE_CREDENTIAL_ID",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Log entry for no-data scenario\nreturn [{\n  json: {\n    check_type: 'scheduled',\n    tables_checked: '[]',\n    issues_found: 0,\n    ai_summary: 'No data to analyze',\n    status: 'skipped'\n  }\n}];"
+      },
+      "id": "prepare-log-entry",
+      "name": "Prepare Log Entry",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [760, 400]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "tableId": "sync_history",
+        "fieldsToSend": "defineBelow",
+        "fieldValues": {
+          "values": [
+            {
+              "fieldName": "check_type",
+              "fieldValue": "={{ $json.check_type }}"
+            },
+            {
+              "fieldName": "tables_checked",
+              "fieldValue": "={{ $json.tables_checked }}"
+            },
+            {
+              "fieldName": "issues_found",
+              "fieldValue": "={{ $json.issues_found }}"
+            },
+            {
+              "fieldName": "ai_summary",
+              "fieldValue": "={{ $json.ai_summary }}"
+            },
+            {
+              "fieldName": "status",
+              "fieldValue": "={{ $json.status }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "log-skip",
+      "name": "Log Skip",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [980, 400],
+      "credentials": {
+        "supabaseApi": {
+          "id": "YOUR_SUPABASE_CREDENTIAL_ID",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "selai-manual-scan",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "manual-scan-webhook",
+      "name": "Manual Scan Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [100, 560],
+      "webhookId": "selai-manual-scan"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT \n  c.id,\n  c.first_name,\n  c.last_name,\n  c.phone,\n  c.email,\n  CASE \n    WHEN c.phone IS NULL OR c.phone = '' THEN 'missing_phone'\n    WHEN c.phone !~ '^0[0-9]{8,9}$' AND c.phone !~ '^\\+972[0-9]{8,9}$' THEN 'invalid_phone'\n    ELSE 'ok'\n  END as phone_status,\n  CASE \n    WHEN c.email IS NULL OR c.email = '' THEN 'missing_email'\n    WHEN c.email !~ '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$' THEN 'invalid_email'\n    ELSE 'ok'\n  END as email_status\nFROM contacts c\nWHERE \n  c.phone IS NULL OR c.phone = '' OR\n  c.email IS NULL OR c.email = '' OR\n  c.phone !~ '^0[0-9]{8,9}$' OR\n  c.email !~ '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$'\nLIMIT 100;",
+        "options": {}
+      },
+      "id": "run-quality-scan",
+      "name": "Run Quality Scan",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [320, 560],
+      "credentials": {
+        "supabaseApi": {
+          "id": "YOUR_SUPABASE_CREDENTIAL_ID",
+          "name": "Supabase account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nconst summary = {\n  total_scanned: items.length,\n  phone_issues: items.filter(i => i.json.phone_status !== 'ok').length,\n  email_issues: items.filter(i => i.json.email_status !== 'ok').length,\n  records: items.map(i => ({\n    id: i.json.id,\n    name: `${i.json.first_name || ''} ${i.json.last_name || ''}`.trim(),\n    phone: i.json.phone,\n    email: i.json.email,\n    phone_status: i.json.phone_status,\n    email_status: i.json.email_status\n  }))\n};\n\nreturn [{ json: summary }];"
+      },
+      "id": "get-scan-results",
+      "name": "Get Scan Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [540, 560]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "respond-scan",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [760, 560]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Check Sync Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Sync Status": {
+      "main": [
+        [
+          {
+            "node": "Has Data?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Data?": {
+      "main": [
+        [
+          {
+            "node": "Get Quality Issues",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare Log Entry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Quality Issues": {
+      "main": [
+        [
+          {
+            "node": "Prepare Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Analysis": {
+      "main": [
+        [
+          {
+            "node": "AI Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Analysis": {
+      "main": [
+        [
+          {
+            "node": "Log Health Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Log Entry": {
+      "main": [
+        [
+          {
+            "node": "Log Skip",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Scan Webhook": {
+      "main": [
+        [
+          {
+            "node": "Run Quality Scan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run Quality Scan": {
+      "main": [
+        [
+          {
+            "node": "Get Scan Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Scan Results": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "SELAI",
+      "createdAt": "2025-01-01T00:00:00.000Z",
+      "updatedAt": "2025-01-01T00:00:00.000Z"
+    },
+    {
+      "name": "Data Health",
+      "createdAt": "2025-01-01T00:00:00.000Z",
+      "updatedAt": "2025-01-01T00:00:00.000Z"
+    }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2025-01-12T00:00:00.000Z",
+  "versionId": "1"
+}

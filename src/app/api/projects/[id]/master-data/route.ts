@@ -78,7 +78,7 @@ export async function GET(
     // Get project details including credentials and configuration status
     const { data: project, error: projectError } = await supabase
       .from('projects')
-      .select('supabase_url, supabase_anon_key, supabase_service_key, name, table_name, is_configured')
+      .select('supabase_url, supabase_anon_key, supabase_service_key, name, table_name, is_configured, storage_mode')
       .eq('id', projectId)
       .single();
 
@@ -101,30 +101,41 @@ export async function GET(
     const sortDir = url.searchParams.get('sortDir') || 'desc';
 
     // =========================================================================
-    // STRICT PROJECT ISOLATION - No Central fallback!
-    // Each project MUST have its own database credentials
+    // PROJECT CLIENT - Local or External
     // =========================================================================
 
-    const clientResult = createProjectClient({
-      supabase_url: project.supabase_url,
-      supabase_service_key: project.supabase_service_key,
-      table_name: tableName,
-      is_configured: project.is_configured,
-    });
+    // Check if this is a LOCAL project (data stored in main Supabase)
+    const isLocalProject = !project.supabase_url || project.storage_mode === 'local';
 
-    if (!clientResult.success) {
-      console.error('Project client creation failed:', project.name, clientResult.errorCode, clientResult.error);
-      return NextResponse.json({
-        error: 'מסד הנתונים של הפרויקט לא מוגדר',
-        details: clientResult.error,
-        errorCode: clientResult.errorCode,
-        action: 'configure_project',
-        noData: true
-      }, { status: 400 });
+    let projectClient;
+
+    if (isLocalProject) {
+      // Use main Supabase client for local projects
+      projectClient = supabase;
+      console.log('Using main Supabase for local project:', project.name, 'table:', tableName);
+    } else {
+      // STRICT PROJECT ISOLATION - Each project MUST have its own database credentials
+      const clientResult = createProjectClient({
+        supabase_url: project.supabase_url,
+        supabase_service_key: project.supabase_service_key,
+        table_name: tableName,
+        is_configured: project.is_configured,
+      });
+
+      if (!clientResult.success) {
+        console.error('Project client creation failed:', project.name, clientResult.errorCode, clientResult.error);
+        return NextResponse.json({
+          error: 'מסד הנתונים של הפרויקט לא מוגדר',
+          details: clientResult.error,
+          errorCode: clientResult.errorCode,
+          action: 'configure_project',
+          noData: true
+        }, { status: 400 });
+      }
+
+      projectClient = clientResult.client!;
+      console.log('Connected to external project database:', project.name, 'table:', tableName);
     }
-
-    const projectClient = clientResult.client!;
-    console.log('Connected to project database:', project.name, 'table:', tableName);
 
     // Check if this is a known view schema
     const viewSchema = VIEW_SCHEMAS[tableName];

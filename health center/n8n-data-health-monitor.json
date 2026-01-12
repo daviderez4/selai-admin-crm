@@ -1,0 +1,470 @@
+{
+  "name": "SELAI - Data Health Monitor",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 1
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT \n  project_id,\n  table_name,\n  supabase_count,\n  base44_count,\n  discrepancy,\n  health_score,\n  health_status,\n  last_sync_at,\n  pending_syncs,\n  failed_syncs,\n  last_error\nFROM sync_status\nWHERE health_status != 'healthy'\n  OR pending_syncs > 10\n  OR failed_syncs > 0\nORDER BY health_score ASC"
+      },
+      "id": "check-sync-status",
+      "name": "Check Sync Status",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [450, 300],
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-creds",
+          "name": "Supabase SELAI"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.health_score }}",
+              "operation": "smaller",
+              "value2": 70
+            }
+          ]
+        }
+      },
+      "id": "check-critical",
+      "name": "Is Critical?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT \n  id,\n  table_name,\n  record_id,\n  issue_type,\n  severity,\n  field_name,\n  current_value,\n  error_message,\n  detected_at\nFROM data_quality_issues\nWHERE status = 'open'\n  AND severity IN ('critical', 'error')\nORDER BY \n  CASE severity WHEN 'critical' THEN 1 WHEN 'error' THEN 2 ELSE 3 END,\n  detected_at DESC\nLIMIT 20"
+      },
+      "id": "get-critical-issues",
+      "name": "Get Critical Issues",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [850, 200],
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-creds",
+          "name": "Supabase SELAI"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "messages": {
+          "values": [
+            {
+              "content": "אתה אנליסט מערכות SELAI. נתח את הבעיות הבאות ותן המלצות:\n\n{{ JSON.stringify($json, null, 2) }}\n\nתן סיכום קצר בעברית (3-5 נקודות) עם:\n1. חומרת הבעיה\n2. השפעה על המערכת\n3. פעולות מומלצות\n4. עדיפות לטיפול"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "analyze-issues",
+      "name": "AI Analysis",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.4,
+      "position": [1050, 200],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai-creds",
+          "name": "OpenAI SELAI"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "resource": "message",
+        "operation": "post",
+        "channel": {
+          "__rl": true,
+          "value": "#selai-alerts",
+          "mode": "name"
+        },
+        "text": "🚨 *התראת בריאות נתונים SELAI*\n\n*טבלאות בעייתיות:*\n{{ $('Check Sync Status').all().map(item => `• ${item.json.table_name}: ${item.json.health_score}% (${item.json.health_status})`).join('\\n') }}\n\n*ניתוח AI:*\n{{ $json.message.content }}\n\n_זמן: {{ new Date().toLocaleString('he-IL') }}_",
+        "otherOptions": {
+          "mrkdwn": true
+        }
+      },
+      "id": "send-alert",
+      "name": "Send Slack Alert",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.1,
+      "position": [1250, 200],
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "slack-creds",
+          "name": "Slack SELAI"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "tableId": "sync_history",
+        "dataToSend": "autoMapInputData",
+        "options": {}
+      },
+      "id": "log-check",
+      "name": "Log Health Check",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [850, 400],
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-creds",
+          "name": "Supabase SELAI"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare log entry\nconst items = $input.all();\n\nreturn [{\n  json: {\n    project_id: 'default',\n    sync_type: 'health_check',\n    source_system: 'n8n',\n    target_system: 'monitoring',\n    tables_synced: items.map(i => i.json.table_name),\n    status: items.some(i => i.json.health_score < 50) ? 'warning' : 'completed',\n    records_processed: items.length,\n    records_created: 0,\n    records_updated: 0,\n    records_failed: items.filter(i => i.json.health_status === 'critical').length,\n    errors: items.filter(i => i.json.last_error).map(i => ({\n      table: i.json.table_name,\n      error: i.json.last_error\n    })),\n    trigger_source: 'scheduled'\n  }\n}];"
+      },
+      "id": "prepare-log",
+      "name": "Prepare Log Entry",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [650, 400]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "data-health-scan",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Manual Scan Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [250, 500]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT scan_data_quality('{{ $json.body.project_id || 'default' }}', {{ $json.body.table_name ? \"'\" + $json.body.table_name + \"'\" : 'NULL' }}) as issues_found"
+      },
+      "id": "run-scan",
+      "name": "Run Quality Scan",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [450, 500],
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-creds",
+          "name": "Supabase SELAI"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT \n  issue_type,\n  severity,\n  COUNT(*) as count\nFROM data_quality_issues\nWHERE project_id = '{{ $json.body.project_id || 'default' }}'\n  AND status = 'open'\nGROUP BY issue_type, severity\nORDER BY \n  CASE severity WHEN 'critical' THEN 1 WHEN 'error' THEN 2 WHEN 'warning' THEN 3 ELSE 4 END"
+      },
+      "id": "get-scan-results",
+      "name": "Get Scan Results",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [650, 500],
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-creds",
+          "name": "Supabase SELAI"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ {\n  success: true,\n  issues_found: $('Run Quality Scan').first().json.issues_found,\n  summary: $json,\n  timestamp: new Date().toISOString()\n} }}"
+      },
+      "id": "respond-scan",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [850, 500]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "auto-fix-issues",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-autofix",
+      "name": "Auto-Fix Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [250, 700]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT \n  id,\n  table_name,\n  record_id,\n  issue_type,\n  field_name,\n  current_value,\n  suggested_fix\nFROM data_quality_issues\nWHERE project_id = '{{ $json.body.project_id || 'default' }}'\n  AND status = 'open'\n  AND auto_fixable = true\n  AND suggested_fix IS NOT NULL\nLIMIT {{ $json.body.limit || 50 }}"
+      },
+      "id": "get-fixable-issues",
+      "name": "Get Fixable Issues",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [450, 700],
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-creds",
+          "name": "Supabase SELAI"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Process each fixable issue\nconst items = $input.all();\nconst results = [];\n\nfor (const item of items) {\n  const { table_name, record_id, field_name, suggested_fix, id } = item.json;\n  \n  results.push({\n    json: {\n      issue_id: id,\n      table_name,\n      record_id,\n      field_name,\n      new_value: suggested_fix,\n      // SQL to execute\n      update_sql: `UPDATE ${table_name} SET ${field_name} = '${suggested_fix}' WHERE id = '${record_id}'`,\n      resolve_sql: `UPDATE data_quality_issues SET status = 'resolved', resolved_at = NOW(), resolution_notes = 'תוקן אוטומטית' WHERE id = '${id}'`\n    }\n  });\n}\n\nreturn results;"
+      },
+      "id": "prepare-fixes",
+      "name": "Prepare Fixes",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [650, 700]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "{{ $json.update_sql }}; {{ $json.resolve_sql }};"
+      },
+      "id": "apply-fixes",
+      "name": "Apply Fixes",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [850, 700],
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-creds",
+          "name": "Supabase SELAI"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Aggregate results\nconst items = $input.all();\n\nreturn [{\n  json: {\n    success: true,\n    fixed_count: items.length,\n    fixes: items.map(i => ({\n      table: i.json.table_name,\n      record: i.json.record_id,\n      field: i.json.field_name\n    })),\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "aggregate-results",
+      "name": "Aggregate Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1050, 700]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}"
+      },
+      "id": "respond-fix",
+      "name": "Respond Fix",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1250, 700]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Check Sync Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Sync Status": {
+      "main": [
+        [
+          {
+            "node": "Is Critical?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Prepare Log Entry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Critical?": {
+      "main": [
+        [
+          {
+            "node": "Get Critical Issues",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Critical Issues": {
+      "main": [
+        [
+          {
+            "node": "AI Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Analysis": {
+      "main": [
+        [
+          {
+            "node": "Send Slack Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Log Entry": {
+      "main": [
+        [
+          {
+            "node": "Log Health Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Scan Webhook": {
+      "main": [
+        [
+          {
+            "node": "Run Quality Scan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run Quality Scan": {
+      "main": [
+        [
+          {
+            "node": "Get Scan Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Scan Results": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Auto-Fix Webhook": {
+      "main": [
+        [
+          {
+            "node": "Get Fixable Issues",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Fixable Issues": {
+      "main": [
+        [
+          {
+            "node": "Prepare Fixes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Fixes": {
+      "main": [
+        [
+          {
+            "node": "Apply Fixes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apply Fixes": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Results": {
+      "main": [
+        [
+          {
+            "node": "Respond Fix",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "SELAI",
+      "createdAt": "2026-01-12T00:00:00.000Z",
+      "updatedAt": "2026-01-12T00:00:00.000Z"
+    },
+    {
+      "name": "Data Health",
+      "createdAt": "2026-01-12T00:00:00.000Z",
+      "updatedAt": "2026-01-12T00:00:00.000Z"
+    }
+  ],
+  "triggerCount": 3,
+  "updatedAt": "2026-01-12T00:00:00.000Z",
+  "versionId": "1"
+}

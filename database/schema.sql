@@ -17,14 +17,30 @@ DROP FUNCTION IF EXISTS update_updated_at_column();
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- Projects table
+-- Supports two storage modes:
+--   'local': Data stored in main Supabase (Excel import only)
+--   'external': Data stored in separate Supabase instance
 CREATE TABLE projects (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
   name VARCHAR(255) NOT NULL,
-  supabase_url TEXT NOT NULL,
-  supabase_anon_key TEXT NOT NULL,
-  supabase_service_key TEXT NOT NULL,
+  -- Supabase credentials (nullable for local mode)
+  supabase_url TEXT,
+  supabase_anon_key TEXT,
+  supabase_service_key TEXT,
   service_key_encrypted TEXT, -- Legacy column for backwards compatibility
   description TEXT,
+  -- Storage and data configuration
+  storage_mode VARCHAR(20) DEFAULT 'local' CHECK (storage_mode IN ('local', 'external')),
+  table_name VARCHAR(255) DEFAULT 'master_data',
+  data_type VARCHAR(50) DEFAULT 'custom',
+  -- Visual customization
+  icon VARCHAR(50) DEFAULT 'layout-dashboard',
+  color VARCHAR(30) DEFAULT 'slate',
+  -- Connection status
+  is_configured BOOLEAN DEFAULT false,
+  connection_last_tested TIMESTAMP WITH TIME ZONE,
+  connection_error TEXT,
+  -- Timestamps
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   created_by UUID REFERENCES auth.users(id) NOT NULL

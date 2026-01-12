@@ -311,6 +311,70 @@ export async function testProjectConnection(
   }
 }
 
+// ============================================================================
+// Local Project Support
+// ============================================================================
+
+export interface ProjectWithStorageMode {
+  supabase_url?: string | null;
+  supabase_service_key?: string | null;
+  table_name?: string;
+  is_configured?: boolean;
+  storage_mode?: 'local' | 'external';
+}
+
+/**
+ * Determines if a project is a "local" project (data stored in main Supabase).
+ * Local projects don't need external credentials.
+ */
+export function isLocalProject(project: ProjectWithStorageMode): boolean {
+  return !project.supabase_url || project.storage_mode === 'local';
+}
+
+/**
+ * Gets the appropriate Supabase client for a project.
+ * For local projects, returns null (caller should use main Supabase client).
+ * For external projects, creates a project-specific client.
+ *
+ * @param project - Project object with credentials
+ * @param mainClient - The main Supabase client (for local projects)
+ * @returns { client, isLocal, error }
+ */
+export function getProjectClient<T extends SupabaseClient>(
+  project: ProjectWithStorageMode,
+  mainClient: T
+): { client: T | SupabaseClient; isLocal: boolean; error?: string; errorCode?: ProjectClientErrorCode } {
+  // Check if local project
+  if (isLocalProject(project)) {
+    return {
+      client: mainClient,
+      isLocal: true,
+    };
+  }
+
+  // External project - create project-specific client
+  const result = createProjectClient({
+    supabase_url: project.supabase_url || '',
+    supabase_service_key: project.supabase_service_key || '',
+    table_name: project.table_name || 'master_data',
+    is_configured: project.is_configured,
+  });
+
+  if (!result.success || !result.client) {
+    return {
+      client: mainClient, // Fallback, but with error
+      isLocal: false,
+      error: result.error,
+      errorCode: result.errorCode,
+    };
+  }
+
+  return {
+    client: result.client,
+    isLocal: false,
+  };
+}
+
 /**
  * Tests connection using encrypted credentials from a project record.
  *

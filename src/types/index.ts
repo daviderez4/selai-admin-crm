@@ -5,11 +5,14 @@
 export interface Project {
   id: string;
   name: string;
-  supabase_url: string;
-  supabase_anon_key: string;
-  supabase_service_key: string;
+  // Supabase credentials (nullable for local mode)
+  supabase_url?: string | null;
+  supabase_anon_key?: string | null;
+  supabase_service_key?: string | null;
   service_key_encrypted?: string; // Legacy column
   description?: string;
+  // Storage and data configuration
+  storage_mode: 'local' | 'external';
   table_name: string;
   data_type?: 'accumulation' | 'insurance' | 'processes' | 'commissions' | 'custom';
   icon?: string;

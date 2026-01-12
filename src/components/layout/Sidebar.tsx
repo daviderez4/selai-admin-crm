@@ -27,6 +27,7 @@ import {
   Calendar,
   MessageSquare,
   Megaphone,
+  Activity,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -260,6 +261,20 @@ export function Sidebar() {
       href: '/audit',
       icon: FileText,
     },
+    // RLS Documentation - only for admins
+    ...(isAdmin() ? [{
+      id: 'rls-docs',
+      title: 'תיעוד הרשאות',
+      href: '/rls-docs',
+      icon: Shield,
+    }] : []),
+    // Admin Panel - only for admins
+    ...(isAdmin() ? [{
+      id: 'admin',
+      title: 'פאנל ניהול',
+      href: '/admin',
+      icon: Activity,
+    }] : []),
     {
       id: 'settings',
       title: 'הגדרות מערכת',

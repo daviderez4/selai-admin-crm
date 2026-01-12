@@ -65,9 +65,9 @@ const roleLabels: Record<string, string> = {
 };
 
 const roleColors: Record<string, string> = {
-  admin: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30',
-  editor: 'bg-blue-500/10 text-blue-400 border-blue-500/30',
-  viewer: 'bg-slate-500/10 text-slate-400 border-slate-500/30',
+  admin: 'bg-blue-50 text-blue-600 border-blue-200',
+  editor: 'bg-cyan-50 text-cyan-600 border-cyan-200',
+  viewer: 'bg-slate-500/10 text-slate-500 border-slate-500/30',
 };
 
 export default function UsersPage() {
@@ -248,13 +248,13 @@ export default function UsersPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-xl font-semibold text-white">משתמשים</h2>
-            <p className="text-slate-400">נהל גישה למשתמשים בפרויקטים שלך</p>
+            <h2 className="text-xl font-semibold text-slate-800">משתמשים</h2>
+            <p className="text-slate-500">נהל גישה למשתמשים בפרויקטים שלך</p>
           </div>
           <div className="flex gap-2">
             <Button
               variant="outline"
-              className="border-slate-600"
+              className="border-slate-200"
               onClick={fetchUsers}
               disabled={isLoading}
             >
@@ -262,7 +262,7 @@ export default function UsersPage() {
               רענן
             </Button>
             <Button
-              className="bg-emerald-500 hover:bg-emerald-600"
+              className="bg-blue-600 hover:bg-blue-700 text-white"
               onClick={() => setIsInviteOpen(true)}
             >
               <Plus className="h-4 w-4 ml-2" />
@@ -273,9 +273,9 @@ export default function UsersPage() {
 
         {/* Error State */}
         {error && (
-          <Card className="bg-red-500/10 border-red-500/30">
+          <Card className="bg-red-50 border-red-200">
             <CardContent className="p-4">
-              <p className="text-red-400">{error}</p>
+              <p className="text-red-600">{error}</p>
             </CardContent>
           </Card>
         )}
@@ -283,44 +283,44 @@ export default function UsersPage() {
         {/* Loading State */}
         {isLoading && (
           <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin text-emerald-500" />
+            <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
           </div>
         )}
 
         {/* Users Table */}
         {!isLoading && users.length > 0 && (
-          <Card className="bg-slate-800/50 border-slate-700">
+          <Card className="bg-white border-slate-200 shadow-sm">
             <CardContent className="p-0">
               <Table>
-                <TableHeader className="bg-slate-800/50">
-                  <TableRow className="border-slate-700 hover:bg-transparent">
-                    <TableHead className="text-slate-300 text-right">משתמש</TableHead>
-                    <TableHead className="text-slate-300 text-right">תפקיד</TableHead>
-                    <TableHead className="text-slate-300 text-right">פרויקטים</TableHead>
-                    <TableHead className="text-slate-300 text-right w-12"></TableHead>
+                <TableHeader className="bg-slate-50">
+                  <TableRow className="border-slate-200 hover:bg-transparent">
+                    <TableHead className="text-slate-700 text-right">משתמש</TableHead>
+                    <TableHead className="text-slate-700 text-right">תפקיד</TableHead>
+                    <TableHead className="text-slate-700 text-right">פרויקטים</TableHead>
+                    <TableHead className="text-slate-700 text-right w-12"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {users.map((user) => (
-                    <TableRow key={user.id} className="border-slate-700">
+                    <TableRow key={user.id} className="border-slate-200">
                       <TableCell>
                         <div className="flex items-center gap-3">
                           <Avatar className="h-8 w-8">
-                            <AvatarFallback className="bg-slate-700 text-emerald-400 text-xs">
+                            <AvatarFallback className="bg-slate-100 text-blue-600 text-xs">
                               {user.email.slice(0, 2).toUpperCase()}
                             </AvatarFallback>
                           </Avatar>
                           <div>
                             <div className="flex items-center gap-2">
                               <Mail className="h-4 w-4 text-slate-500" />
-                              <span className="text-white">{user.email}</span>
+                              <span className="text-slate-800">{user.email}</span>
                             </div>
                             {user.full_name && (
-                              <span className="text-slate-400 text-sm">{user.full_name}</span>
+                              <span className="text-slate-500 text-sm">{user.full_name}</span>
                             )}
                           </div>
                           {user.id === currentUserId && (
-                            <Badge variant="outline" className="border-emerald-500 text-emerald-400 text-xs">
+                            <Badge variant="outline" className="border-blue-500 text-blue-600 text-xs">
                               אתה
                             </Badge>
                           )}
@@ -337,7 +337,7 @@ export default function UsersPage() {
                             <Badge
                               key={project.id}
                               variant="outline"
-                              className="border-slate-600 text-slate-400 text-xs"
+                              className="border-slate-200 text-slate-500 text-xs"
                               title={`${project.name} - ${roleLabels[project.role]}`}
                             >
                               {project.name}
@@ -350,13 +350,13 @@ export default function UsersPage() {
                         {user.id !== currentUserId && (
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="text-slate-400">
+                              <Button variant="ghost" size="icon" className="text-slate-500">
                                 <MoreVertical className="h-4 w-4" />
                               </Button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="bg-slate-800 border-slate-700">
+                            <DropdownMenuContent align="end" className="bg-white border-slate-200">
                               <DropdownMenuItem
-                                className="text-slate-300 focus:bg-slate-700 cursor-pointer"
+                                className="text-slate-700 focus:bg-slate-100 cursor-pointer"
                                 onClick={() => openEditDialog(user)}
                               >
                                 <Edit className="h-4 w-4 ml-2" />
@@ -365,7 +365,7 @@ export default function UsersPage() {
                               {user.projects.map(project => (
                                 <DropdownMenuItem
                                   key={project.id}
-                                  className="text-red-400 focus:bg-red-500/10 cursor-pointer"
+                                  className="text-red-600 focus:bg-red-50 cursor-pointer"
                                   onClick={() => handleRemoveAccess(user.id, project.id, project.name)}
                                 >
                                   <Trash2 className="h-4 w-4 ml-2" />
@@ -386,13 +386,13 @@ export default function UsersPage() {
 
         {/* Empty State */}
         {!isLoading && users.length === 0 && !error && (
-          <Card className="bg-slate-800/50 border-slate-700">
+          <Card className="bg-white border-slate-200 shadow-sm">
             <CardContent className="p-12 text-center">
               <Users className="h-12 w-12 text-slate-500 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-white mb-2">אין משתמשים</h3>
-              <p className="text-slate-400 mb-4">הזמן משתמשים לפרויקטים שלך</p>
+              <h3 className="text-lg font-medium text-slate-800 mb-2">אין משתמשים</h3>
+              <p className="text-slate-500 mb-4">הזמן משתמשים לפרויקטים שלך</p>
               <Button
-                className="bg-emerald-500 hover:bg-emerald-600"
+                className="bg-blue-600 hover:bg-blue-700 text-white"
                 onClick={() => setIsInviteOpen(true)}
               >
                 <Plus className="h-4 w-4 ml-2" />
@@ -404,13 +404,13 @@ export default function UsersPage() {
 
         {/* Invite Dialog */}
         <Dialog open={isInviteOpen} onOpenChange={setIsInviteOpen}>
-          <DialogContent className="bg-slate-900 border-slate-700" dir="rtl">
+          <DialogContent className="bg-white border-slate-200" dir="rtl">
             <DialogHeader>
-              <DialogTitle className="text-white">הזמנת משתמש חדש</DialogTitle>
+              <DialogTitle className="text-slate-800">הזמנת משתמש חדש</DialogTitle>
             </DialogHeader>
             <div className="space-y-4 py-4">
               <div className="space-y-2">
-                <Label className="text-slate-300">אימייל</Label>
+                <Label className="text-slate-700">אימייל</Label>
                 <Input
                   type="email"
                   placeholder="user@example.com"
@@ -418,36 +418,36 @@ export default function UsersPage() {
                   onChange={(e) =>
                     setInviteData({ ...inviteData, email: e.target.value })
                   }
-                  className="bg-slate-800 border-slate-700 text-white"
+                  className="bg-white border-slate-200 text-slate-800"
                 />
               </div>
               <div className="space-y-2">
-                <Label className="text-slate-300">תפקיד</Label>
+                <Label className="text-slate-700">תפקיד</Label>
                 <Select
                   value={inviteData.role}
                   onValueChange={(value) =>
                     setInviteData({ ...inviteData, role: value })
                   }
                 >
-                  <SelectTrigger className="bg-slate-800 border-slate-700">
+                  <SelectTrigger className="bg-white border-slate-200">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className="bg-slate-800 border-slate-700">
-                    <SelectItem value="admin" className="text-white focus:bg-slate-700">
+                  <SelectContent className="bg-white border-slate-200">
+                    <SelectItem value="admin" className="text-slate-800 focus:bg-slate-100">
                       מנהל - גישה מלאה
                     </SelectItem>
-                    <SelectItem value="editor" className="text-white focus:bg-slate-700">
+                    <SelectItem value="editor" className="text-slate-800 focus:bg-slate-100">
                       עורך - קריאה ועריכה
                     </SelectItem>
-                    <SelectItem value="viewer" className="text-white focus:bg-slate-700">
+                    <SelectItem value="viewer" className="text-slate-800 focus:bg-slate-100">
                       צופה - קריאה בלבד
                     </SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label className="text-slate-300">פרויקטים</Label>
-                <div className="space-y-2 max-h-48 overflow-y-auto p-2 bg-slate-800 rounded-md border border-slate-700">
+                <Label className="text-slate-700">פרויקטים</Label>
+                <div className="space-y-2 max-h-48 overflow-y-auto p-2 bg-slate-50 rounded-md border border-slate-200">
                   {managedProjects.length === 0 ? (
                     <p className="text-slate-500 text-sm">אין פרויקטים זמינים</p>
                   ) : (
@@ -460,7 +460,7 @@ export default function UsersPage() {
                         />
                         <label
                           htmlFor={project.id}
-                          className="text-white text-sm cursor-pointer"
+                          className="text-slate-800 text-sm cursor-pointer"
                         >
                           {project.name}
                         </label>
@@ -469,13 +469,13 @@ export default function UsersPage() {
                   )}
                 </div>
                 {inviteData.projectIds.length > 0 && (
-                  <p className="text-slate-400 text-xs">
+                  <p className="text-slate-500 text-xs">
                     נבחרו {inviteData.projectIds.length} פרויקטים
                   </p>
                 )}
               </div>
               <Button
-                className="w-full bg-emerald-500 hover:bg-emerald-600"
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white"
                 onClick={handleInvite}
                 disabled={isInviting}
               >
@@ -497,25 +497,25 @@ export default function UsersPage() {
 
         {/* Edit Dialog */}
         <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
-          <DialogContent className="bg-slate-900 border-slate-700" dir="rtl">
+          <DialogContent className="bg-white border-slate-200" dir="rtl">
             <DialogHeader>
-              <DialogTitle className="text-white">
+              <DialogTitle className="text-slate-800">
                 עריכת הרשאות - {editUser?.email}
               </DialogTitle>
             </DialogHeader>
             <div className="space-y-4 py-4">
               <div className="space-y-2">
-                <Label className="text-slate-300">פרויקט</Label>
+                <Label className="text-slate-700">פרויקט</Label>
                 <Select value={editProjectId} onValueChange={setEditProjectId}>
-                  <SelectTrigger className="bg-slate-800 border-slate-700">
+                  <SelectTrigger className="bg-white border-slate-200">
                     <SelectValue placeholder="בחר פרויקט" />
                   </SelectTrigger>
-                  <SelectContent className="bg-slate-800 border-slate-700">
+                  <SelectContent className="bg-white border-slate-200">
                     {managedProjects.map((project) => (
                       <SelectItem
                         key={project.id}
                         value={project.id}
-                        className="text-white focus:bg-slate-700"
+                        className="text-slate-800 focus:bg-slate-100"
                       >
                         {project.name}
                       </SelectItem>
@@ -524,26 +524,26 @@ export default function UsersPage() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label className="text-slate-300">תפקיד</Label>
+                <Label className="text-slate-700">תפקיד</Label>
                 <Select value={editRole} onValueChange={setEditRole}>
-                  <SelectTrigger className="bg-slate-800 border-slate-700">
+                  <SelectTrigger className="bg-white border-slate-200">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className="bg-slate-800 border-slate-700">
-                    <SelectItem value="admin" className="text-white focus:bg-slate-700">
+                  <SelectContent className="bg-white border-slate-200">
+                    <SelectItem value="admin" className="text-slate-800 focus:bg-slate-100">
                       מנהל - גישה מלאה
                     </SelectItem>
-                    <SelectItem value="editor" className="text-white focus:bg-slate-700">
+                    <SelectItem value="editor" className="text-slate-800 focus:bg-slate-100">
                       עורך - קריאה ועריכה
                     </SelectItem>
-                    <SelectItem value="viewer" className="text-white focus:bg-slate-700">
+                    <SelectItem value="viewer" className="text-slate-800 focus:bg-slate-100">
                       צופה - קריאה בלבד
                     </SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <Button
-                className="w-full bg-emerald-500 hover:bg-emerald-600"
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white"
                 onClick={handleUpdateAccess}
               >
                 <Shield className="h-4 w-4 ml-2" />

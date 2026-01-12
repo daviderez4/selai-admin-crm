@@ -54,7 +54,7 @@ export async function POST(request: Request) {
     // Get the project with encrypted key
     const { data: project, error: projectError } = await supabase
       .from('projects')
-      .select('supabase_service_key')
+      .select('supabase_service_key, storage_mode, supabase_url')
       .eq('id', projectId)
       .single();
 
@@ -62,6 +62,26 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { error: 'Project not found' },
         { status: 404 }
+      );
+    }
+
+    // Check if this is a LOCAL project (no external Supabase connection)
+    const isLocalProject = !project.supabase_url || project.storage_mode === 'local';
+
+    if (isLocalProject) {
+      // For local projects, return a flag indicating no external connection needed
+      return NextResponse.json({
+        serviceKey: null,
+        isLocal: true,
+        message: 'פרויקט מקומי - לא נדרש חיבור חיצוני'
+      });
+    }
+
+    // External project - decrypt the service key
+    if (!project.supabase_service_key) {
+      return NextResponse.json(
+        { error: 'Service key not configured for this project' },
+        { status: 400 }
       );
     }
 

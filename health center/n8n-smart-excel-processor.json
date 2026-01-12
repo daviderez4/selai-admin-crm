@@ -1,0 +1,421 @@
+{
+  "name": "SELAI - Smart Excel Processor",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "process-excel",
+        "responseMode": "responseNode",
+        "options": {
+          "rawBody": true
+        }
+      },
+      "id": "webhook-upload",
+      "name": "Receive Excel Upload",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "operation": "toJson",
+        "options": {
+          "headerRow": true,
+          "range": "",
+          "includeEmptyRows": false
+        }
+      },
+      "id": "parse-excel",
+      "name": "Parse Excel",
+      "type": "n8n-nodes-base.spreadsheetFile",
+      "typeVersion": 2,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract headers from first row\nconst items = $input.all();\n\nif (!items || items.length === 0) {\n  return [{ json: { error: 'No data found in file', headers: [] } }];\n}\n\nconst firstRow = items[0].json;\nconst headers = Object.keys(firstRow);\n\n// Get sample data (first 5 rows)\nconst sampleData = items.slice(0, 5).map(item => item.json);\n\nreturn [{\n  json: {\n    headers,\n    headerCount: headers.length,\n    rowCount: items.length,\n    sampleData,\n    projectId: $('Receive Excel Upload').first().json.body?.project_id || 'default',\n    fileName: $('Receive Excel Upload').first().json.body?.file_name || 'unknown.xlsx'\n  }\n}];"
+      },
+      "id": "extract-headers",
+      "name": "Extract Headers",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM detect_schema('{{ $json.projectId }}', ARRAY[{{ $json.headers.map(h => `'${h}'`).join(', ') }}])"
+      },
+      "id": "detect-schema",
+      "name": "Detect Schema",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [850, 300],
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-creds",
+          "name": "Supabase SELAI"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.confidence }}",
+              "operation": "largerEqual",
+              "value2": 70
+            }
+          ]
+        }
+      },
+      "id": "check-confidence",
+      "name": "High Confidence?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1050, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT column_mappings, normalization_rules FROM data_schemas WHERE id = '{{ $json.schema_id }}'"
+      },
+      "id": "get-schema-mappings",
+      "name": "Get Schema Mappings",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [1250, 200],
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-creds",
+          "name": "Supabase SELAI"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Apply automatic mappings based on known patterns\nconst headers = $('Extract Headers').first().json.headers;\nconst knownMappings = {\n  // Hebrew patterns\n  'שם פרטי': 'first_name',\n  'שם משפחה': 'last_name',\n  'שם מלא': 'full_name',\n  'שם': 'full_name',\n  'ת.ז.': 'id_number',\n  'תעודת זהות': 'id_number',\n  'מזהה': 'id_number',\n  'טלפון': 'phone',\n  'נייד': 'phone',\n  'טלפון נייד': 'phone',\n  'פלאפון': 'phone',\n  'אימייל': 'email',\n  'מייל': 'email',\n  'דואר אלקטרוני': 'email',\n  'כתובת': 'address',\n  'עיר': 'city',\n  'יתרה': 'balance',\n  'סכום': 'balance',\n  'יתרה לתאריך': 'balance',\n  'סטטוס': 'status',\n  'מצב': 'status',\n  'תאריך': 'date',\n  'תאריך הצטרפות': 'join_date',\n  'תאריך תחילה': 'start_date',\n  'תאריך סיום': 'end_date',\n  'הערות': 'notes',\n  'הערה': 'notes',\n  'פרמיה': 'premium',\n  'מספר פוליסה': 'policy_number',\n  'פוליסה': 'policy_number',\n  \n  // English patterns (case insensitive matching)\n  'first_name': 'first_name',\n  'last_name': 'last_name',\n  'full_name': 'full_name',\n  'name': 'full_name',\n  'phone': 'phone',\n  'mobile': 'phone',\n  'email': 'email',\n  'address': 'address',\n  'city': 'city',\n  'status': 'status',\n  'balance': 'balance',\n  'amount': 'balance',\n  'notes': 'notes'\n};\n\nconst suggestedMappings = {};\nconst unmappedHeaders = [];\n\nfor (const header of headers) {\n  const normalizedHeader = header.toLowerCase().trim();\n  \n  // Direct match\n  if (knownMappings[header]) {\n    suggestedMappings[header] = knownMappings[header];\n    continue;\n  }\n  \n  // Partial match\n  let found = false;\n  for (const [pattern, target] of Object.entries(knownMappings)) {\n    if (normalizedHeader.includes(pattern.toLowerCase()) || \n        pattern.toLowerCase().includes(normalizedHeader)) {\n      suggestedMappings[header] = target;\n      found = true;\n      break;\n    }\n  }\n  \n  if (!found) {\n    unmappedHeaders.push(header);\n  }\n}\n\nreturn [{\n  json: {\n    suggestedMappings,\n    mappedCount: Object.keys(suggestedMappings).length,\n    unmappedHeaders,\n    unmappedCount: unmappedHeaders.length,\n    confidence: (Object.keys(suggestedMappings).length / headers.length) * 100,\n    requiresManualReview: unmappedHeaders.length > 0\n  }\n}];"
+      },
+      "id": "suggest-mappings",
+      "name": "AI Suggest Mappings",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1250, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Apply the detected/suggested mappings to the data\nconst allData = $('Parse Excel').all();\nconst mappings = $('Get Schema Mappings').first()?.json?.column_mappings || \n                 $('AI Suggest Mappings').first()?.json?.suggestedMappings || {};\nconst normRules = $('Get Schema Mappings').first()?.json?.normalization_rules || {};\n\n// Normalization functions\nconst normalizers = {\n  normalize_israeli_phone: (val) => {\n    if (!val) return null;\n    let phone = String(val).replace(/[^0-9+]/g, '');\n    if (phone.startsWith('+972')) phone = '0' + phone.slice(4);\n    if (phone.startsWith('972')) phone = '0' + phone.slice(3);\n    return phone;\n  },\n  \n  normalize_israeli_id: (val) => {\n    if (!val) return null;\n    return String(val).replace(/[^0-9]/g, '').padStart(9, '0');\n  },\n  \n  parse_currency: (val) => {\n    if (!val) return null;\n    const num = String(val).replace(/[^0-9.-]/g, '');\n    return parseFloat(num) || null;\n  },\n  \n  normalize_date: (val) => {\n    if (!val) return null;\n    // Try to parse various date formats\n    const date = new Date(val);\n    if (!isNaN(date.getTime())) {\n      return date.toISOString().split('T')[0];\n    }\n    // Try DD/MM/YYYY format\n    const parts = String(val).split(/[\\/\\-.]/);\n    if (parts.length === 3) {\n      const [d, m, y] = parts;\n      const year = y.length === 2 ? '20' + y : y;\n      return `${year}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;\n    }\n    return val;\n  },\n  \n  normalize_email: (val) => {\n    if (!val) return null;\n    return String(val).toLowerCase().trim();\n  }\n};\n\n// Validation functions\nconst validators = {\n  phone: (val) => /^0[0-9]{9}$/.test(val),\n  email: (val) => /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(val),\n  id_number: (val) => {\n    if (!val || val.length !== 9) return false;\n    let sum = 0;\n    for (let i = 0; i < 9; i++) {\n      let digit = parseInt(val[i]) * ((i % 2) + 1);\n      if (digit > 9) digit -= 9;\n      sum += digit;\n    }\n    return sum % 10 === 0;\n  }\n};\n\nconst processedRows = [];\nconst validationErrors = [];\nlet validCount = 0;\nlet invalidCount = 0;\n\nfor (let rowIndex = 0; rowIndex < allData.length; rowIndex++) {\n  const row = allData[rowIndex].json;\n  const mappedRow = {\n    _original_row: rowIndex + 1,\n    _validation_errors: []\n  };\n  \n  for (const [sourceCol, targetField] of Object.entries(mappings)) {\n    let value = row[sourceCol];\n    \n    // Apply normalization if defined\n    const normRule = normRules[targetField];\n    if (normRule && normalizers[normRule]) {\n      value = normalizers[normRule](value);\n    }\n    \n    // Apply validation\n    const validator = validators[targetField];\n    if (validator && value && !validator(value)) {\n      mappedRow._validation_errors.push({\n        field: targetField,\n        value: value,\n        error: `ערך לא תקין עבור ${targetField}`\n      });\n    }\n    \n    mappedRow[targetField] = value;\n  }\n  \n  // Track validation stats\n  if (mappedRow._validation_errors.length > 0) {\n    invalidCount++;\n    validationErrors.push(...mappedRow._validation_errors.map(e => ({\n      ...e,\n      row: rowIndex + 1\n    })));\n  } else {\n    validCount++;\n  }\n  \n  processedRows.push({ json: mappedRow });\n}\n\n// Return processed data and stats\nreturn [{\n  json: {\n    stats: {\n      totalRows: allData.length,\n      validRows: validCount,\n      invalidRows: invalidCount,\n      validationRate: (validCount / allData.length * 100).toFixed(1) + '%'\n    },\n    validationErrors: validationErrors.slice(0, 100), // First 100 errors\n    processedData: processedRows.map(r => r.json)\n  }\n}];"
+      },
+      "id": "apply-mappings",
+      "name": "Apply Mappings & Validate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1450, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.stats.invalidRows }}",
+              "operation": "equal",
+              "value2": 0
+            }
+          ]
+        }
+      },
+      "id": "check-valid",
+      "name": "All Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1650, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare data for Supabase insert\nconst result = $input.first().json;\nconst processedData = result.processedData;\nconst targetTable = $('Receive Excel Upload').first().json.body?.target_table || 'contacts';\nconst projectId = $('Extract Headers').first().json.projectId;\n\n// Remove internal fields and add required fields\nconst cleanedRows = processedData.map(row => {\n  const { _original_row, _validation_errors, ...cleanRow } = row;\n  return {\n    ...cleanRow,\n    project_id: projectId,\n    created_at: new Date().toISOString(),\n    updated_at: new Date().toISOString()\n  };\n});\n\nreturn cleanedRows.map(row => ({ json: row }));"
+      },
+      "id": "prepare-insert",
+      "name": "Prepare for Insert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1850, 200]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "tableId": "={{ $('Receive Excel Upload').first().json.body?.target_table || 'contacts' }}",
+        "dataToSend": "autoMapInputData",
+        "options": {
+          "returnFields": "id"
+        }
+      },
+      "id": "insert-data",
+      "name": "Insert to Supabase",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [2050, 200],
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-creds",
+          "name": "Supabase SELAI"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "tableId": "schema_usage_log",
+        "dataToSend": "defineBelow",
+        "fieldsToSend": {
+          "values": [
+            {
+              "name": "project_id",
+              "value": "={{ $('Extract Headers').first().json.projectId }}"
+            },
+            {
+              "name": "schema_id",
+              "value": "={{ $('Detect Schema').first()?.json?.schema_id || null }}"
+            },
+            {
+              "name": "file_name",
+              "value": "={{ $('Extract Headers').first().json.fileName }}"
+            },
+            {
+              "name": "row_count",
+              "value": "={{ $('Apply Mappings & Validate').first().json.stats.totalRows }}"
+            },
+            {
+              "name": "valid_rows",
+              "value": "={{ $('Apply Mappings & Validate').first().json.stats.validRows }}"
+            },
+            {
+              "name": "invalid_rows",
+              "value": "={{ $('Apply Mappings & Validate').first().json.stats.invalidRows }}"
+            },
+            {
+              "name": "detection_method",
+              "value": "={{ $('Detect Schema').first()?.json?.confidence >= 70 ? 'auto' : 'suggested' }}"
+            },
+            {
+              "name": "confidence_score",
+              "value": "={{ $('Detect Schema').first()?.json?.confidence || $('AI Suggest Mappings').first()?.json?.confidence || 0 }}"
+            },
+            {
+              "name": "was_successful",
+              "value": true
+            },
+            {
+              "name": "validation_errors",
+              "value": "={{ JSON.stringify($('Apply Mappings & Validate').first().json.validationErrors.slice(0, 50)) }}"
+            }
+          ]
+        }
+      },
+      "id": "log-usage",
+      "name": "Log Usage",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [2250, 300],
+      "credentials": {
+        "supabaseApi": {
+          "id": "supabase-creds",
+          "name": "Supabase SELAI"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ {\n  success: true,\n  message: 'הקובץ עובד בהצלחה',\n  stats: $('Apply Mappings & Validate').first().json.stats,\n  insertedCount: $('Insert to Supabase').all().length,\n  schemaDetected: $('Detect Schema').first()?.json?.schema_name || 'זוהה אוטומטית',\n  confidence: ($('Detect Schema').first()?.json?.confidence || $('AI Suggest Mappings').first()?.json?.confidence || 0).toFixed(1) + '%'\n} }}"
+      },
+      "id": "respond-success",
+      "name": "Success Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [2450, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ {\n  success: false,\n  message: 'נמצאו שגיאות בנתונים - נדרשת בדיקה ידנית',\n  stats: $('Apply Mappings & Validate').first().json.stats,\n  validationErrors: $('Apply Mappings & Validate').first().json.validationErrors.slice(0, 20),\n  requiresReview: true\n} }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "id": "respond-errors",
+      "name": "Validation Errors Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1850, 400]
+    }
+  ],
+  "connections": {
+    "Receive Excel Upload": {
+      "main": [
+        [
+          {
+            "node": "Parse Excel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Excel": {
+      "main": [
+        [
+          {
+            "node": "Extract Headers",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Headers": {
+      "main": [
+        [
+          {
+            "node": "Detect Schema",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Detect Schema": {
+      "main": [
+        [
+          {
+            "node": "High Confidence?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "High Confidence?": {
+      "main": [
+        [
+          {
+            "node": "Get Schema Mappings",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "AI Suggest Mappings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Schema Mappings": {
+      "main": [
+        [
+          {
+            "node": "Apply Mappings & Validate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Suggest Mappings": {
+      "main": [
+        [
+          {
+            "node": "Apply Mappings & Validate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apply Mappings & Validate": {
+      "main": [
+        [
+          {
+            "node": "All Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "All Valid?": {
+      "main": [
+        [
+          {
+            "node": "Prepare for Insert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Validation Errors Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare for Insert": {
+      "main": [
+        [
+          {
+            "node": "Insert to Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert to Supabase": {
+      "main": [
+        [
+          {
+            "node": "Log Usage",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Usage": {
+      "main": [
+        [
+          {
+            "node": "Success Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "SELAI",
+      "createdAt": "2026-01-12T00:00:00.000Z"
+    },
+    {
+      "name": "Excel",
+      "createdAt": "2026-01-12T00:00:00.000Z"
+    },
+    {
+      "name": "Schema",
+      "createdAt": "2026-01-12T00:00:00.000Z"
+    }
+  ],
+  "triggerCount": 1,
+  "updatedAt": "2026-01-12T00:00:00.000Z"
+}

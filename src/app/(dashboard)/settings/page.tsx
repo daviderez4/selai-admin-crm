@@ -63,34 +63,34 @@ export default function SettingsPage() {
 
       <div className="flex-1 p-6 space-y-6 max-w-3xl">
         {/* Profile Settings */}
-        <Card className="bg-slate-800/50 border-slate-700">
+        <Card className="bg-white border-slate-200 shadow-sm">
           <CardHeader>
             <div className="flex items-center gap-2">
-              <User className="h-5 w-5 text-emerald-500" />
-              <CardTitle className="text-white">פרופיל</CardTitle>
+              <User className="h-5 w-5 text-blue-600" />
+              <CardTitle className="text-slate-800">פרופיל</CardTitle>
             </div>
-            <CardDescription className="text-slate-400">
+            <CardDescription className="text-slate-500">
               נהל את פרטי החשבון שלך
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label className="text-slate-300">אימייל</Label>
+              <Label className="text-slate-700">אימייל</Label>
               <Input
                 value={user?.email || ''}
                 disabled
-                className="bg-slate-900 border-slate-700 text-slate-400"
+                className="bg-white border-slate-200 text-slate-500"
               />
             </div>
             <div className="space-y-2">
-              <Label className="text-slate-300">שם מלא</Label>
+              <Label className="text-slate-700">שם מלא</Label>
               <Input
                 placeholder="הזן שם מלא"
                 defaultValue={user?.user_metadata?.full_name || ''}
-                className="bg-slate-900 border-slate-700 text-white"
+                className="bg-white border-slate-200 text-slate-800"
               />
             </div>
-            <Button className="bg-emerald-500 hover:bg-emerald-600">
+            <Button className="bg-blue-600 hover:bg-blue-700 text-white">
               <Check className="h-4 w-4 ml-2" />
               שמור שינויים
             </Button>
@@ -98,13 +98,13 @@ export default function SettingsPage() {
         </Card>
 
         {/* Security Settings */}
-        <Card className="bg-slate-800/50 border-slate-700">
+        <Card className="bg-white border-slate-200 shadow-sm">
           <CardHeader>
             <div className="flex items-center gap-2">
-              <Shield className="h-5 w-5 text-emerald-500" />
-              <CardTitle className="text-white">אבטחה</CardTitle>
+              <Shield className="h-5 w-5 text-blue-600" />
+              <CardTitle className="text-slate-800">אבטחה</CardTitle>
             </div>
-            <CardDescription className="text-slate-400">
+            <CardDescription className="text-slate-500">
               הגדרות אבטחה וגישה
             </CardDescription>
           </CardHeader>
@@ -113,8 +113,8 @@ export default function SettingsPage() {
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <Label className="text-white">אימות דו-שלבי (2FA)</Label>
-                  <p className="text-sm text-slate-400">
+                  <Label className="text-slate-800">אימות דו-שלבי (2FA)</Label>
+                  <p className="text-sm text-slate-500">
                     {is2FAEnabled
                       ? 'אימות דו-שלבי מופעל בחשבונך'
                       : 'הוסף שכבת אבטחה נוספת לחשבונך'}
@@ -128,11 +128,11 @@ export default function SettingsPage() {
                       value={disableCode}
                       onChange={(e) => setDisableCode(e.target.value.replace(/\D/g, ''))}
                       maxLength={6}
-                      className="w-24 bg-slate-900 border-slate-700 text-white text-center"
+                      className="w-24 bg-white border-slate-200 text-slate-800 text-center"
                     />
                     <Button
                       variant="outline"
-                      className="border-red-500/50 text-red-400 hover:bg-red-500/10"
+                      className="border-red-200 text-red-600 hover:bg-red-50"
                       onClick={handleDisable2FA}
                       disabled={is2FALoading}
                     >
@@ -141,7 +141,7 @@ export default function SettingsPage() {
                   </div>
                 ) : (
                   <Button
-                    className="bg-emerald-500 hover:bg-emerald-600"
+                    className="bg-blue-600 hover:bg-blue-700 text-white"
                     onClick={handleSetup2FA}
                   >
                     <Shield className="h-4 w-4 ml-2" />
@@ -151,28 +151,28 @@ export default function SettingsPage() {
               </div>
             </div>
 
-            <Separator className="bg-slate-700" />
+            <Separator className="bg-slate-200" />
 
             {/* Change Password */}
             <div className="space-y-4">
-              <Label className="text-white">שינוי סיסמה</Label>
+              <Label className="text-slate-800">שינוי סיסמה</Label>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label className="text-slate-400 text-sm">סיסמה חדשה</Label>
+                  <Label className="text-slate-500 text-sm">סיסמה חדשה</Label>
                   <Input
                     type="password"
-                    className="bg-slate-900 border-slate-700 text-white"
+                    className="bg-white border-slate-200 text-slate-800"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-slate-400 text-sm">אימות סיסמה</Label>
+                  <Label className="text-slate-500 text-sm">אימות סיסמה</Label>
                   <Input
                     type="password"
-                    className="bg-slate-900 border-slate-700 text-white"
+                    className="bg-white border-slate-200 text-slate-800"
                   />
                 </div>
               </div>
-              <Button variant="outline" className="border-slate-700 text-slate-300">
+              <Button variant="outline" className="border-slate-200 text-slate-700">
                 עדכן סיסמה
               </Button>
             </div>
@@ -180,62 +180,62 @@ export default function SettingsPage() {
         </Card>
 
         {/* Appearance Settings */}
-        <Card className="bg-slate-800/50 border-slate-700">
+        <Card className="bg-white border-slate-200 shadow-sm">
           <CardHeader>
             <div className="flex items-center gap-2">
-              <Moon className="h-5 w-5 text-emerald-500" />
-              <CardTitle className="text-white">תצוגה</CardTitle>
+              <Moon className="h-5 w-5 text-blue-600" />
+              <CardTitle className="text-slate-800">תצוגה</CardTitle>
             </div>
-            <CardDescription className="text-slate-400">
+            <CardDescription className="text-slate-500">
               התאם את מראה המערכת
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <Label className="text-white">עיצוב</Label>
-                <p className="text-sm text-slate-400">בחר את העיצוב המועדף</p>
+                <Label className="text-slate-800">עיצוב</Label>
+                <p className="text-sm text-slate-500">בחר את העיצוב המועדף</p>
               </div>
               <Select
                 value={settings?.theme || 'dark'}
                 onValueChange={(value) => handleThemeChange(value as 'dark' | 'light' | 'system')}
               >
-                <SelectTrigger className="w-32 bg-slate-900 border-slate-700">
+                <SelectTrigger className="w-32 bg-white border-slate-200">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="bg-slate-800 border-slate-700">
-                  <SelectItem value="dark" className="text-white focus:bg-slate-700">
+                <SelectContent className="bg-white border-slate-200">
+                  <SelectItem value="dark" className="text-slate-800 focus:bg-slate-100">
                     כהה
                   </SelectItem>
-                  <SelectItem value="light" className="text-white focus:bg-slate-700">
+                  <SelectItem value="light" className="text-slate-800 focus:bg-slate-100">
                     בהיר
                   </SelectItem>
-                  <SelectItem value="system" className="text-white focus:bg-slate-700">
+                  <SelectItem value="system" className="text-slate-800 focus:bg-slate-100">
                     מערכת
                   </SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
-            <Separator className="bg-slate-700" />
+            <Separator className="bg-slate-200" />
 
             <div className="flex items-center justify-between">
               <div>
-                <Label className="text-white">שפה</Label>
-                <p className="text-sm text-slate-400">בחר את שפת הממשק</p>
+                <Label className="text-slate-800">שפה</Label>
+                <p className="text-sm text-slate-500">בחר את שפת הממשק</p>
               </div>
               <Select
                 value={settings?.language || 'he'}
                 onValueChange={(value) => handleLanguageChange(value as 'he' | 'en')}
               >
-                <SelectTrigger className="w-32 bg-slate-900 border-slate-700">
+                <SelectTrigger className="w-32 bg-white border-slate-200">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="bg-slate-800 border-slate-700">
-                  <SelectItem value="he" className="text-white focus:bg-slate-700">
+                <SelectContent className="bg-white border-slate-200">
+                  <SelectItem value="he" className="text-slate-800 focus:bg-slate-100">
                     עברית
                   </SelectItem>
-                  <SelectItem value="en" className="text-white focus:bg-slate-700">
+                  <SelectItem value="en" className="text-slate-800 focus:bg-slate-100">
                     English
                   </SelectItem>
                 </SelectContent>

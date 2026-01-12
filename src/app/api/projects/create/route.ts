@@ -134,6 +134,7 @@ export async function POST(request: Request) {
         supabase_anon_key: mode === 'external' ? supabase_anon_key.trim() : null,
         supabase_service_key: encryptedServiceKey, // null for local mode
         description: description?.trim() || '',
+        storage_mode: mode, // 'local' or 'external'
         table_name: tableName,
         data_type: data_type || 'custom',
         icon: icon || 'layout-dashboard',

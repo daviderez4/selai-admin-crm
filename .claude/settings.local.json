@@ -30,7 +30,12 @@
       "Bash(findstr:*)",
       "Bash(netstat:*)",
       "Bash(head:*)",
-      "Bash(wc:*)"
+      "Bash(wc:*)",
+      "Bash(dir \"C:\\\\dev\\\\selai-admin-hub\\\\src\\\\app\\\\admin\")",
+      "Bash(dir \"C:\\\\dev\\\\selai-admin-hub\\\\src\\\\app\\\\api\\\\projects\\\\[id]\")",
+      "Bash(timeout:*)",
+      "Bash(ping:*)",
+      "Bash(xargs:*)"
     ]
   }
 }

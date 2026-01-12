@@ -114,13 +114,15 @@ export function ProjectCard({
                 <Settings className="ml-2 h-3.5 w-3.5" />
                 הגדרות
               </DropdownMenuItem>
-              <DropdownMenuItem
-                className="text-xs text-slate-600 focus:bg-slate-50 cursor-pointer"
-                onClick={() => window.open(project.supabase_url, '_blank')}
-              >
-                <ExternalLink className="ml-2 h-3.5 w-3.5" />
-                פתח בסופהבייס
-              </DropdownMenuItem>
+              {project.supabase_url && (
+                <DropdownMenuItem
+                  className="text-xs text-slate-600 focus:bg-slate-50 cursor-pointer"
+                  onClick={() => window.open(project.supabase_url!, '_blank')}
+                >
+                  <ExternalLink className="ml-2 h-3.5 w-3.5" />
+                  פתח בסופהבייס
+                </DropdownMenuItem>
+              )}
               <DropdownMenuSeparator className="bg-slate-100" />
               <DropdownMenuItem
                 className="text-xs text-red-500 focus:bg-red-50 cursor-pointer"

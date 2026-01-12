@@ -74,7 +74,7 @@ export async function GET(
     // Get project details
     const { data: project, error: projectError } = await supabase
       .from('projects')
-      .select('supabase_url, supabase_service_key, name, table_name, is_configured')
+      .select('supabase_url, supabase_service_key, name, table_name, is_configured, storage_mode')
       .eq('id', projectId)
       .single();
 
@@ -95,53 +95,98 @@ export async function GET(
       }, { status: 400 });
     }
 
-    // Create project client
-    const clientResult = createProjectClient({
-      supabase_url: project.supabase_url,
-      supabase_service_key: project.supabase_service_key,
-      table_name: tableName,
-      is_configured: project.is_configured,
-    });
+    // Determine if this is a local or external project
+    const isLocalProject = !project.supabase_url || project.storage_mode === 'local';
 
-    if (!clientResult.success) {
-      return NextResponse.json({
-        error: 'מסד הנתונים לא מוגדר',
-        details: clientResult.error,
-      }, { status: 400 });
+    let projectClient;
+
+    if (isLocalProject) {
+      // Use the main Supabase client for local projects
+      projectClient = supabase;
+    } else {
+      // Create project-specific client for external projects
+      const clientResult = createProjectClient({
+        supabase_url: project.supabase_url,
+        supabase_service_key: project.supabase_service_key,
+        table_name: tableName,
+        is_configured: project.is_configured,
+      });
+
+      if (!clientResult.success) {
+        return NextResponse.json({
+          error: 'מסד הנתונים לא מוגדר',
+          details: clientResult.error,
+        }, { status: 400 });
+      }
+
+      projectClient = clientResult.client!;
     }
-
-    const projectClient = clientResult.client!;
 
     // Parse query params
     const url = new URL(request.url);
     const provider = url.searchParams.get('provider');
     const agentName = url.searchParams.get('agent');
     const branch = url.searchParams.get('branch');
+    const month = url.searchParams.get('month');
     const fromDate = url.searchParams.get('from');
     const toDate = url.searchParams.get('to');
 
-    // Fetch all data (with limit for performance)
-    let query = projectClient
+    // First, get the total count
+    let countQuery = projectClient
       .from(tableName)
-      .select('*', { count: 'exact' });
+      .select('*', { count: 'exact', head: true });
 
-    if (provider) query = query.eq('provider', provider);
-    if (agentName) query = query.ilike('agent_name', `%${agentName}%`);
-    if (branch) query = query.eq('branch', branch);
-    if (fromDate) query = query.gte('processing_month', fromDate);
-    if (toDate) query = query.lte('processing_month', toDate);
+    if (provider) countQuery = countQuery.eq('provider', provider);
+    if (agentName) countQuery = countQuery.ilike('agent_name', `%${agentName}%`);
+    if (branch) countQuery = countQuery.eq('branch', branch);
+    if (month) {
+      const monthStart = `${month}-01`;
+      const monthEnd = `${month}-31`;
+      countQuery = countQuery.gte('processing_month', monthStart).lte('processing_month', monthEnd);
+    }
+    if (fromDate) countQuery = countQuery.gte('processing_month', fromDate);
+    if (toDate) countQuery = countQuery.lte('processing_month', toDate);
 
-    // Limit for dashboard performance
-    query = query.order('processing_month', { ascending: false }).limit(10000);
+    const { count: totalCount } = await countQuery;
+    const total = totalCount || 0;
 
-    const { data: rawData, error: queryError, count: totalCount } = await query;
+    // Fetch ALL data in chunks to get accurate totals
+    const CHUNK_SIZE = 1000;
+    const allData: Record<string, unknown>[] = [];
 
-    if (queryError) {
-      console.error('View dashboard query error:', queryError);
-      return NextResponse.json({ error: queryError.message }, { status: 500 });
+    for (let offset = 0; offset < total; offset += CHUNK_SIZE) {
+      let query = projectClient
+        .from(tableName)
+        .select('*');
+
+      if (provider) query = query.eq('provider', provider);
+      if (agentName) query = query.ilike('agent_name', `%${agentName}%`);
+      if (branch) query = query.eq('branch', branch);
+      if (month) {
+        const monthStart = `${month}-01`;
+        const monthEnd = `${month}-31`;
+        query = query.gte('processing_month', monthStart).lte('processing_month', monthEnd);
+      }
+      if (fromDate) query = query.gte('processing_month', fromDate);
+      if (toDate) query = query.lte('processing_month', toDate);
+
+      query = query.order('processing_month', { ascending: false }).range(offset, offset + CHUNK_SIZE - 1);
+
+      const { data: chunkData, error: chunkError } = await query;
+
+      if (chunkError) {
+        console.error('View dashboard chunk error:', chunkError);
+        return NextResponse.json({ error: chunkError.message }, { status: 500 });
+      }
+
+      if (chunkData) {
+        allData.push(...chunkData);
+      }
     }
 
-    const data = rawData || [];
+    console.log(`View dashboard: Fetched ${allData.length} records (total: ${total})`);
+
+    const data = allData;
 
     // Calculate statistics
     const agentMap = new Map<string, AgentStats>();
@@ -250,6 +295,10 @@ export async function GET(
     const uniqueProviders = [...new Set(data.map((r: Record<string, unknown>) => String(r.provider || '')))].filter(Boolean);
     const uniqueBranches = [...new Set(data.map((r: Record<string, unknown>) => String(r.branch || '')))].filter(Boolean);
     const uniqueAgents = [...new Set(data.map((r: Record<string, unknown>) => String(r.agent_name || '')))].filter(Boolean);
+    const uniqueMonths = [...new Set(data.map((r: Record<string, unknown>) => {
+      const date = String(r.processing_month || '');
+      return date.substring(0, 7); // Get YYYY-MM format
+    }))].filter(Boolean).sort((a, b) => b.localeCompare(a)); // Sort descending (newest first)
 
     return NextResponse.json({
       // Meta info
@@ -258,7 +307,7 @@ export async function GET(
 
       // Stats
       stats: {
-        totalRecords: totalCount || data.length,
+        totalRecords: total,
         totalCommission,
         totalPremium: isNifraim ? totalPremium : 0,
         totalAccumulation: isGemel ? totalAccumulation : 0,
@@ -278,6 +327,7 @@ export async function GET(
         providers: uniqueProviders,
         branches: uniqueBranches,
         agents: uniqueAgents.slice(0, 100), // Limit for UI performance
+        months: uniqueMonths,
       },
 
       // Recent records for table display

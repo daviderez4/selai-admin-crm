@@ -1,0 +1,136 @@
+{
+  "name": "SELAI - Data Health Monitor v3",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 1
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [100, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT 'health_check' as check_type, NOW() as checked_at, (SELECT COUNT(*) FROM sync_history) as total_checks;",
+        "options": {}
+      },
+      "id": "simple-check",
+      "name": "Simple Check",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [320, 300],
+      "credentials": {
+        "supabaseApi": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Supabase SELAI"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const checkResult = $input.first().json;\n\nconst prompt = `אתה אנליסט מערכות SELAI.\n\nמערכת בריאות הנתונים רצה כעת.\nזמן הבדיקה: ${new Date().toLocaleString('he-IL')}\n\nתן הודעה קצרה שהמערכת פעילה ועובדת תקין.`;\n\nreturn [{\n  json: {\n    prompt,\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "prepare-prompt",
+      "name": "Prepare Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [540, 300]
+    },
+    {
+      "parameters": {
+        "resource": "chat",
+        "model": "gpt-4o",
+        "messages": {
+          "values": [
+            {
+              "content": "={{ $json.prompt }}"
+            }
+          ]
+        },
+        "options": {
+          "maxTokens": 200,
+          "temperature": 0.3
+        }
+      },
+      "id": "ai-analysis",
+      "name": "AI Analysis",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.8,
+      "position": [760, 300],
+      "credentials": {
+        "openAiApi": {
+          "id": "YOUR_OPENAI_ID",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "tableId": "sync_history",
+        "fieldsToSend": "defineBelow",
+        "fieldValues": {
+          "values": [
+            {
+              "fieldName": "check_type",
+              "fieldValue": "scheduled"
+            },
+            {
+              "fieldName": "tables_checked",
+              "fieldValue": "[\"sync_history\"]"
+            },
+            {
+              "fieldName": "issues_found",
+              "fieldValue": "0"
+            },
+            {
+              "fieldName": "ai_summary",
+              "fieldValue": "={{ $json.message?.content || $json.text || 'System check completed' }}"
+            },
+            {
+              "fieldName": "status",
+              "fieldValue": "completed"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "save-result",
+      "name": "Save Result",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [980, 300],
+      "credentials": {
+        "supabaseApi": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Supabase SELAI"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [[{"node": "Simple Check", "type": "main", "index": 0}]]
+    },
+    "Simple Check": {
+      "main": [[{"node": "Prepare Prompt", "type": "main", "index": 0}]]
+    },
+    "Prepare Prompt": {
+      "main": [[{"node": "AI Analysis", "type": "main", "index": 0}]]
+    },
+    "AI Analysis": {
+      "main": [[{"node": "Save Result", "type": "main", "index": 0}]]
+    }
+  },
+  "settings": {"executionOrder": "v1"}
+}

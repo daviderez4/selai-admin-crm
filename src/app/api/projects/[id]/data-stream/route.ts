@@ -97,7 +97,7 @@ export async function GET(
     // Get project details
     const { data: project, error: projectError } = await supabase
       .from('projects')
-      .select('supabase_url, supabase_service_key, name, table_name, is_configured')
+      .select('supabase_url, supabase_service_key, name, table_name, is_configured, storage_mode')
       .eq('id', projectId)
       .single();
 
@@ -109,22 +109,34 @@ export async function GET(
     const viewSchema = VIEW_SCHEMAS[tableName];
     const isKnownView = !!viewSchema;
 
-    // Create project client
-    const clientResult = createProjectClient({
-      supabase_url: project.supabase_url,
-      supabase_service_key: project.supabase_service_key,
-      table_name: tableName,
-      is_configured: project.is_configured,
-    });
+    // Check if this is a LOCAL project (data stored in main Supabase)
+    const isLocalProject = !project.supabase_url || project.storage_mode === 'local';
 
-    if (!clientResult.success) {
-      return NextResponse.json({
-        error: 'מסד הנתונים לא מוגדר',
-        details: clientResult.error,
-      }, { status: 400 });
+    // For local projects, use the main Supabase client
+    // For external projects, create a project-specific client
+    let projectClient;
+
+    if (isLocalProject) {
+      // Use main Supabase client for local projects
+      projectClient = supabase;
+    } else {
+      // Create external project client
+      const clientResult = createProjectClient({
+        supabase_url: project.supabase_url,
+        supabase_service_key: project.supabase_service_key,
+        table_name: tableName,
+        is_configured: project.is_configured,
+      });
+
+      if (!clientResult.success) {
+        return NextResponse.json({
+          error: 'מסד הנתונים לא מוגדר',
+          details: clientResult.error,
+        }, { status: 400 });
+      }
+
+      projectClient = clientResult.client!;
     }
-
-    const projectClient = clientResult.client!;
 
     // Get total count
     const { count: totalCount, error: countError } = await projectClient

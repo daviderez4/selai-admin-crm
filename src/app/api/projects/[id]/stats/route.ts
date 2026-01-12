@@ -37,7 +37,7 @@ export async function GET(
     // Get project details
     const { data: project, error: projectError } = await supabase
       .from('projects')
-      .select('supabase_url, supabase_service_key, table_name, is_configured')
+      .select('supabase_url, supabase_service_key, table_name, is_configured, storage_mode')
       .eq('id', projectId)
       .single();
 
@@ -45,24 +45,32 @@ export async function GET(
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
     }
 
-    // STRICT PROJECT ISOLATION - No Central fallback!
-    const clientResult = createProjectClient({
-      supabase_url: project.supabase_url,
-      supabase_service_key: project.supabase_service_key,
-      table_name: tableName,
-      is_configured: project.is_configured,
-    });
+    // Check if this is a LOCAL project
+    const isLocalProject = !project.supabase_url || project.storage_mode === 'local';
 
-    if (!clientResult.success) {
-      return NextResponse.json({
-        error: 'מסד הנתונים של הפרויקט לא מוגדר',
-        details: clientResult.error,
-        errorCode: clientResult.errorCode,
-        action: 'configure_project',
-      }, { status: 400 });
+    let projectClient;
+
+    if (isLocalProject) {
+      projectClient = supabase;
+    } else {
+      const clientResult = createProjectClient({
+        supabase_url: project.supabase_url,
+        supabase_service_key: project.supabase_service_key,
+        table_name: tableName,
+        is_configured: project.is_configured,
+      });
+
+      if (!clientResult.success) {
+        return NextResponse.json({
+          error: 'מסד הנתונים של הפרויקט לא מוגדר',
+          details: clientResult.error,
+          errorCode: clientResult.errorCode,
+          action: 'configure_project',
+        }, { status: 400 });
+      }
+
+      projectClient = clientResult.client!;
     }
-
-    const projectClient = clientResult.client!;
 
     // Get total count
     const { count: totalRecords } = await projectClient
