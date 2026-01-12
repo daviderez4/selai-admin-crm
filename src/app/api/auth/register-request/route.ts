@@ -5,7 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createSelaiClient } from '@/lib/supabase/server';
 
 export async function POST(request: NextRequest) {
   try {
@@ -95,7 +95,7 @@ export async function POST(request: NextRequest) {
       }, { status: 500 });
     }
 
-    // Step 2: Try to find matching agent in external_agents
+    // Step 2: Try to find matching agent in external_agents (from SELAI database)
     let matchedExternalId = null;
     let matchScore = 0;
     let matchDetails: Record<string, any> = {};
@@ -106,8 +106,9 @@ export async function POST(request: NextRequest) {
       const normalizedPhone = phone.replace(/[-\s]/g, '');
       const phoneLastDigits = normalizedPhone.slice(-9);
 
-      // Search in external_agents directly
-      const { data: matchingAgents } = await supabase
+      // Search in external_agents from SELAI database
+      const selaiClient = createSelaiClient();
+      const { data: matchingAgents } = await selaiClient
         .from('external_agents')
         .select('id, full_name, email, mobile_phone, id_number')
         .eq('is_active_in_sela', true)

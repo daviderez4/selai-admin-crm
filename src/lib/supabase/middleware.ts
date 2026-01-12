@@ -36,7 +36,7 @@ export async function updateSession(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
   // Public routes that don't require authentication
-  const publicRoutes = ['/login', '/setup-2fa', '/verify', '/api/auth/callback', '/api/debug', '/landing', '/portal', '/register', '/register-agent'];
+  const publicRoutes = ['/login', '/signup', '/pending-approval', '/verify-profile', '/complete-profile', '/setup-2fa', '/verify', '/api/auth/callback', '/api/auth/register-request', '/api/selai/supervisors', '/api/debug', '/landing', '/portal', '/register', '/register-agent'];
   const isPublicRoute = pathname === '/' || publicRoutes.some(route => pathname.startsWith(route));
 
   // If user is not authenticated and trying to access protected route

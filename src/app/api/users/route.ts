@@ -108,10 +108,17 @@ export async function GET() {
       .select('id, name')
       .in('id', adminProjectIds);
 
+    // Fetch pending invitations
+    const { data: pendingInvitations } = await supabase
+      .from('pending_invitations')
+      .select('*')
+      .order('created_at', { ascending: false });
+
     return NextResponse.json({
       users,
       managedProjects: adminProjects || [],
-      currentUserId: user.id
+      currentUserId: user.id,
+      pendingInvitations: pendingInvitations || []
     });
 
   } catch (error) {

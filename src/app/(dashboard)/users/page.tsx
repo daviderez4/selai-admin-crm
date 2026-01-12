@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Users, Plus, Shield, Mail, MoreVertical, Trash2, Edit, Loader2, RefreshCw } from 'lucide-react';
+import { Users, Plus, Shield, Mail, MoreVertical, Trash2, Edit, Loader2, RefreshCw, Clock, Send } from 'lucide-react';
 import { Header } from '@/components/layout/Header';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -58,6 +58,15 @@ interface ManagedProject {
   name: string;
 }
 
+interface PendingInvitation {
+  id: string;
+  email: string;
+  role: string;
+  project_ids: string[];
+  created_at: string;
+  expires_at: string;
+}
+
 const roleLabels: Record<string, string> = {
   admin: 'מנהל',
   editor: 'עורך',
@@ -72,6 +81,7 @@ const roleColors: Record<string, string> = {
 
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
+  const [pendingInvitations, setPendingInvitations] = useState<PendingInvitation[]>([]);
   const [managedProjects, setManagedProjects] = useState<ManagedProject[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
@@ -104,6 +114,7 @@ export default function UsersPage() {
 
       const data = await response.json();
       setUsers(data.users || []);
+      setPendingInvitations(data.pendingInvitations || []);
       setManagedProjects(data.managedProjects || []);
       setCurrentUserId(data.currentUserId || '');
     } catch (err) {
@@ -285,6 +296,43 @@ export default function UsersPage() {
           <div className="flex items-center justify-center py-12">
             <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
           </div>
+        )}
+
+        {/* Pending Invitations */}
+        {!isLoading && pendingInvitations.length > 0 && (
+          <Card className="bg-amber-50 border-amber-200 shadow-sm">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Send className="h-5 w-5 text-amber-600" />
+                <h3 className="font-medium text-amber-800">הזמנות ממתינות ({pendingInvitations.length})</h3>
+              </div>
+              <div className="space-y-2">
+                {pendingInvitations.map((invitation) => (
+                  <div key={invitation.id} className="flex items-center justify-between p-3 bg-white rounded-lg border border-amber-100">
+                    <div className="flex items-center gap-3">
+                      <Avatar className="h-8 w-8">
+                        <AvatarFallback className="bg-amber-100 text-amber-600 text-xs">
+                          <Clock className="h-4 w-4" />
+                        </AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <Mail className="h-4 w-4 text-slate-400" />
+                          <span className="text-slate-800">{invitation.email}</span>
+                        </div>
+                        <span className="text-slate-500 text-xs">
+                          הוזמן ב-{new Date(invitation.created_at).toLocaleDateString('he-IL')}
+                        </span>
+                      </div>
+                    </div>
+                    <Badge variant="outline" className={roleColors[invitation.role]}>
+                      {roleLabels[invitation.role]}
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
         )}
 
         {/* Users Table */}

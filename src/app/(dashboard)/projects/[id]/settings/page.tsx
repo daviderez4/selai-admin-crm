@@ -235,11 +235,11 @@ export default function ProjectSettingsPage() {
           {/* Header */}
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-white">הגדרות פרויקט</h1>
-              <p className="text-slate-400">עדכון פרטי הפרויקט וחיבור למסד הנתונים</p>
+              <h1 className="text-2xl font-bold text-slate-800">הגדרות פרויקט</h1>
+              <p className="text-slate-500">עדכון פרטי הפרויקט וחיבור למסד הנתונים</p>
             </div>
             <Link href={`/projects/${projectId}`}>
-              <Button variant="ghost" className="text-slate-400 hover:text-white">
+              <Button variant="ghost" className="text-slate-600 hover:text-slate-800">
                 <ArrowRight className="h-4 w-4 ml-2" />
                 חזור לפרויקט
               </Button>
@@ -247,31 +247,31 @@ export default function ProjectSettingsPage() {
           </div>
 
           {/* Basic Info Card */}
-          <Card className="bg-slate-800/50 border-slate-700">
+          <Card className="bg-white border-slate-200 shadow-sm">
             <CardHeader>
-              <CardTitle className="text-white">פרטי הפרויקט</CardTitle>
-              <CardDescription className="text-slate-400">שם ותיאור הפרויקט</CardDescription>
+              <CardTitle className="text-slate-800">פרטי הפרויקט</CardTitle>
+              <CardDescription className="text-slate-500">שם ותיאור הפרויקט</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="name" className="text-slate-300">שם הפרויקט *</Label>
+                <Label htmlFor="name" className="text-slate-700">שם הפרויקט *</Label>
                 <Input
                   id="name"
                   value={formData.name}
                   onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
                   placeholder="לדוגמה: דשבורד צבירה ראשי"
-                  className="bg-slate-900 border-slate-700 text-white"
+                  className="bg-white border-slate-300 text-slate-800"
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="description" className="text-slate-300">תיאור (אופציונלי)</Label>
+                <Label htmlFor="description" className="text-slate-700">תיאור (אופציונלי)</Label>
                 <Textarea
                   id="description"
                   value={formData.description}
                   onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
                   placeholder="תיאור קצר..."
-                  className="bg-slate-900 border-slate-700 text-white resize-none"
+                  className="bg-white border-slate-300 text-slate-800 resize-none"
                   rows={3}
                 />
               </div>
@@ -279,53 +279,53 @@ export default function ProjectSettingsPage() {
           </Card>
 
           {/* Database Connection Card */}
-          <Card className="bg-slate-800/50 border-slate-700">
+          <Card className="bg-white border-slate-200 shadow-sm">
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle className="text-white flex items-center gap-2">
-                    <Database className="h-5 w-5 text-cyan-400" />
+                  <CardTitle className="text-slate-800 flex items-center gap-2">
+                    <Database className="h-5 w-5 text-blue-600" />
                     חיבור למסד הנתונים
                   </CardTitle>
-                  <CardDescription className="text-slate-400">פרטי Supabase לפרויקט זה</CardDescription>
+                  <CardDescription className="text-slate-500">פרטי Supabase לפרויקט זה</CardDescription>
                 </div>
                 {selectedProject.is_configured ? (
-                  <Badge className="bg-emerald-500/20 text-emerald-400">מוגדר</Badge>
+                  <Badge className="bg-emerald-100 text-emerald-700">מוגדר</Badge>
                 ) : (
-                  <Badge className="bg-amber-500/20 text-amber-400">לא מוגדר</Badge>
+                  <Badge className="bg-amber-100 text-amber-700">לא מוגדר</Badge>
                 )}
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
               {/* Supabase URL */}
               <div className="space-y-2">
-                <Label htmlFor="supabase_url" className="text-slate-300">Supabase URL *</Label>
+                <Label htmlFor="supabase_url" className="text-slate-700">Supabase URL *</Label>
                 <Input
                   id="supabase_url"
                   value={formData.supabase_url}
                   onChange={(e) => setFormData(prev => ({ ...prev, supabase_url: e.target.value }))}
                   placeholder="https://xxxxx.supabase.co"
-                  className="bg-slate-900 border-slate-700 text-white font-mono text-sm"
+                  className="bg-slate-50 border-slate-300 text-slate-800 font-mono text-sm"
                   dir="ltr"
                 />
               </div>
 
               {/* Anon Key */}
               <div className="space-y-2">
-                <Label htmlFor="supabase_anon_key" className="text-slate-300">Anon Key *</Label>
+                <Label htmlFor="supabase_anon_key" className="text-slate-700">Anon Key *</Label>
                 <Input
                   id="supabase_anon_key"
                   value={formData.supabase_anon_key}
                   onChange={(e) => setFormData(prev => ({ ...prev, supabase_anon_key: e.target.value }))}
                   placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-                  className="bg-slate-900 border-slate-700 text-white font-mono text-sm"
+                  className="bg-slate-50 border-slate-300 text-slate-800 font-mono text-sm"
                   dir="ltr"
                 />
               </div>
 
               {/* Service Key */}
               <div className="space-y-2">
-                <Label htmlFor="supabase_service_key" className="text-slate-300">
+                <Label htmlFor="supabase_service_key" className="text-slate-700">
                   Service Key (להחלפה בלבד)
                 </Label>
                 <div className="relative">
@@ -335,13 +335,13 @@ export default function ProjectSettingsPage() {
                     value={formData.supabase_service_key}
                     onChange={(e) => setFormData(prev => ({ ...prev, supabase_service_key: e.target.value }))}
                     placeholder="השאר ריק כדי לשמור את המפתח הקיים"
-                    className="bg-slate-900 border-slate-700 text-white font-mono text-sm pl-10"
+                    className="bg-slate-50 border-slate-300 text-slate-800 font-mono text-sm pl-10"
                     dir="ltr"
                   />
                   <button
                     type="button"
                     onClick={() => setShowServiceKey(!showServiceKey)}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
                   >
                     {showServiceKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
@@ -353,7 +353,7 @@ export default function ProjectSettingsPage() {
 
               {/* Table Selection */}
               <div className="space-y-2">
-                <Label className="text-slate-300">טבלה לאחסון הנתונים</Label>
+                <Label className="text-slate-700">טבלה לאחסון הנתונים</Label>
                 <div className="grid grid-cols-2 gap-2">
                   {AVAILABLE_TABLES.map(table => (
                     <button
@@ -363,17 +363,17 @@ export default function ProjectSettingsPage() {
                       className={cn(
                         'p-3 rounded-lg border transition-all text-right flex items-center gap-2',
                         formData.table_name === table.value
-                          ? 'border-cyan-500 bg-cyan-500/10'
-                          : 'border-slate-700 hover:border-slate-600 bg-slate-900/50'
+                          ? 'border-blue-500 bg-blue-50'
+                          : 'border-slate-200 hover:border-slate-300 bg-white'
                       )}
                     >
                       <span className="text-lg">{table.icon}</span>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-white">{table.description}</p>
+                        <p className="text-sm font-medium text-slate-800">{table.description}</p>
                         <p className="text-xs text-slate-500 font-mono">{table.label}</p>
                       </div>
                       {formData.table_name === table.value && (
-                        <Check className="h-4 w-4 text-cyan-400" />
+                        <Check className="h-4 w-4 text-blue-600" />
                       )}
                     </button>
                   ))}
@@ -381,13 +381,13 @@ export default function ProjectSettingsPage() {
               </div>
 
               {/* Test Connection */}
-              <div className="pt-4 border-t border-slate-700">
+              <div className="pt-4 border-t border-slate-200">
                 <div className="flex items-center justify-between">
                   <Button
                     variant="outline"
                     onClick={handleTestConnection}
                     disabled={testing || !formData.supabase_url}
-                    className="border-slate-700 text-slate-300 hover:bg-slate-800"
+                    className="border-slate-300 text-slate-700 hover:bg-slate-100"
                   >
                     {testing ? (
                       <>
@@ -405,20 +405,20 @@ export default function ProjectSettingsPage() {
                   {connectionStatus && (
                     <div className={cn(
                       'flex items-center gap-2 px-3 py-2 rounded-lg',
-                      connectionStatus.success ? 'bg-emerald-500/10' : 'bg-red-500/10'
+                      connectionStatus.success ? 'bg-emerald-50' : 'bg-red-50'
                     )}>
                       {connectionStatus.success ? (
                         <>
-                          <Check className="h-4 w-4 text-emerald-400" />
-                          <span className="text-sm text-emerald-400">
+                          <Check className="h-4 w-4 text-emerald-600" />
+                          <span className="text-sm text-emerald-600">
                             החיבור הצליח
                             {connectionStatus.tableExists && ` (${connectionStatus.rowCount?.toLocaleString('he-IL')} שורות)`}
                           </span>
                         </>
                       ) : (
                         <>
-                          <X className="h-4 w-4 text-red-400" />
-                          <span className="text-sm text-red-400">
+                          <X className="h-4 w-4 text-red-600" />
+                          <span className="text-sm text-red-600">
                             {connectionStatus.error || 'החיבור נכשל'}
                           </span>
                         </>
@@ -431,20 +431,20 @@ export default function ProjectSettingsPage() {
           </Card>
 
           {/* Update Frequency Card */}
-          <Card className="bg-slate-800/50 border-slate-700">
+          <Card className="bg-white border-slate-200 shadow-sm">
             <CardHeader>
-              <CardTitle className="text-white flex items-center gap-2">
-                <Clock className="h-5 w-5 text-amber-400" />
+              <CardTitle className="text-slate-800 flex items-center gap-2">
+                <Clock className="h-5 w-5 text-amber-600" />
                 תדירות עדכון נתונים
               </CardTitle>
-              <CardDescription className="text-slate-400">
+              <CardDescription className="text-slate-500">
                 הגדר כיצד יתעדכנו הנתונים - ידנית או אוטומטית
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               {/* Update Frequency Selection */}
               <div className="space-y-2">
-                <Label className="text-slate-300">תדירות עדכון</Label>
+                <Label className="text-slate-700">תדירות עדכון</Label>
                 <div className="grid grid-cols-2 gap-2">
                   {[
                     { value: 'manual', label: 'ידני', description: 'עדכון בלחיצה בלבד', icon: '✋' },
@@ -462,17 +462,17 @@ export default function ProjectSettingsPage() {
                       className={cn(
                         'p-3 rounded-lg border transition-all text-right flex items-center gap-2',
                         formData.update_frequency === option.value
-                          ? 'border-amber-500 bg-amber-500/10'
-                          : 'border-slate-700 hover:border-slate-600 bg-slate-900/50'
+                          ? 'border-amber-500 bg-amber-50'
+                          : 'border-slate-200 hover:border-slate-300 bg-white'
                       )}
                     >
                       <span className="text-lg">{option.icon}</span>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-white">{option.label}</p>
+                        <p className="text-sm font-medium text-slate-800">{option.label}</p>
                         <p className="text-xs text-slate-500">{option.description}</p>
                       </div>
                       {formData.update_frequency === option.value && (
-                        <Check className="h-4 w-4 text-amber-400" />
+                        <Check className="h-4 w-4 text-amber-600" />
                       )}
                     </button>
                   ))}
@@ -482,19 +482,19 @@ export default function ProjectSettingsPage() {
               {/* Auto Import Email - Only show if not manual */}
               {formData.update_frequency !== 'manual' && (
                 <>
-                  <div className="pt-4 border-t border-slate-700 space-y-4">
+                  <div className="pt-4 border-t border-slate-200 space-y-4">
                     {/* Enable/Disable Toggle */}
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <Mail className="h-4 w-4 text-slate-400" />
-                        <Label className="text-slate-300">ייבוא אוטומטי ממייל</Label>
+                        <Mail className="h-4 w-4 text-slate-500" />
+                        <Label className="text-slate-700">ייבוא אוטומטי ממייל</Label>
                       </div>
                       <button
                         type="button"
                         onClick={() => setFormData(prev => ({ ...prev, auto_import_enabled: !prev.auto_import_enabled }))}
                         className={cn(
                           'w-12 h-6 rounded-full transition-colors relative',
-                          formData.auto_import_enabled ? 'bg-emerald-500' : 'bg-slate-600'
+                          formData.auto_import_enabled ? 'bg-emerald-500' : 'bg-slate-300'
                         )}
                       >
                         <div
@@ -509,7 +509,7 @@ export default function ProjectSettingsPage() {
                     {/* Email Input */}
                     {formData.auto_import_enabled && (
                       <div className="space-y-2">
-                        <Label htmlFor="auto_import_email" className="text-slate-300">
+                        <Label htmlFor="auto_import_email" className="text-slate-700">
                           כתובת מייל לניטור
                         </Label>
                         <Input
@@ -518,7 +518,7 @@ export default function ProjectSettingsPage() {
                           value={formData.auto_import_email}
                           onChange={(e) => setFormData(prev => ({ ...prev, auto_import_email: e.target.value }))}
                           placeholder="reports@company.com"
-                          className="bg-slate-900 border-slate-700 text-white"
+                          className="bg-white border-slate-300 text-slate-800"
                           dir="ltr"
                         />
                         <p className="text-xs text-slate-500">
@@ -529,8 +529,8 @@ export default function ProjectSettingsPage() {
                   </div>
 
                   {/* Info Box */}
-                  <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
-                    <p className="text-amber-400 text-sm flex items-center gap-2">
+                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                    <p className="text-amber-700 text-sm flex items-center gap-2">
                       <Calendar className="h-4 w-4" />
                       {formData.update_frequency === 'daily' && 'הנתונים יתעדכנו מדי יום בשעה 06:00'}
                       {formData.update_frequency === 'weekly' && 'הנתונים יתעדכנו כל יום ראשון בשעה 06:00'}
@@ -541,8 +541,8 @@ export default function ProjectSettingsPage() {
               )}
 
               {formData.update_frequency === 'manual' && (
-                <div className="p-3 bg-slate-700/50 rounded-lg">
-                  <p className="text-slate-400 text-sm">
+                <div className="p-3 bg-slate-50 rounded-lg">
+                  <p className="text-slate-600 text-sm">
                     במצב ידני, עליך לייבא קבצים דרך מסך הייבוא בכל פעם שתרצה לעדכן נתונים
                   </p>
                 </div>
@@ -555,14 +555,14 @@ export default function ProjectSettingsPage() {
             <Button
               variant="outline"
               onClick={() => router.push(`/projects/${projectId}`)}
-              className="border-slate-700 text-slate-300"
+              className="border-slate-300 text-slate-700"
             >
               ביטול
             </Button>
             <Button
               onClick={handleSave}
               disabled={saving}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              className="bg-blue-600 hover:bg-blue-700 text-white"
             >
               {saving ? (
                 <>

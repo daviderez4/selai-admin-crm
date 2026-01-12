@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createAdminClient } from '@/lib/supabase/server';
 
 // POST /api/users/invite - Invite a new user by email
 export async function POST(request: Request) {
   try {
     const supabase = await createClient();
+    const adminClient = createAdminClient();
     const { data: { user }, error: userError } = await supabase.auth.getUser();
 
     if (userError || !user) {
@@ -53,9 +54,28 @@ export async function POST(request: Request) {
       // User exists - just add access
       targetUserId = existingProfile.id;
     } else {
-      // Create invitation record for new user
-      // When they sign up with this email, they'll automatically get access
-      const { data: invitation, error: inviteError } = await supabase
+      // User doesn't exist - send magic link invitation via Supabase Auth
+      const { data: inviteData, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(
+        email.toLowerCase(),
+        {
+          redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || 'https://selai.app'}/complete-profile`,
+          data: {
+            invited_by: user.id,
+            invited_role: role,
+            project_ids: projectIds
+          }
+        }
+      );
+
+      if (inviteError) {
+        console.error('Error sending invite email:', inviteError);
+        return NextResponse.json({
+          error: `Failed to send invitation: ${inviteError.message}`
+        }, { status: 500 });
+      }
+
+      // Also save to pending_invitations table for tracking
+      await supabase
         .from('pending_invitations')
         .upsert({
           email: email.toLowerCase(),
@@ -70,16 +90,27 @@ export async function POST(request: Request) {
         .select()
         .single();
 
-      if (inviteError) {
-        // Table might not exist - create access anyway for existing users
-        console.log('Note: pending_invitations table may not exist:', inviteError.message);
+      // Log the action (ignore errors)
+      try {
+        await supabase.from('audit_logs').insert({
+          user_id: user.id,
+          action: 'user_invited',
+          details: {
+            invited_email: email,
+            project_ids: projectIds,
+            role: role,
+            auth_user_id: inviteData.user?.id
+          }
+        });
+      } catch {
+        // Ignore audit log errors
       }
 
       return NextResponse.json({
         success: true,
         status: 'invited',
-        message: `Invitation sent to ${email}. They will get access when they sign up.`,
-        invitation: invitation || { email, projectIds, role }
+        message: `הזמנה נשלחה ל-${email}`,
+        invitedUserId: inviteData.user?.id
       });
     }
 
@@ -101,22 +132,26 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Failed to add access' }, { status: 500 });
     }
 
-    // Log the action
-    await supabase.from('audit_logs').insert({
-      user_id: user.id,
-      action: 'user_invited',
-      details: {
-        invited_email: email,
-        target_user_id: targetUserId,
-        project_ids: projectIds,
-        role: role
-      }
-    });
+    // Log the action (ignore errors)
+    try {
+      await supabase.from('audit_logs').insert({
+        user_id: user.id,
+        action: 'user_invited',
+        details: {
+          invited_email: email,
+          target_user_id: targetUserId,
+          project_ids: projectIds,
+          role: role
+        }
+      });
+    } catch {
+      // Ignore audit log errors
+    }
 
     return NextResponse.json({
       success: true,
       status: 'access_granted',
-      message: `Access granted to ${email}`,
+      message: `גישה ניתנה ל-${email}`,
       userId: targetUserId
     });
 

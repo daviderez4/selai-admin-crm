@@ -40,12 +40,9 @@ export function HeroSection() {
 
             {/* Main Title */}
             <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold mb-6">
-              <span className="text-slate-800 block">SelaiOS</span>
+              <span className="text-slate-800 block">SELAI</span>
               <span className="text-transparent bg-clip-text bg-gradient-to-l from-blue-600 to-violet-600 block">
-                InsuranceAI
-              </span>
-              <span className="text-transparent bg-clip-text bg-gradient-to-l from-violet-600 to-purple-600 block">
-                System
+                InsuranceOS
               </span>
             </h1>
 
@@ -68,7 +65,7 @@ export function HeroSection() {
                 </svg>
               </Link>
               <Link
-                href="/register"
+                href="/signup"
                 className="px-6 py-3 bg-slate-800 text-white rounded-xl font-medium hover:bg-slate-700 transition-colors flex items-center gap-2"
               >
                 <span>הרשמה למערכת</span>

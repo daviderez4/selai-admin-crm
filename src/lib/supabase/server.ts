@@ -1,4 +1,5 @@
 import { createServerClient } from '@supabase/ssr';
+import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
 
 export async function createClient() {
@@ -54,4 +55,24 @@ export async function getSession() {
   }
 
   return session;
+}
+
+/**
+ * Create SELAI database client (for external_agents, supervisors lookup)
+ */
+export function createSelaiClient() {
+  return createSupabaseClient(
+    process.env.SELAI_SUPABASE_URL!,
+    process.env.SELAI_SERVICE_ROLE_KEY!
+  );
+}
+
+/**
+ * Create Hub Admin client with service role (for admin operations like inviting users)
+ */
+export function createAdminClient() {
+  return createSupabaseClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
 }

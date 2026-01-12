@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { Toaster } from "sonner";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -13,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "SelaiOS - InsuranceAI System",
+  title: "SELAI InsuranceOS",
   description: "פלטפורמת ה-AI המתקדמת לניהול סוכנויות ביטוח. שילוב של סוכנים וירטואליים, אוטומציה ודאטה בזמן אמת.",
   metadataBase: new URL('https://selai.app'),
   icons: {
@@ -22,16 +23,16 @@ export const metadata: Metadata = {
     apple: "/sela-logo-full.png",
   },
   openGraph: {
-    title: "SelaiOS - InsuranceAI System",
+    title: "SELAI InsuranceOS",
     description: "פלטפורמת ה-AI המתקדמת לניהול סוכנויות ביטוח",
     url: "https://selai.app",
-    siteName: "SelaiOS",
+    siteName: "SELAI",
     locale: "he_IL",
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "SelaiOS - InsuranceAI System",
+    title: "SELAI InsuranceOS",
     description: "פלטפורמת ה-AI המתקדמת לניהול סוכנויות ביטוח",
   },
 };
@@ -47,6 +48,7 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-slate-50`}
       >
         {children}
+        <Toaster position="top-center" richColors dir="rtl" />
       </body>
     </html>
   );
