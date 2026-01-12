@@ -66,6 +66,15 @@ export function Sidebar() {
     const tableName = selectedProject.table_name || '';
     const dashboards: NavItem[] = [];
 
+    // Smart Dashboard - available for ALL project types
+    dashboards.push({
+      id: 'smart-dashboard',
+      title: 'דשבורד חכם',
+      href: `/projects/${projectId}/smart-dashboard`,
+      icon: Activity,
+      requiresProject: true,
+    });
+
     switch (tableName) {
       case 'master_data':
         // מכירות - Sales dashboards
