@@ -137,41 +137,23 @@ export default function AdminRegistrationsContent() {
     setProcessing(true);
 
     try {
-      const supabase = createClient();
+      // Use the registration approval API that creates auth user
+      const response = await fetch(`/api/registration/${selectedRequest.id}/approve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'approve',
+          reviewer_notes: adminNotes,
+        }),
+      });
 
-      // Update registration status
-      const { error: updateError } = await supabase
-        .from('registration_requests')
-        .update({
-          status: 'approved',
-          admin_notes: adminNotes,
-          reviewed_at: new Date().toISOString(),
-        })
-        .eq('id', selectedRequest.id);
+      const data = await response.json();
 
-      if (updateError) throw updateError;
-
-      // Create user in users table
-      const { error: userError } = await supabase
-        .from('users')
-        .insert({
-          email: selectedRequest.email,
-          full_name: selectedRequest.full_name,
-          phone: selectedRequest.phone,
-          user_type: assignedRole || selectedRequest.requested_role,
-          is_active: true,
-          is_approved: true,
-          approved_at: new Date().toISOString(),
-        });
-
-      if (userError) {
-        console.error('Error creating user:', userError);
-        // Don't fail the whole operation if user creation fails
-        toast.warning('בקשה אושרה אך יצירת המשתמש נכשלה - יש ליצור ידנית');
-      } else {
-        toast.success(`${selectedRequest.full_name} אושר בהצלחה!`);
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to approve');
       }
 
+      toast.success(`${selectedRequest.full_name} אושר בהצלחה!`);
       setShowApproveDialog(false);
       setSelectedRequest(null);
       setAdminNotes('');
@@ -179,7 +161,7 @@ export default function AdminRegistrationsContent() {
       fetchRegistrations();
     } catch (error) {
       console.error('Error approving request:', error);
-      toast.error('שגיאה באישור הבקשה');
+      toast.error(error instanceof Error ? error.message : 'שגיאה באישור הבקשה');
     } finally {
       setProcessing(false);
     }
@@ -190,18 +172,20 @@ export default function AdminRegistrationsContent() {
     setProcessing(true);
 
     try {
-      const supabase = createClient();
+      const response = await fetch(`/api/registration/${selectedRequest.id}/approve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'reject',
+          rejection_reason: adminNotes,
+        }),
+      });
 
-      const { error } = await supabase
-        .from('registration_requests')
-        .update({
-          status: 'rejected',
-          admin_notes: adminNotes,
-          reviewed_at: new Date().toISOString(),
-        })
-        .eq('id', selectedRequest.id);
+      const data = await response.json();
 
-      if (error) throw error;
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to reject');
+      }
 
       toast.success('הבקשה נדחתה');
       setShowRejectDialog(false);

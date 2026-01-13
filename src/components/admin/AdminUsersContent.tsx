@@ -272,102 +272,43 @@ export default function AdminUsersContent() {
   };
 
   const handleApproveRequest = async (request: RegistrationRequest) => {
-    const supabase = createClient();
-
     try {
-      // Update registration request status
-      const { error: updateError } = await supabase
-        .from('registration_requests')
-        .update({ status: 'approved' })
-        .eq('id', request.id);
+      // Use the registration approval API that creates auth user
+      const response = await fetch(`/api/registration/${request.id}/approve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'approve' }),
+      });
 
-      if (updateError) {
-        throw updateError;
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to approve');
       }
 
-      // Create user record with supervisor link if provided
-      const { data: newUser, error: userError } = await supabase
-        .from('users')
-        .insert({
-          email: request.email,
-          full_name: request.full_name,
-          phone: request.phone,
-          national_id: request.id_number,
-          user_type: request.requested_role,
-          role: request.requested_role === 'admin' ? 'admin' : 'user',
-          supervisor_id: request.supervisor_id || null,
-          is_active: true,
-          is_approved: true,
-        })
-        .select()
-        .single();
-
-      if (userError && !userError.message.includes('duplicate')) {
-        console.log('User creation note:', userError.message);
-      }
-
-      // Also create a CRM contact record for this user
-      // This ensures all registered users appear in the contacts list
-      const nameParts = request.full_name.split(' ');
-      const firstName = nameParts[0] || request.full_name;
-      const lastName = nameParts.slice(1).join(' ') || '';
-
-      // Determine owner_id: If agent with supervisor, supervisor is the owner
-      // Otherwise, the user owns their own contact record
-      const ownerId = request.supervisor_id || newUser?.id;
-
-      const { data: newContact, error: contactError } = await supabase
-        .from('crm_contacts')
-        .insert({
-          first_name: firstName,
-          last_name: lastName,
-          email: request.email,
-          phone: request.phone,
-          id_number: request.id_number,
-          source: 'registration',
-          status: 'active',
-          tags: [request.requested_role],
-          notes: `נרשם כ${request.requested_role === 'agent' ? 'סוכן' : request.requested_role === 'supervisor' ? 'מפקח' : 'משתמש'}`,
-          user_id: newUser?.id,
-          owner_id: ownerId,
-        })
-        .select()
-        .single();
-
-      if (contactError && !contactError.message.includes('duplicate')) {
-        console.log('Contact creation note:', contactError.message);
-      }
-
-      // If agent has a supervisor, also create a reference in supervisor's contacts
-      if (request.requested_role === 'agent' && request.supervisor_id && newContact) {
-        // Update contact to ensure supervisor can see this agent in their team
-        await supabase
-          .from('crm_contacts')
-          .update({
-            assigned_to: request.supervisor_id,
-          })
-          .eq('id', newContact.id);
-      }
-
-      toast.success('הבקשה אושרה בהצלחה');
+      toast.success(`${request.full_name} אושר בהצלחה!`);
       await fetchData();
     } catch (error) {
       console.error('Error approving request:', error);
-      toast.error('שגיאה באישור הבקשה');
+      toast.error(error instanceof Error ? error.message : 'שגיאה באישור הבקשה');
     }
   };
 
   const handleRejectRequest = async (requestId: string, notes?: string) => {
-    const supabase = createClient();
-
     try {
-      const { error } = await supabase
-        .from('registration_requests')
-        .update({ status: 'rejected' })
-        .eq('id', requestId);
+      const response = await fetch(`/api/registration/${requestId}/approve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'reject',
+          rejection_reason: notes,
+        }),
+      });
 
-      if (error) {
-        throw error;
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to reject');
       }
 
       toast.success('הבקשה נדחתה');
