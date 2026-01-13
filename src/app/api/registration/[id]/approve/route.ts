@@ -39,7 +39,7 @@ export async function POST(
       return NextResponse.json({ error: 'Registration not found' }, { status: 404 });
     }
 
-    if (registration.status !== 'pending') {
+    if (!['pending', 'needs_review'].includes(registration.status)) {
       return NextResponse.json({ error: 'Registration already processed' }, { status: 400 });
     }
 
@@ -65,29 +65,61 @@ export async function POST(
 
     // Handle approval - Create user account
     if (action === 'approve') {
-      // Create user record
-      const { data: newUser, error: userError } = await supabase
+      // First, check if user already exists (from auth signup)
+      const { data: existingUser } = await supabase
         .from('users')
-        .insert({
-          email: registration.email,
-          full_name: registration.full_name,
-          phone: registration.phone,
-          national_id: registration.national_id,
-          license_number: registration.license_number,
-          user_type: registration.requested_role,
-          supervisor_id: registration.requested_supervisor_id,
-          manager_id: registration.requested_manager_id,
-          sela_agent_id: registration.sela_match_id,
-          sela_data: registration.sela_match_data,
-          verification_status: registration.sela_match_found ? 'verified' : 'pending',
-          approved_by: reviewer.id,
-          approved_at: new Date().toISOString(),
-          is_active: true,
-          is_profile_complete: false,
-          portal_access: registration.requested_role === 'client'
-        })
-        .select()
-        .single();
+        .select('id')
+        .eq('email', registration.email.toLowerCase())
+        .maybeSingle();
+
+      let newUser;
+      let userError;
+
+      if (existingUser) {
+        // Update existing user record
+        const { data, error } = await supabase
+          .from('users')
+          .update({
+            full_name: registration.full_name,
+            phone: registration.phone,
+            id_number: registration.id_number || registration.national_id,
+            license_number: registration.license_number,
+            user_type: registration.requested_role || 'agent',
+            supervisor_id: registration.requested_supervisor_id || registration.supervisor_id,
+            manager_id: registration.requested_manager_id,
+            approved_by: reviewer.id,
+            approved_at: new Date().toISOString(),
+            is_active: true,
+            is_approved: true,
+          })
+          .eq('id', existingUser.id)
+          .select()
+          .single();
+        newUser = data;
+        userError = error;
+      } else {
+        // Create new user record
+        const { data, error } = await supabase
+          .from('users')
+          .insert({
+            email: registration.email.toLowerCase(),
+            full_name: registration.full_name,
+            phone: registration.phone,
+            id_number: registration.id_number || registration.national_id,
+            license_number: registration.license_number,
+            user_type: registration.requested_role || 'agent',
+            supervisor_id: registration.requested_supervisor_id || registration.supervisor_id,
+            manager_id: registration.requested_manager_id,
+            approved_by: reviewer.id,
+            approved_at: new Date().toISOString(),
+            is_active: true,
+            is_approved: true,
+          })
+          .select()
+          .single();
+        newUser = data;
+        userError = error;
+      }
 
       if (userError) {
         console.error('Error creating user:', userError);
