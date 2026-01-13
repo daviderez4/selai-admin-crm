@@ -27,6 +27,7 @@ import {
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useUserStore } from '@/stores/userStore';
+import { useAuthStore } from '@/lib/stores/authStore';
 import { toast } from 'sonner';
 import type { Supervisor, ExternalAgent } from '@/types';
 
@@ -46,7 +47,11 @@ interface SupervisorWithAgents extends Supervisor {
 }
 
 export default function HierarchyPage() {
-  const { profile, isAdmin, canManageUsers } = useUserStore();
+  const { profile, isAdmin: isAdminUserStore, canManageUsers } = useUserStore();
+  const { userRecord, isAdmin: isAdminAuth } = useAuthStore();
+
+  // Check admin from both stores - authStore (users table) or userStore (SELAI)
+  const isAdmin = () => isAdminAuth() || isAdminUserStore();
   const [supervisors, setSupervisors] = useState<SupervisorWithAgents[]>([]);
   const [agents, setAgents] = useState<ExternalAgent[]>([]);
   const [invitations, setInvitations] = useState<Invitation[]>([]);
@@ -213,8 +218,11 @@ export default function HierarchyPage() {
     s.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Check permissions - allow admin or supervisor
-  const canView = isAdmin() || profile?.role === 'supervisor';
+  // Check permissions - allow admin, manager or supervisor
+  const canView = isAdmin() ||
+    userRecord?.user_type === 'manager' ||
+    userRecord?.user_type === 'supervisor' ||
+    profile?.role === 'supervisor';
 
   if (!canView) {
     return (
