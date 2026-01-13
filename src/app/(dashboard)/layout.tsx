@@ -8,6 +8,7 @@ import { useProjectsStore } from '@/lib/stores/projectsStore';
 import { useUserPreferencesStore } from '@/lib/stores/userPreferencesStore';
 import { Toaster } from '@/components/ui/sonner';
 import NavigationAssistant from '@/components/assistant/NavigationAssistant';
+import KnowledgeChat from '@/components/assistant/KnowledgeChat';
 
 export default function DashboardLayout({
   children,
@@ -77,6 +78,7 @@ export default function DashboardLayout({
       </main>
       <Toaster position="top-center" richColors />
       <NavigationAssistant />
+      <KnowledgeChat />
     </div>
   );
 }
