@@ -165,9 +165,12 @@ export default function SignupPage() {
       setIsSuccess(true);
       toast.success('ההרשמה בוצעה בהצלחה!');
 
-      // Redirect to pending approval
+      // Store email for pending-approval page
+      localStorage.setItem('pending_registration_email', formData.email.trim().toLowerCase());
+
+      // Redirect to pending approval with email
       setTimeout(() => {
-        router.push('/pending-approval');
+        router.push(`/pending-approval?email=${encodeURIComponent(formData.email.trim().toLowerCase())}`);
       }, 2000);
 
     } catch (err: any) {
