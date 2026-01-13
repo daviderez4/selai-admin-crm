@@ -28,6 +28,10 @@ import {
   MessageSquare,
   Megaphone,
   Activity,
+  Workflow,
+  PieChart,
+  UsersRound,
+  AppWindow,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -135,10 +139,38 @@ export function Sidebar() {
     {
       id: 'home',
       title: 'דשבורד ראשי',
-      href: '/projects',
-      icon: Home,
+      href: '/dashboard',
+      icon: AppWindow,
       alwaysShow: true,
     },
+    {
+      id: 'projects',
+      title: 'פרויקטים',
+      href: '/projects',
+      icon: FolderKanban,
+      alwaysShow: true,
+    },
+    // Supervisor team view - only for supervisors and admins
+    ...(isAdmin() || isSupervisor() ? [{
+      id: 'my-team',
+      title: 'הצוות שלי',
+      href: '/supervisor',
+      icon: UsersRound,
+    }] : []),
+    // Reports - for managers and above
+    ...(isAdmin() || isSupervisor() ? [{
+      id: 'reports',
+      title: 'דוחות',
+      href: '/reports',
+      icon: PieChart,
+    }] : []),
+    // Workflows - for managers and above
+    ...(isAdmin() || isSupervisor() ? [{
+      id: 'workflows',
+      title: 'אוטומציות',
+      href: '/workflows',
+      icon: Workflow,
+    }] : []),
   ];
 
   // Project-specific navigation items
