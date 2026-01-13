@@ -166,8 +166,11 @@ export default function AdminUsersContent() {
         .select('*')
         .order('created_at', { ascending: false });
 
+      console.log('Fetched users:', usersData?.length, 'users', usersError ? `Error: ${usersError.message}` : '');
+
       if (usersError) {
         console.error('Error fetching users:', usersError);
+        toast.error(`שגיאה בטעינת משתמשים: ${usersError.message}`);
       } else if (usersData) {
         // Map to UserProfile format
         const mappedUsers: UserProfile[] = usersData.map((u: Record<string, unknown>) => ({
@@ -213,13 +216,55 @@ export default function AdminUsersContent() {
     }
 
     setIsCreating(true);
+    const supabase = createClient();
+
     try {
-      await new Promise(resolve => setTimeout(resolve, 500));
-      toast.success('המשתמש נוצר בהצלחה');
+      // Check if user already exists
+      const { data: existingUser } = await supabase
+        .from('users')
+        .select('id')
+        .eq('email', newUser.email.toLowerCase())
+        .maybeSingle();
+
+      if (existingUser) {
+        // Update existing user
+        const { error: updateError } = await supabase
+          .from('users')
+          .update({
+            full_name: newUser.full_name,
+            phone: newUser.mobile || null,
+            user_type: newUser.role,
+            supervisor_id: newUser.supervisor_id || null,
+            is_active: true,
+            is_approved: true,
+          })
+          .eq('id', existingUser.id);
+
+        if (updateError) throw updateError;
+        toast.success('המשתמש עודכן בהצלחה');
+      } else {
+        // Create new user
+        const { error: insertError } = await supabase
+          .from('users')
+          .insert({
+            email: newUser.email.toLowerCase(),
+            full_name: newUser.full_name,
+            phone: newUser.mobile || null,
+            user_type: newUser.role,
+            supervisor_id: newUser.supervisor_id || null,
+            is_active: true,
+            is_approved: true,
+          });
+
+        if (insertError) throw insertError;
+        toast.success('המשתמש נוצר בהצלחה');
+      }
+
       setCreateDialogOpen(false);
       setNewUser({ full_name: '', email: '', mobile: '', role: 'agent', supervisor_id: '' });
-      fetchData();
+      await fetchData();
     } catch (error) {
+      console.error('Error creating user:', error);
       toast.error('שגיאה ביצירת המשתמש');
     } finally {
       setIsCreating(false);
@@ -396,25 +441,45 @@ export default function AdminUsersContent() {
 
     setIsSendingInvite(true);
     const supabase = createClient();
+    const email = inviteEmail.trim().toLowerCase();
 
     try {
-      // First create the user record in our users table
-      const { error: userError } = await supabase
+      // Check if user already exists
+      const { data: existingUser } = await supabase
         .from('users')
-        .insert({
-          email: inviteEmail.trim().toLowerCase(),
-          user_type: inviteRole,
-          is_active: true,
-          is_approved: true,
-        });
+        .select('id')
+        .eq('email', email)
+        .maybeSingle();
 
-      if (userError && !userError.message.includes('duplicate')) {
-        console.error('User creation error:', userError);
+      if (existingUser) {
+        // Update existing user
+        await supabase
+          .from('users')
+          .update({
+            user_type: inviteRole,
+            is_active: true,
+            is_approved: true,
+          })
+          .eq('id', existingUser.id);
+      } else {
+        // Create new user record
+        const { error: userError } = await supabase
+          .from('users')
+          .insert({
+            email: email,
+            user_type: inviteRole,
+            is_active: true,
+            is_approved: true,
+          });
+
+        if (userError) {
+          console.error('User creation error:', userError);
+        }
       }
 
       // Send magic link / invite email
       const { error: inviteError } = await supabase.auth.signInWithOtp({
-        email: inviteEmail.trim().toLowerCase(),
+        email: email,
         options: {
           emailRedirectTo: `${window.location.origin}/auth/callback`,
           data: {
@@ -429,7 +494,7 @@ export default function AdminUsersContent() {
       setInviteDialogOpen(false);
       setInviteEmail('');
       setInviteRole('agent');
-      fetchData();
+      await fetchData();
     } catch (error) {
       console.error('Error inviting user:', error);
       toast.error('שגיאה בשליחת הזמנה');

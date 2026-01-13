@@ -417,11 +417,25 @@ export default function DashboardPage() {
                 </div>
               </div>
             </div>
-            <div className="text-left hidden md:block">
-              <p className="text-blue-100 text-xs">Selaboard v0.2.0</p>
-              <p className="text-white/80 text-sm">
-                {new Date().toLocaleDateString('he-IL', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-              </p>
+            <div className="flex items-center gap-3">
+              {/* Admin Quick Access */}
+              {userRole === 'admin' && (
+                <Button
+                  onClick={() => router.push('/admin')}
+                  variant="secondary"
+                  size="sm"
+                  className="bg-white/20 hover:bg-white/30 text-white border-white/30"
+                >
+                  <Shield className="h-4 w-4 ml-2" />
+                  פאנל ניהול
+                </Button>
+              )}
+              <div className="text-left hidden md:block">
+                <p className="text-blue-100 text-xs">Selaboard v0.2.0</p>
+                <p className="text-white/80 text-sm">
+                  {new Date().toLocaleDateString('he-IL', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                </p>
+              </div>
             </div>
           </div>
         </div>
