@@ -64,6 +64,9 @@ import {
   RefreshCw,
   FileText,
   Clock,
+  Key,
+  Send,
+  UserPlus,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { SystemRole } from '@/types/permissions';
@@ -120,6 +123,9 @@ export default function AdminUsersContent() {
   const [activeTab, setActiveTab] = useState('requests');
 
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
+  const [resetPasswordDialogOpen, setResetPasswordDialogOpen] = useState(false);
+  const [selectedUserForReset, setSelectedUserForReset] = useState<UserProfile | null>(null);
   const [newUser, setNewUser] = useState({
     full_name: '',
     email: '',
@@ -127,7 +133,11 @@ export default function AdminUsersContent() {
     role: 'agent' as SystemRole,
     supervisor_id: '',
   });
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteRole, setInviteRole] = useState<SystemRole>('agent');
   const [isCreating, setIsCreating] = useState(false);
+  const [isSendingInvite, setIsSendingInvite] = useState(false);
+  const [isSendingReset, setIsSendingReset] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -346,6 +356,88 @@ export default function AdminUsersContent() {
     }
   };
 
+  // Send password reset email
+  const handleSendPasswordReset = async () => {
+    if (!selectedUserForReset?.email) {
+      toast.error('לא נמצא אימייל');
+      return;
+    }
+
+    setIsSendingReset(true);
+    const supabase = createClient();
+
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(
+        selectedUserForReset.email,
+        {
+          redirectTo: `${window.location.origin}/auth/reset-password`,
+        }
+      );
+
+      if (error) throw error;
+
+      toast.success(`נשלח מייל איפוס סיסמה ל-${selectedUserForReset.email}`);
+      setResetPasswordDialogOpen(false);
+      setSelectedUserForReset(null);
+    } catch (error) {
+      console.error('Error sending reset email:', error);
+      toast.error('שגיאה בשליחת מייל איפוס');
+    } finally {
+      setIsSendingReset(false);
+    }
+  };
+
+  // Invite new user by email
+  const handleInviteUser = async () => {
+    if (!inviteEmail.trim()) {
+      toast.error('נא להזין כתובת אימייל');
+      return;
+    }
+
+    setIsSendingInvite(true);
+    const supabase = createClient();
+
+    try {
+      // First create the user record in our users table
+      const { error: userError } = await supabase
+        .from('users')
+        .insert({
+          email: inviteEmail.trim().toLowerCase(),
+          user_type: inviteRole,
+          is_active: true,
+          is_approved: true,
+        });
+
+      if (userError && !userError.message.includes('duplicate')) {
+        console.error('User creation error:', userError);
+      }
+
+      // Send magic link / invite email
+      const { error: inviteError } = await supabase.auth.signInWithOtp({
+        email: inviteEmail.trim().toLowerCase(),
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          data: {
+            user_type: inviteRole,
+          },
+        },
+      });
+
+      if (inviteError) throw inviteError;
+
+      toast.success(`הזמנה נשלחה ל-${inviteEmail}`);
+      setInviteDialogOpen(false);
+      setInviteEmail('');
+      setInviteRole('agent');
+      fetchData();
+    } catch (error) {
+      console.error('Error inviting user:', error);
+      toast.error('שגיאה בשליחת הזמנה');
+    } finally {
+      setIsSendingInvite(false);
+    }
+  };
+
   const filteredUsers = users.filter(user => {
     const matchesSearch =
       user.full_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -379,6 +471,10 @@ export default function AdminUsersContent() {
           <Button variant="outline" onClick={handleRefresh} disabled={isRefreshing}>
             <RefreshCw className={`h-4 w-4 ml-2 ${isRefreshing ? 'animate-spin' : ''}`} />
             רענן
+          </Button>
+          <Button variant="outline" onClick={() => setInviteDialogOpen(true)}>
+            <Send className="h-4 w-4 ml-2" />
+            הזמן משתמש
           </Button>
           <Button onClick={() => setCreateDialogOpen(true)}>
             <Plus className="h-4 w-4 ml-2" />
@@ -507,6 +603,15 @@ export default function AdminUsersContent() {
                             <DropdownMenuItem>
                               <Edit className="h-4 w-4 ml-2" />
                               עריכה
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => {
+                                setSelectedUserForReset(user);
+                                setResetPasswordDialogOpen(true);
+                              }}
+                            >
+                              <Key className="h-4 w-4 ml-2" />
+                              איפוס סיסמה
                             </DropdownMenuItem>
                             <DropdownMenuItem
                               onClick={() => handleToggleUserStatus(user.id, user.is_active)}
@@ -741,6 +846,107 @@ export default function AdminUsersContent() {
                 <Plus className="h-4 w-4 ml-2" />
               )}
               צור משתמש
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Invite User Dialog */}
+      <Dialog open={inviteDialogOpen} onOpenChange={setInviteDialogOpen}>
+        <DialogContent dir="rtl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Send className="h-5 w-5" />
+              הזמנת משתמש חדש
+            </DialogTitle>
+            <DialogDescription>
+              שלח הזמנה באימייל למשתמש חדש. הוא יקבל לינק להתחברות ויוכל להגדיר סיסמה.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>אימייל</Label>
+              <Input
+                type="email"
+                value={inviteEmail}
+                onChange={(e) => setInviteEmail(e.target.value)}
+                placeholder="email@example.com"
+                dir="ltr"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>תפקיד</Label>
+              <Select
+                value={inviteRole}
+                onValueChange={(value: SystemRole) => setInviteRole(value)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(ROLE_CONFIGS).map(([role, config]) => (
+                    <SelectItem key={role} value={role}>
+                      {config.labelHe}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setInviteDialogOpen(false)}>
+              ביטול
+            </Button>
+            <Button onClick={handleInviteUser} disabled={isSendingInvite}>
+              {isSendingInvite ? (
+                <Loader2 className="h-4 w-4 animate-spin ml-2" />
+              ) : (
+                <Send className="h-4 w-4 ml-2" />
+              )}
+              שלח הזמנה
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reset Password Dialog */}
+      <Dialog open={resetPasswordDialogOpen} onOpenChange={setResetPasswordDialogOpen}>
+        <DialogContent dir="rtl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Key className="h-5 w-5" />
+              איפוס סיסמה
+            </DialogTitle>
+            <DialogDescription>
+              שלח מייל עם לינק לאיפוס סיסמה למשתמש
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedUserForReset && (
+            <div className="bg-slate-50 p-4 rounded-lg space-y-2">
+              <p className="font-medium">{selectedUserForReset.full_name}</p>
+              <p className="text-sm text-muted-foreground">{selectedUserForReset.email}</p>
+            </div>
+          )}
+
+          <p className="text-sm text-muted-foreground">
+            המשתמש יקבל אימייל עם לינק לאיפוס הסיסמה שלו.
+          </p>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setResetPasswordDialogOpen(false)}>
+              ביטול
+            </Button>
+            <Button onClick={handleSendPasswordReset} disabled={isSendingReset}>
+              {isSendingReset ? (
+                <Loader2 className="h-4 w-4 animate-spin ml-2" />
+              ) : (
+                <Mail className="h-4 w-4 ml-2" />
+              )}
+              שלח מייל איפוס
             </Button>
           </DialogFooter>
         </DialogContent>
