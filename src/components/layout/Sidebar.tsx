@@ -32,6 +32,7 @@ import {
   PieChart,
   UsersRound,
   AppWindow,
+  UserPlus,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -315,6 +316,13 @@ export function Sidebar() {
       title: 'פאנל ניהול',
       href: '/admin',
       icon: Activity,
+    }] : []),
+    // Registration Requests - only for admins
+    ...(isAdmin() ? [{
+      id: 'registrations',
+      title: 'בקשות הרשמה',
+      href: '/admin/registrations',
+      icon: UserPlus,
     }] : []),
     {
       id: 'settings',
