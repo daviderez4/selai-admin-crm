@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 import {
   Briefcase,
   ArrowLeft,
@@ -169,8 +170,18 @@ export default function AgentRegisterPage() {
           חזרה לבחירת סוג חשבון
         </Link>
 
-        {/* Header */}
+        {/* Header with Logo */}
         <div className="text-center mb-8">
+          <div className="flex justify-center mb-6">
+            <Image
+              src="/sela-logo-full.png"
+              alt="סלע סוכנות לביטוח"
+              width={200}
+              height={70}
+              className="h-16 w-auto object-contain"
+              priority
+            />
+          </div>
           <div className="w-16 h-16 bg-blue-500/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
             <Briefcase className="w-8 h-8 text-blue-400" />
           </div>

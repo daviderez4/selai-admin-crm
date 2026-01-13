@@ -1,12 +1,25 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { Clock, Mail, Phone, ArrowLeft, CheckCircle2 } from 'lucide-react';
 
 export default function PendingApprovalPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4" dir="rtl">
       <div className="w-full max-w-lg text-center">
+        {/* Logo */}
+        <div className="flex justify-center mb-8">
+          <Image
+            src="/sela-logo-full.png"
+            alt="סלע סוכנות לביטוח"
+            width={200}
+            height={70}
+            className="h-16 w-auto object-contain"
+            priority
+          />
+        </div>
+
         {/* Icon */}
         <div className="w-24 h-24 bg-amber-500/20 rounded-full flex items-center justify-center mx-auto mb-8">
           <Clock className="w-12 h-12 text-amber-400" />
