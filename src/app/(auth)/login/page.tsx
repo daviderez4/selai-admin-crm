@@ -48,13 +48,20 @@ export default function LoginPage() {
 
       if (data.user) {
         // Check if user exists in users table (existing users)
-        const { data: userProfile } = await supabase
+        const { data: userProfile, error: profileError } = await supabase
           .from('users')
-          .select('id, role, is_active')
-          .eq('email', email)
-          .single();
+          .select('id, user_type, is_active')
+          .eq('email', email.toLowerCase())
+          .maybeSingle();
 
-        if (userProfile && userProfile.is_active) {
+        // If error or no profile, just go to dashboard - authStore will handle it
+        if (profileError) {
+          console.log('Profile check error (non-blocking):', profileError.message);
+          router.push('/');
+          return;
+        }
+
+        if (userProfile && userProfile.is_active !== false) {
           // User exists and is active - go to dashboard
           router.push('/');
           return;
