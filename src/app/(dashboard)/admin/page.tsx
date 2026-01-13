@@ -9,6 +9,8 @@ import {
   Users,
   Settings,
   Shield,
+  UserPlus,
+  Cog,
 } from 'lucide-react';
 import DataHealthDashboard from '@/components/admin/health/DataHealthDashboard';
 import SchemaRegistryManager from '@/components/admin/health/SchemaRegistryManager';
@@ -24,6 +26,16 @@ const AdminProjectsContent = dynamic(
 
 const AdminUsersContent = dynamic(
   () => import('@/components/admin/AdminUsersContent'),
+  { loading: () => <div className="flex items-center justify-center h-96"><div className="animate-spin h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full"></div></div> }
+);
+
+const AdminRegistrationsContent = dynamic(
+  () => import('@/components/admin/AdminRegistrationsContent'),
+  { loading: () => <div className="flex items-center justify-center h-96"><div className="animate-spin h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full"></div></div> }
+);
+
+const AdminSettingsContent = dynamic(
+  () => import('@/components/admin/AdminSettingsContent'),
   { loading: () => <div className="flex items-center justify-center h-96"><div className="animate-spin h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full"></div></div> }
 );
 
@@ -77,6 +89,20 @@ export default function AdminPage() {
               <Users className="h-4 w-4 ml-2" />
               משתמשים
             </TabsTrigger>
+            <TabsTrigger
+              value="registrations"
+              className="data-[state=active]:bg-green-50 data-[state=active]:text-green-700 px-4 py-2 rounded-lg"
+            >
+              <UserPlus className="h-4 w-4 ml-2" />
+              בקשות הרשמה
+            </TabsTrigger>
+            <TabsTrigger
+              value="settings"
+              className="data-[state=active]:bg-purple-50 data-[state=active]:text-purple-700 px-4 py-2 rounded-lg"
+            >
+              <Cog className="h-4 w-4 ml-2" />
+              הגדרות מערכת
+            </TabsTrigger>
           </TabsList>
         </div>
 
@@ -97,6 +123,14 @@ export default function AdminPage() {
 
         <TabsContent value="users" className="m-0">
           <AdminUsersContent />
+        </TabsContent>
+
+        <TabsContent value="registrations" className="m-0">
+          <AdminRegistrationsContent />
+        </TabsContent>
+
+        <TabsContent value="settings" className="m-0">
+          <AdminSettingsContent />
         </TabsContent>
       </Tabs>
     </div>
