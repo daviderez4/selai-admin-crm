@@ -60,7 +60,7 @@ export async function GET(request: Request) {
   }
 }
 
-// POST - Submit new registration request
+// POST - Submit new registration request (PUBLIC - no auth required)
 export async function POST(request: Request) {
   try {
     const supabase = await createClient();
@@ -82,20 +82,28 @@ export async function POST(request: Request) {
     // Validate required fields
     if (!full_name || !email || !phone || !requested_role) {
       return NextResponse.json({
-        error: 'Missing required fields: full_name, email, phone, requested_role'
+        error: 'חסרים שדות חובה: שם מלא, אימייל, טלפון, תפקיד'
       }, { status: 400 });
     }
 
-    // Check if email already exists
+    // Validate role
+    const validRoles = ['agent', 'supervisor', 'manager', 'client'];
+    if (!validRoles.includes(requested_role)) {
+      return NextResponse.json({
+        error: 'תפקיד לא חוקי'
+      }, { status: 400 });
+    }
+
+    // Check if email already exists in users table
     const { data: existingUser } = await supabase
       .from('users')
       .select('id')
       .eq('email', email)
-      .single();
+      .maybeSingle();
 
     if (existingUser) {
       return NextResponse.json({
-        error: 'Email already registered'
+        error: 'האימייל כבר רשום במערכת'
       }, { status: 400 });
     }
 
@@ -105,11 +113,11 @@ export async function POST(request: Request) {
       .select('id')
       .eq('email', email)
       .eq('status', 'pending')
-      .single();
+      .maybeSingle();
 
     if (existingRequest) {
       return NextResponse.json({
-        error: 'Registration request already pending for this email'
+        error: 'בקשת הרשמה כבר קיימת עבור אימייל זה'
       }, { status: 400 });
     }
 
@@ -167,33 +175,62 @@ export async function POST(request: Request) {
       }
     }
 
+    // Prepare insert data - only include non-empty fields
+    const insertData: Record<string, unknown> = {
+      full_name,
+      email,
+      phone,
+      requested_role,
+      status: 'pending'
+    };
+
+    // Add optional fields only if they have values
+    if (national_id) insertData.national_id = national_id;
+    if (license_number) insertData.license_number = license_number;
+    if (requested_supervisor_id) insertData.requested_supervisor_id = requested_supervisor_id;
+    if (requested_manager_id) insertData.requested_manager_id = requested_manager_id;
+    if (company_name) insertData.company_name = company_name;
+    if (notes) insertData.notes = notes;
+
+    // Add Sela match data if found
+    if (selaMatch) {
+      insertData.sela_match_found = true;
+      insertData.sela_match_id = selaMatch.id;
+      insertData.sela_match_data = selaMatch;
+      insertData.match_confidence = matchConfidence;
+      insertData.match_method = matchMethod;
+    }
+
     // Create registration request
     const { data: registration, error } = await supabase
       .from('registration_requests')
-      .insert({
-        full_name,
-        email,
-        phone,
-        national_id,
-        license_number,
-        requested_role,
-        requested_supervisor_id,
-        requested_manager_id,
-        company_name,
-        notes,
-        sela_match_found: !!selaMatch,
-        sela_match_id: selaMatch?.id,
-        sela_match_data: selaMatch,
-        match_confidence: matchConfidence,
-        match_method: matchMethod,
-        status: 'pending'
-      })
+      .insert(insertData)
       .select()
       .single();
 
     if (error) {
       console.error('Error creating registration:', error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+
+      // Check for common errors
+      if (error.code === '42501') {
+        return NextResponse.json({
+          error: 'שגיאת הרשאות - פנה למנהל המערכת (RLS policy issue)'
+        }, { status: 403 });
+      }
+      if (error.code === '23505') {
+        return NextResponse.json({
+          error: 'בקשה עם אימייל זה כבר קיימת'
+        }, { status: 400 });
+      }
+      if (error.code === '23503') {
+        return NextResponse.json({
+          error: 'שגיאה בנתונים - מפקח או מנהל לא נמצא'
+        }, { status: 400 });
+      }
+
+      return NextResponse.json({
+        error: `שגיאה בשמירת הבקשה: ${error.message}`
+      }, { status: 500 });
     }
 
     return NextResponse.json({
@@ -209,6 +246,9 @@ export async function POST(request: Request) {
 
   } catch (error) {
     console.error('Registration POST error:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    return NextResponse.json({
+      error: `שגיאה בשליחת הבקשה: ${message}`
+    }, { status: 500 });
   }
 }
