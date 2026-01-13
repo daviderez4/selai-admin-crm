@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
+import { Label } from '@/components/ui/label';
 import {
   Shield,
   Users,
@@ -22,6 +23,9 @@ import {
   Crown,
   CheckCircle2,
   AlertTriangle,
+  Save,
+  Server,
+  Loader2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -52,6 +56,7 @@ export default function AdminSettingsContent() {
   const [loading, setLoading] = useState(true);
   const [newAdminEmail, setNewAdminEmail] = useState('');
   const [addingAdmin, setAddingAdmin] = useState(false);
+  const [savingEmail, setSavingEmail] = useState(false);
 
   // Settings states
   const [settings, setSettings] = useState({
@@ -62,8 +67,18 @@ export default function AdminSettingsContent() {
     maintenanceMode: false,
   });
 
+  // Email settings
+  const [emailSettings, setEmailSettings] = useState({
+    system_email: '',
+    smtp_host: '',
+    smtp_port: '587',
+    smtp_user: '',
+    smtp_password: '',
+  });
+
   useEffect(() => {
     fetchAdmins();
+    fetchSystemSettings();
   }, []);
 
   const fetchAdmins = async () => {
@@ -84,6 +99,74 @@ export default function AdminSettingsContent() {
       toast.error('שגיאה בטעינת רשימת מנהלים');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchSystemSettings = async () => {
+    const supabase = createClient();
+
+    try {
+      const { data, error } = await supabase
+        .from('system_settings')
+        .select('key, value');
+
+      if (error) {
+        console.log('System settings table might not exist yet:', error.message);
+        return;
+      }
+
+      if (data) {
+        const settingsMap: Record<string, string> = {};
+        data.forEach((s: { key: string; value: string | null }) => {
+          settingsMap[s.key] = s.value || '';
+        });
+
+        setEmailSettings({
+          system_email: settingsMap['system_email'] || '',
+          smtp_host: settingsMap['smtp_host'] || '',
+          smtp_port: settingsMap['smtp_port'] || '587',
+          smtp_user: settingsMap['smtp_user'] || '',
+          smtp_password: settingsMap['smtp_password'] || '',
+        });
+
+        setSettings({
+          allowPublicRegistration: settingsMap['allow_public_registration'] !== 'false',
+          requireEmailVerification: settingsMap['require_email_verification'] !== 'false',
+          autoApproveAgents: settingsMap['auto_approve_agents'] === 'true',
+          enableNotifications: settingsMap['enable_notifications'] !== 'false',
+          maintenanceMode: settingsMap['maintenance_mode'] === 'true',
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching system settings:', error);
+    }
+  };
+
+  const handleSaveEmailSettings = async () => {
+    setSavingEmail(true);
+    const supabase = createClient();
+
+    try {
+      const updates = [
+        { key: 'system_email', value: emailSettings.system_email },
+        { key: 'smtp_host', value: emailSettings.smtp_host },
+        { key: 'smtp_port', value: emailSettings.smtp_port },
+        { key: 'smtp_user', value: emailSettings.smtp_user },
+        { key: 'smtp_password', value: emailSettings.smtp_password },
+      ];
+
+      for (const update of updates) {
+        await supabase
+          .from('system_settings')
+          .upsert({ key: update.key, value: update.value }, { onConflict: 'key' });
+      }
+
+      toast.success('הגדרות האימייל נשמרו');
+    } catch (error) {
+      console.error('Error saving email settings:', error);
+      toast.error('שגיאה בשמירת הגדרות האימייל');
+    } finally {
+      setSavingEmail(false);
     }
   };
 
@@ -365,6 +448,95 @@ export default function AdminSettingsContent() {
               checked={settings.maintenanceMode}
               onCheckedChange={(v) => handleSettingChange('maintenanceMode', v)}
             />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Email Settings */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-cyan-100 rounded-lg">
+              <Mail className="h-5 w-5 text-cyan-600" />
+            </div>
+            <div>
+              <CardTitle>הגדרות מייל מערכת</CardTitle>
+              <CardDescription>הגדרת שרת SMTP לשליחת מיילים מהמערכת</CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="system_email">כתובת מייל מערכת</Label>
+              <Input
+                id="system_email"
+                type="email"
+                placeholder="noreply@company.com"
+                value={emailSettings.system_email}
+                onChange={(e) => setEmailSettings({ ...emailSettings, system_email: e.target.value })}
+                dir="ltr"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="smtp_host">שרת SMTP</Label>
+              <Input
+                id="smtp_host"
+                placeholder="smtp.gmail.com"
+                value={emailSettings.smtp_host}
+                onChange={(e) => setEmailSettings({ ...emailSettings, smtp_host: e.target.value })}
+                dir="ltr"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="smtp_port">פורט</Label>
+              <Input
+                id="smtp_port"
+                placeholder="587"
+                value={emailSettings.smtp_port}
+                onChange={(e) => setEmailSettings({ ...emailSettings, smtp_port: e.target.value })}
+                dir="ltr"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="smtp_user">שם משתמש SMTP</Label>
+              <Input
+                id="smtp_user"
+                placeholder="username@gmail.com"
+                value={emailSettings.smtp_user}
+                onChange={(e) => setEmailSettings({ ...emailSettings, smtp_user: e.target.value })}
+                dir="ltr"
+              />
+            </div>
+
+            <div className="space-y-2 md:col-span-2">
+              <Label htmlFor="smtp_password">סיסמת SMTP (App Password)</Label>
+              <Input
+                id="smtp_password"
+                type="password"
+                placeholder="••••••••••••••••"
+                value={emailSettings.smtp_password}
+                onChange={(e) => setEmailSettings({ ...emailSettings, smtp_password: e.target.value })}
+                dir="ltr"
+              />
+              <p className="text-xs text-slate-500">
+                עבור Gmail, יש ליצור App Password בהגדרות האבטחה של חשבון Google
+              </p>
+            </div>
+          </div>
+
+          <div className="flex justify-end pt-4 border-t">
+            <Button onClick={handleSaveEmailSettings} disabled={savingEmail}>
+              {savingEmail ? (
+                <Loader2 className="h-4 w-4 ml-2 animate-spin" />
+              ) : (
+                <Save className="h-4 w-4 ml-2" />
+              )}
+              שמור הגדרות מייל
+            </Button>
           </div>
         </CardContent>
       </Card>

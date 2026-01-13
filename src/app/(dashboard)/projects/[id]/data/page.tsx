@@ -723,6 +723,93 @@ export default function DataPage() {
     }
   }, [filteredData, visibleColumns, activeColumns, projectInfo?.table_name]);
 
+  // Export schema/structure handler (without actual data)
+  const handleExportSchema = useCallback(() => {
+    if (activeColumns.length === 0) {
+      toast.error('אין שדות לייצוא');
+      return;
+    }
+
+    try {
+      // Create schema data - export field information without actual data
+      const schemaData = activeColumns.map((col, index) => ({
+        'מספר': index + 1,
+        'מזהה שדה': col.key,
+        'שם שדה': col.label,
+        'סוג': col.type || 'text',
+        'רוחב': col.width || 'auto',
+        'ניתן למיון': col.sortable !== false ? 'כן' : 'לא',
+        'גלוי': visibleColumns.has(col.key) ? 'כן' : 'לא',
+      }));
+
+      // Create workbook with multiple sheets
+      const workbook = XLSX.utils.book_new();
+
+      // Sheet 1: Project Info
+      const projectInfoData = [
+        { 'מאפיין': 'שם הפרויקט', 'ערך': projectInfo?.name || '-' },
+        { 'מאפיין': 'שם הטבלה', 'ערך': projectInfo?.table_name || '-' },
+        { 'מאפיין': 'תיאור', 'ערך': projectInfo?.description || '-' },
+        { 'מאפיין': 'סה"כ שדות', 'ערך': activeColumns.length.toString() },
+        { 'מאפיין': 'סה"כ רשומות', 'ערך': filteredData.length.toLocaleString('he-IL') },
+        { 'מאפיין': 'תאריך יצוא', 'ערך': new Date().toLocaleDateString('he-IL') },
+        { 'מאפיין': 'שעת יצוא', 'ערך': new Date().toLocaleTimeString('he-IL') },
+      ];
+      const infoSheet = XLSX.utils.json_to_sheet(projectInfoData);
+      infoSheet['!dir'] = 'rtl';
+      infoSheet['!cols'] = [{ wch: 20 }, { wch: 40 }];
+      XLSX.utils.book_append_sheet(workbook, infoSheet, 'פרטי פרויקט');
+
+      // Sheet 2: Schema/Fields
+      const schemaSheet = XLSX.utils.json_to_sheet(schemaData);
+      schemaSheet['!dir'] = 'rtl';
+      schemaSheet['!cols'] = [
+        { wch: 8 },   // מספר
+        { wch: 25 },  // מזהה שדה
+        { wch: 30 },  // שם שדה
+        { wch: 12 },  // סוג
+        { wch: 10 },  // רוחב
+        { wch: 12 },  // ניתן למיון
+        { wch: 8 },   // גלוי
+      ];
+      XLSX.utils.book_append_sheet(workbook, schemaSheet, 'מבנה שדות');
+
+      // Sheet 3: Sample values (first value from each column, no personal data)
+      const sampleData = activeColumns.map((col) => {
+        // Get unique values count
+        const uniqueValues = new Set(filteredData.map(row => row[col.key]));
+        const nonEmptyCount = filteredData.filter(row => row[col.key] != null && row[col.key] !== '').length;
+
+        return {
+          'שם שדה': col.label,
+          'מזהה': col.key,
+          'ערכים ייחודיים': uniqueValues.size,
+          'אחוז מילוי': filteredData.length > 0
+            ? `${Math.round((nonEmptyCount / filteredData.length) * 100)}%`
+            : '0%',
+        };
+      });
+      const sampleSheet = XLSX.utils.json_to_sheet(sampleData);
+      sampleSheet['!dir'] = 'rtl';
+      sampleSheet['!cols'] = [
+        { wch: 30 },  // שם שדה
+        { wch: 25 },  // מזהה
+        { wch: 15 },  // ערכים ייחודיים
+        { wch: 12 },  // אחוז מילוי
+      ];
+      XLSX.utils.book_append_sheet(workbook, sampleSheet, 'סטטיסטיקות שדות');
+
+      const tableName = projectInfo?.table_name || 'schema';
+      const fileName = `${tableName}_מבנה_${new Date().toISOString().split('T')[0]}`;
+
+      XLSX.writeFile(workbook, `${fileName}.xlsx`, { bookType: 'xlsx' });
+
+      toast.success(`מבנה השדות יוצא בהצלחה (${activeColumns.length} שדות)`);
+    } catch {
+      toast.error('שגיאה בייצוא מבנה השדות');
+    }
+  }, [activeColumns, visibleColumns, projectInfo, filteredData]);
+
   // Share via email handler
   const handleShareEmail = useCallback(() => {
     if (filteredData.length === 0) {
@@ -1463,6 +1550,13 @@ export default function DataPage() {
               >
                 <FileSpreadsheet className="h-4 w-4 ml-2 text-blue-600" />
                 ייצוא ל-CSV
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => handleExportSchema()}
+                className="text-slate-700 cursor-pointer hover:bg-slate-50"
+              >
+                <Columns3 className="h-4 w-4 ml-2 text-purple-600" />
+                ייצוא מבנה שדות
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

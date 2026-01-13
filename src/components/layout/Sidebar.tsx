@@ -57,12 +57,18 @@ interface NavItem {
 export function Sidebar() {
   const pathname = usePathname();
   const params = useParams();
-  const { signOut, user } = useAuthStore();
+  const { signOut, user, userRecord, isAdmin: isAdminAuth, isManager, canAccessProjects } = useAuthStore();
   const { selectedProject } = useProjectsStore();
   const { profile, isAdmin, isSupervisor } = useUserStore();
   const [collapsed, setCollapsed] = useState(false);
 
   const projectId = params?.id as string;
+
+  // Use authStore for role checks (with userRecord from users table)
+  // Fall back to userStore.profile if userRecord not available
+  const hasAdminAccess = isAdminAuth() || isAdmin();
+  const hasProjectAccess = canAccessProjects() || isAdmin(); // admin or manager
+  const hasTeamAccess = hasAdminAccess || isSupervisor() || isManager();
 
   // Get project-specific dashboards based on table_name
   const getProjectDashboards = (): NavItem[] => {
@@ -144,29 +150,30 @@ export function Sidebar() {
       icon: AppWindow,
       alwaysShow: true,
     },
-    {
+    // Projects - ONLY for admin and manager (not agents/supervisors)
+    ...(hasProjectAccess ? [{
       id: 'projects',
       title: 'פרויקטים',
       href: '/projects',
       icon: FolderKanban,
       alwaysShow: true,
-    },
+    }] : []),
     // Supervisor team view - only for supervisors and admins
-    ...(isAdmin() || isSupervisor() ? [{
+    ...(hasTeamAccess ? [{
       id: 'my-team',
       title: 'הצוות שלי',
       href: '/supervisor',
       icon: UsersRound,
     }] : []),
     // Reports - for managers and above
-    ...(isAdmin() || isSupervisor() ? [{
+    ...(hasTeamAccess ? [{
       id: 'reports',
       title: 'דוחות',
       href: '/reports',
       icon: PieChart,
     }] : []),
     // Workflows - for managers and above
-    ...(isAdmin() || isSupervisor() ? [{
+    ...(hasAdminAccess || isManager() ? [{
       id: 'workflows',
       title: 'אוטומציות',
       href: '/workflows',
@@ -285,40 +292,42 @@ export function Sidebar() {
   // System navigation items - filter based on role
   const systemNavItems: NavItem[] = [
     // Hierarchy page - only for admin and supervisors
-    ...(isAdmin() || isSupervisor() ? [{
+    ...(hasTeamAccess ? [{
       id: 'hierarchy',
       title: 'היררכיה ארגונית',
       href: '/hierarchy',
       icon: Building2,
     }] : []),
-    {
+    // Users - only for admins and managers
+    ...(hasAdminAccess || isManager() ? [{
       id: 'users',
       title: 'משתמשים',
       href: '/users',
       icon: Users,
-    },
-    {
+    }] : []),
+    // Audit log - only for admins
+    ...(hasAdminAccess ? [{
       id: 'audit',
       title: 'לוג פעולות',
       href: '/audit',
       icon: FileText,
-    },
+    }] : []),
     // RLS Documentation - only for admins
-    ...(isAdmin() ? [{
+    ...(hasAdminAccess ? [{
       id: 'rls-docs',
       title: 'תיעוד הרשאות',
       href: '/rls-docs',
       icon: Shield,
     }] : []),
     // Admin Panel - only for admins
-    ...(isAdmin() ? [{
+    ...(hasAdminAccess ? [{
       id: 'admin',
       title: 'פאנל ניהול',
       href: '/admin',
       icon: Activity,
     }] : []),
     // Registration Requests - only for admins
-    ...(isAdmin() ? [{
+    ...(hasAdminAccess ? [{
       id: 'registrations',
       title: 'בקשות הרשמה',
       href: '/admin/registrations',
@@ -326,7 +335,7 @@ export function Sidebar() {
     }] : []),
     {
       id: 'settings',
-      title: 'הגדרות מערכת',
+      title: 'הגדרות',
       href: '/settings',
       icon: Settings,
     },
@@ -495,17 +504,20 @@ export function Sidebar() {
         {/* User section */}
         <div className="border-t border-slate-100">
           {/* User Role Badge */}
-          {profile && !collapsed && (
+          {(userRecord || profile) && !collapsed && (
             <div className="p-2 bg-slate-50/50">
               <div className="flex items-center gap-2 px-2 py-1.5">
                 <div className={cn(
                   "p-1.5 rounded-full",
-                  profile.role === 'admin' ? 'bg-purple-100' :
-                  profile.role === 'supervisor' ? 'bg-blue-100' : 'bg-slate-100'
+                  (userRecord?.user_type === 'admin' || profile?.role === 'admin') ? 'bg-purple-100' :
+                  (userRecord?.user_type === 'manager') ? 'bg-indigo-100' :
+                  (userRecord?.user_type === 'supervisor' || profile?.role === 'supervisor') ? 'bg-blue-100' : 'bg-slate-100'
                 )}>
-                  {profile.role === 'admin' ? (
+                  {(userRecord?.user_type === 'admin' || profile?.role === 'admin') ? (
                     <Shield className="h-3 w-3 text-purple-600" />
-                  ) : profile.role === 'supervisor' ? (
+                  ) : (userRecord?.user_type === 'manager') ? (
+                    <Shield className="h-3 w-3 text-indigo-600" />
+                  ) : (userRecord?.user_type === 'supervisor' || profile?.role === 'supervisor') ? (
                     <Shield className="h-3 w-3 text-blue-600" />
                   ) : (
                     <User className="h-3 w-3 text-slate-600" />
@@ -513,11 +525,14 @@ export function Sidebar() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-medium text-slate-700 truncate">
-                    {profile.full_name}
+                    {userRecord?.full_name || profile?.full_name || user?.email}
                   </p>
                   <p className="text-[10px] text-slate-500">
-                    {profile.role === 'admin' ? 'מנהל מערכת' :
-                     profile.role === 'supervisor' ? 'מפקח' : 'סוכן'}
+                    {userRecord?.user_type === 'admin' || profile?.role === 'admin' ? 'מנהל מערכת' :
+                     userRecord?.user_type === 'manager' ? 'מנהל' :
+                     userRecord?.user_type === 'supervisor' || profile?.role === 'supervisor' ? 'מפקח' :
+                     userRecord?.user_type === 'agent' ? 'סוכן' :
+                     userRecord?.user_type === 'client' ? 'לקוח' : 'ממתין לאישור'}
                   </p>
                 </div>
               </div>

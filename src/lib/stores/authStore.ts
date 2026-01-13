@@ -3,8 +3,25 @@ import { persist } from 'zustand/middleware';
 import { createClient } from '../supabase/client';
 import type { User, UserSettings } from '@/types';
 
+export type UserType = 'admin' | 'manager' | 'supervisor' | 'agent' | 'client' | 'pending' | 'guest';
+
+export interface UserRecord {
+  id: string;
+  auth_id: string | null;
+  email: string;
+  full_name: string;
+  phone: string | null;
+  user_type: UserType;
+  supervisor_id: string | null;
+  manager_id: string | null;
+  is_active: boolean;
+  is_approved: boolean;
+  created_at: string;
+}
+
 interface AuthState {
   user: User | null;
+  userRecord: UserRecord | null;
   settings: UserSettings | null;
   isLoading: boolean;
   isAuthenticated: boolean;
@@ -12,19 +29,30 @@ interface AuthState {
 
   // Actions
   setUser: (user: User | null) => void;
+  setUserRecord: (record: UserRecord | null) => void;
   setSettings: (settings: UserSettings | null) => void;
   setLoading: (loading: boolean) => void;
   setRequires2FA: (requires: boolean) => void;
   fetchUser: () => Promise<void>;
+  fetchUserRecord: () => Promise<void>;
   fetchSettings: () => Promise<void>;
   signOut: () => Promise<void>;
   updateSettings: (updates: Partial<UserSettings>) => Promise<void>;
+
+  // Role helpers
+  isAdmin: () => boolean;
+  isManager: () => boolean;
+  isSupervisor: () => boolean;
+  isAgent: () => boolean;
+  canAccessProjects: () => boolean;
+  canManageUsers: () => boolean;
 }
 
 export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
       user: null,
+      userRecord: null,
       settings: null,
       isLoading: true,
       isAuthenticated: false,
@@ -32,6 +60,10 @@ export const useAuthStore = create<AuthState>()(
 
       setUser: (user) => {
         set({ user, isAuthenticated: !!user });
+      },
+
+      setUserRecord: (userRecord) => {
+        set({ userRecord });
       },
 
       setSettings: (settings) => {
@@ -54,7 +86,7 @@ export const useAuthStore = create<AuthState>()(
           const { data: { user }, error } = await supabase.auth.getUser();
 
           if (error || !user) {
-            set({ user: null, isAuthenticated: false, isLoading: false });
+            set({ user: null, userRecord: null, isAuthenticated: false, isLoading: false });
             return;
           }
 
@@ -69,11 +101,67 @@ export const useAuthStore = create<AuthState>()(
             isLoading: false,
           });
 
+          // Fetch user record from users table
+          await get().fetchUserRecord();
+
           // Fetch settings after getting user
           await get().fetchSettings();
         } catch (error) {
           console.error('Error fetching user:', error);
-          set({ user: null, isAuthenticated: false, isLoading: false });
+          set({ user: null, userRecord: null, isAuthenticated: false, isLoading: false });
+        }
+      },
+
+      fetchUserRecord: async () => {
+        const { user } = get();
+        if (!user) return;
+
+        const supabase = createClient();
+
+        try {
+          // Try to find by auth_id first, then by email
+          const { data, error } = await supabase
+            .from('users')
+            .select('*')
+            .or(`auth_id.eq.${user.id},email.eq.${user.email?.toLowerCase()}`)
+            .maybeSingle();
+
+          if (error) {
+            console.log('Error fetching user record:', error.message);
+            return;
+          }
+
+          if (data) {
+            set({ userRecord: data as UserRecord });
+
+            // If auth_id not set, update it
+            if (!data.auth_id && user.id) {
+              await supabase
+                .from('users')
+                .update({ auth_id: user.id })
+                .eq('id', data.id);
+            }
+          } else {
+            // Create user record if not exists
+            const { data: newUser, error: createError } = await supabase
+              .from('users')
+              .insert({
+                auth_id: user.id,
+                email: user.email?.toLowerCase() || '',
+                full_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'משתמש',
+                user_type: 'pending',
+                is_active: true,
+                is_approved: false,
+              })
+              .select()
+              .single();
+
+            if (!createError && newUser) {
+              set({ userRecord: newUser as UserRecord });
+            }
+          }
+        } catch (error) {
+          console.error('Error fetching user record:', error);
         }
       },
 
@@ -167,6 +255,7 @@ export const useAuthStore = create<AuthState>()(
           await supabase.auth.signOut();
           set({
             user: null,
+            userRecord: null,
             settings: null,
             isAuthenticated: false,
             requires2FA: false,
@@ -200,6 +289,21 @@ export const useAuthStore = create<AuthState>()(
           console.error('Error updating settings:', error);
         }
       },
+
+      // Role helper methods
+      isAdmin: () => get().userRecord?.user_type === 'admin',
+      isManager: () => get().userRecord?.user_type === 'manager',
+      isSupervisor: () => get().userRecord?.user_type === 'supervisor',
+      isAgent: () => get().userRecord?.user_type === 'agent',
+
+      // Only admin and manager can access projects
+      canAccessProjects: () => {
+        const userType = get().userRecord?.user_type;
+        return userType === 'admin' || userType === 'manager';
+      },
+
+      // Only admin can manage users
+      canManageUsers: () => get().userRecord?.user_type === 'admin',
     }),
     {
       name: 'auth-storage',
