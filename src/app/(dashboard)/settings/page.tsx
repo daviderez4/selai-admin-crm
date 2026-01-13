@@ -228,7 +228,7 @@ export default function SettingsPage() {
     <div className="flex flex-col h-full">
       <Header title="אזור אישי והגדרות" />
 
-      <div className="flex-1 p-6">
+      <div className="flex-1 p-6" dir="rtl">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="mb-6">
             <TabsTrigger value="profile" className="gap-2">
@@ -296,7 +296,7 @@ export default function SettingsPage() {
           </TabsContent>
 
           {/* Integrations Tab */}
-          <TabsContent value="integrations" className="space-y-6">
+          <TabsContent value="integrations" className="space-y-6 max-w-4xl">
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h3 className="text-lg font-semibold">אינטגרציות וחיבורים</h3>

@@ -38,7 +38,8 @@
       "Bash(xargs:*)",
       "Bash(git tag:*)",
       "Bash(npx vercel:*)",
-      "Bash(echo:*)"
+      "Bash(echo:*)",
+      "Bash(dir)"
     ]
   }
 }
