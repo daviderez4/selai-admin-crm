@@ -77,6 +77,12 @@ export async function POST(
 
       if (existingAuthUser) {
         authUserId = existingAuthUser.id;
+        // Make sure email is confirmed for existing users
+        if (!existingAuthUser.email_confirmed_at) {
+          await adminClient.auth.admin.updateUserById(existingAuthUser.id, {
+            email_confirm: true,
+          });
+        }
       } else {
         // Step 2: Create auth user with stored password
         if (!registration.encrypted_password) {
