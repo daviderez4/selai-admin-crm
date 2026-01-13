@@ -1,11 +1,37 @@
 /**
  * Registration Request API
  * Creates a pending registration request in registration_requests table
+ * NO auth user created here - only after admin approval
  * Automatically matches with external_agents using find_external_agent_match
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createSelaiClient } from '@/lib/supabase/server';
+
+// Simple encryption for temporary password storage (until admin approval)
+// In production, use proper encryption with environment-based keys
+function encryptPassword(password: string): string {
+  const key = process.env.PASSWORD_ENCRYPTION_KEY || 'selai-temp-key-2024';
+  let encrypted = '';
+  for (let i = 0; i < password.length; i++) {
+    encrypted += String.fromCharCode(
+      password.charCodeAt(i) ^ key.charCodeAt(i % key.length)
+    );
+  }
+  return Buffer.from(encrypted).toString('base64');
+}
+
+export function decryptPassword(encrypted: string): string {
+  const key = process.env.PASSWORD_ENCRYPTION_KEY || 'selai-temp-key-2024';
+  const decoded = Buffer.from(encrypted, 'base64').toString();
+  let decrypted = '';
+  for (let i = 0; i < decoded.length; i++) {
+    decrypted += String.fromCharCode(
+      decoded.charCodeAt(i) ^ key.charCodeAt(i % key.length)
+    );
+  }
+  return decrypted;
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -43,13 +69,15 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
+    const normalizedEmail = email.toLowerCase().trim();
+
     // Check if email already exists in registration_requests (pending)
     const { data: existingRequest } = await supabase
       .from('registration_requests')
       .select('id, status')
-      .eq('email', email)
+      .eq('email', normalizedEmail)
       .in('status', ['pending', 'needs_review'])
-      .single();
+      .maybeSingle();
 
     if (existingRequest) {
       return NextResponse.json({
@@ -57,51 +85,10 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
-    // Check if email already exists in users table (already registered AND approved)
-    const { data: existingUser } = await supabase
-      .from('users')
-      .select('id, is_approved, user_type')
-      .eq('email', email.toLowerCase())
-      .maybeSingle();
+    // Encrypt password for storage (will be decrypted when admin approves to create auth user)
+    const encryptedPassword = encryptPassword(password);
 
-    // Only block if user exists AND is approved (active user)
-    if (existingUser && existingUser.is_approved) {
-      return NextResponse.json({
-        error: 'Email already registered'
-      }, { status: 400 });
-    }
-
-    // If user exists but not approved, delete it so they can re-register
-    if (existingUser && !existingUser.is_approved) {
-      await supabase.from('users').delete().eq('id', existingUser.id);
-    }
-
-    // Step 1: Create auth user in Supabase
-    const { data: authData, error: authError } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          full_name,
-          phone,
-          id_number: national_id,
-        },
-      },
-    });
-
-    if (authError) {
-      if (authError.message.includes('already registered')) {
-        return NextResponse.json({
-          error: 'Email already registered'
-        }, { status: 400 });
-      }
-      console.error('Auth signup error:', authError);
-      return NextResponse.json({
-        error: authError.message
-      }, { status: 500 });
-    }
-
-    // Step 2: Try to find matching agent in external_agents (from SELAI database)
+    // Step 1: Try to find matching agent in external_agents (from SELAI database)
     let matchedExternalId = null;
     let matchScore = 0;
     let matchDetails: Record<string, any> = {};
@@ -175,15 +162,17 @@ export async function POST(request: NextRequest) {
     const { data: regRequest, error: regError } = await supabase
       .from('registration_requests')
       .insert({
-        email,
+        email: normalizedEmail,
         full_name,
         phone,
         id_number: national_id,
         requested_role: user_type || 'agent',
+        supervisor_id: supervisor_id || null,
         matched_external_id: matchedExternalId,
         match_score: matchScore,
         match_details: matchDetails,
         status: initialStatus,
+        encrypted_password: encryptedPassword,
       })
       .select()
       .single();

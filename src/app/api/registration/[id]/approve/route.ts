@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createAdminClient } from '@/lib/supabase/server';
+import { decryptPassword } from '@/app/api/auth/register-request/route';
 
 export async function POST(
   request: Request,
@@ -63,9 +64,50 @@ export async function POST(
       return NextResponse.json({ success: true, status: 'rejected' });
     }
 
-    // Handle approval - Create user account
+    // Handle approval - Create auth user and user record
     if (action === 'approve') {
-      // First, check if user already exists (from auth signup)
+      const adminClient = createAdminClient();
+      let authUserId: string | null = null;
+
+      // Step 1: Check if auth user already exists
+      const { data: authUsers } = await adminClient.auth.admin.listUsers();
+      const existingAuthUser = authUsers?.users?.find(
+        u => u.email?.toLowerCase() === registration.email.toLowerCase()
+      );
+
+      if (existingAuthUser) {
+        authUserId = existingAuthUser.id;
+      } else {
+        // Step 2: Create auth user with stored password
+        if (!registration.encrypted_password) {
+          return NextResponse.json({
+            error: 'No password stored for this registration. User must re-register.'
+          }, { status: 400 });
+        }
+
+        const password = decryptPassword(registration.encrypted_password);
+
+        const { data: newAuthUser, error: authError } = await adminClient.auth.admin.createUser({
+          email: registration.email.toLowerCase(),
+          password: password,
+          email_confirm: true, // Auto-confirm email
+          user_metadata: {
+            full_name: registration.full_name,
+            phone: registration.phone,
+          }
+        });
+
+        if (authError) {
+          console.error('Error creating auth user:', authError);
+          return NextResponse.json({
+            error: `Failed to create auth user: ${authError.message}`
+          }, { status: 500 });
+        }
+
+        authUserId = newAuthUser.user.id;
+      }
+
+      // Step 3: Check if user record exists in users table
       const { data: existingUser } = await supabase
         .from('users')
         .select('id')
@@ -80,6 +122,7 @@ export async function POST(
         const { data, error } = await supabase
           .from('users')
           .update({
+            auth_id: authUserId,
             full_name: registration.full_name,
             phone: registration.phone,
             id_number: registration.id_number || registration.national_id,
@@ -102,6 +145,7 @@ export async function POST(
         const { data, error } = await supabase
           .from('users')
           .insert({
+            auth_id: authUserId,
             email: registration.email.toLowerCase(),
             full_name: registration.full_name,
             phone: registration.phone,
@@ -158,7 +202,7 @@ export async function POST(
         // Don't fail the whole operation, just log it
       }
 
-      // Update registration request
+      // Update registration request (clear password for security)
       const { error: updateError } = await supabase
         .from('registration_requests')
         .update({
@@ -166,7 +210,8 @@ export async function POST(
           reviewed_by: reviewer.id,
           reviewed_at: new Date().toISOString(),
           reviewer_notes,
-          created_user_id: newUser.id
+          created_user_id: newUser.id,
+          encrypted_password: null, // Clear password after use
         })
         .eq('id', id);
 

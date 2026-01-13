@@ -119,7 +119,7 @@ export default function DataPage() {
   const projectId = params.id as string;
 
   // Project info
-  const [projectInfo, setProjectInfo] = useState<{ name: string; table_name: string } | null>(null);
+  const [projectInfo, setProjectInfo] = useState<{ name: string; table_name: string; description?: string } | null>(null);
 
   // Data state
   const [data, setData] = useState<Record<string, unknown>[]>([]);
