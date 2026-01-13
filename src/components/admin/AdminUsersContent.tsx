@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { createClient } from '@/lib/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -55,10 +56,14 @@ import {
   Loader2,
   AlertCircle,
   CheckCircle,
+  CheckCircle2,
   Mail,
   Phone,
   Building,
   UserCog,
+  RefreshCw,
+  FileText,
+  Clock,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { SystemRole } from '@/types/permissions';
@@ -84,12 +89,15 @@ interface RegistrationRequest {
   id: string;
   full_name: string;
   email: string;
-  mobile: string;
-  id_number: string;
-  requested_role: 'agent' | 'supervisor';
+  phone: string | null;
+  id_number: string | null;
+  requested_role: string;
   supervisor_id?: string;
   supervisor_name?: string;
-  status: 'pending' | 'approved' | 'rejected';
+  status: 'pending' | 'needs_review' | 'approved' | 'rejected';
+  matched_external_id: string | null;
+  match_score: number | null;
+  match_details: Record<string, unknown> | null;
   created_at: string;
 }
 
@@ -103,12 +111,13 @@ const ROLE_COLORS: Record<SystemRole, string> = {
 
 export default function AdminUsersContent() {
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [requests, setRequests] = useState<RegistrationRequest[]>([]);
   const [supervisors, setSupervisors] = useState<UserProfile[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState<string>('all');
-  const [activeTab, setActiveTab] = useState('users');
+  const [activeTab, setActiveTab] = useState('requests');
 
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [newUser, setNewUser] = useState({
@@ -125,116 +134,66 @@ export default function AdminUsersContent() {
   }, []);
 
   const fetchData = async () => {
+    const supabase = createClient();
+
     try {
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // Fetch registration requests
+      const { data: regRequests, error: reqError } = await supabase
+        .from('registration_requests')
+        .select('*')
+        .in('status', ['pending', 'needs_review'])
+        .order('created_at', { ascending: false });
 
-      const mockSupervisors: UserProfile[] = [
-        {
-          id: 'sup1',
-          full_name: 'משה כהן',
-          email: 'moshe@sela.co.il',
-          role: 'supervisor',
-          is_active: true,
-          is_verified: true,
-          registration_status: 'approved',
-          created_at: '2024-01-01',
-        },
-        {
-          id: 'sup2',
-          full_name: 'רחל לוי',
-          email: 'rachel@sela.co.il',
-          role: 'supervisor',
-          is_active: true,
-          is_verified: true,
-          registration_status: 'approved',
-          created_at: '2024-01-15',
-        },
-      ];
+      if (reqError) {
+        console.error('Error fetching registration requests:', reqError);
+      } else {
+        setRequests(regRequests || []);
+      }
 
-      setSupervisors(mockSupervisors);
+      // Fetch all users
+      const { data: usersData, error: usersError } = await supabase
+        .from('users')
+        .select('*')
+        .order('created_at', { ascending: false });
 
-      setUsers([
-        ...mockSupervisors,
-        {
-          id: '1',
-          full_name: 'דוד אדמין',
-          email: 'admin@sela.co.il',
-          role: 'admin',
-          is_active: true,
-          is_verified: true,
-          registration_status: 'approved',
-          last_login_at: new Date().toISOString(),
-          created_at: '2024-01-01',
-        },
-        {
-          id: '2',
-          full_name: 'יוסי מנהל',
-          email: 'manager@sela.co.il',
-          role: 'manager',
-          is_active: true,
-          is_verified: true,
-          registration_status: 'approved',
-          created_at: '2024-02-01',
-        },
-        {
-          id: '3',
-          full_name: 'ישראל ישראלי',
-          email: 'israel@example.com',
-          mobile: '050-1234567',
-          role: 'agent',
-          supervisor_id: 'sup1',
-          supervisor_name: 'משה כהן',
-          is_active: true,
-          is_verified: true,
-          registration_status: 'approved',
-          last_login_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-          created_at: '2024-03-01',
-        },
-        {
-          id: '4',
-          full_name: 'שרה כהן',
-          email: 'sarah@example.com',
-          mobile: '050-2345678',
-          role: 'agent',
-          supervisor_id: 'sup1',
-          supervisor_name: 'משה כהן',
-          is_active: true,
-          is_verified: true,
-          registration_status: 'approved',
-          created_at: '2024-03-15',
-        },
-      ]);
+      if (usersError) {
+        console.error('Error fetching users:', usersError);
+      } else if (usersData) {
+        // Map to UserProfile format
+        const mappedUsers: UserProfile[] = usersData.map((u: Record<string, unknown>) => ({
+          id: u.id as string,
+          full_name: (u.full_name as string) || 'לא צוין',
+          email: (u.email as string) || '',
+          mobile: u.phone as string | undefined,
+          id_number: u.national_id as string | undefined,
+          role: (u.user_type as SystemRole) || (u.role as SystemRole) || 'agent',
+          supervisor_id: u.supervisor_id as string | undefined,
+          is_active: u.is_active as boolean ?? true,
+          is_verified: u.is_approved as boolean ?? false,
+          registration_status: u.is_approved ? 'approved' : 'pending',
+          last_login_at: u.last_login_at as string | undefined,
+          created_at: u.created_at as string,
+        }));
 
-      setRequests([
-        {
-          id: 'req1',
-          full_name: 'יעקב מזרחי',
-          email: 'yaakov@example.com',
-          mobile: '050-5678901',
-          id_number: '123456789',
-          requested_role: 'agent',
-          supervisor_id: 'sup1',
-          supervisor_name: 'משה כהן',
-          status: 'pending',
-          created_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-        },
-        {
-          id: 'req2',
-          full_name: 'מירי גולן',
-          email: 'miri@example.com',
-          mobile: '050-6789012',
-          id_number: '234567890',
-          requested_role: 'supervisor',
-          status: 'pending',
-          created_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-        },
-      ]);
+        setUsers(mappedUsers);
+
+        // Extract supervisors
+        const supervisorsList = mappedUsers.filter(u => u.role === 'supervisor');
+        setSupervisors(supervisorsList);
+      }
     } catch (error) {
       console.error('Failed to fetch data:', error);
       toast.error('שגיאה בטעינת הנתונים');
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await fetchData();
+    setIsRefreshing(false);
+    toast.success('הנתונים עודכנו');
   };
 
   const handleCreateUser = async () => {
@@ -257,34 +216,132 @@ export default function AdminUsersContent() {
     }
   };
 
-  const handleApproveRequest = async (requestId: string) => {
+  const handleApproveRequest = async (request: RegistrationRequest) => {
+    const supabase = createClient();
+
     try {
-      await new Promise(resolve => setTimeout(resolve, 300));
-      toast.success('הבקשה אושרה');
-      setRequests(prev => prev.filter(r => r.id !== requestId));
+      // Update registration request status
+      const { error: updateError } = await supabase
+        .from('registration_requests')
+        .update({ status: 'approved' })
+        .eq('id', request.id);
+
+      if (updateError) {
+        throw updateError;
+      }
+
+      // Create user record with supervisor link if provided
+      const { data: newUser, error: userError } = await supabase
+        .from('users')
+        .insert({
+          email: request.email,
+          full_name: request.full_name,
+          phone: request.phone,
+          national_id: request.id_number,
+          user_type: request.requested_role,
+          role: request.requested_role === 'admin' ? 'admin' : 'user',
+          supervisor_id: request.supervisor_id || null,
+          is_active: true,
+          is_approved: true,
+        })
+        .select()
+        .single();
+
+      if (userError && !userError.message.includes('duplicate')) {
+        console.log('User creation note:', userError.message);
+      }
+
+      // Also create a CRM contact record for this user
+      // This ensures all registered users appear in the contacts list
+      const nameParts = request.full_name.split(' ');
+      const firstName = nameParts[0] || request.full_name;
+      const lastName = nameParts.slice(1).join(' ') || '';
+
+      // Determine owner_id: If agent with supervisor, supervisor is the owner
+      // Otherwise, the user owns their own contact record
+      const ownerId = request.supervisor_id || newUser?.id;
+
+      const { data: newContact, error: contactError } = await supabase
+        .from('crm_contacts')
+        .insert({
+          first_name: firstName,
+          last_name: lastName,
+          email: request.email,
+          phone: request.phone,
+          id_number: request.id_number,
+          source: 'registration',
+          status: 'active',
+          tags: [request.requested_role],
+          notes: `נרשם כ${request.requested_role === 'agent' ? 'סוכן' : request.requested_role === 'supervisor' ? 'מפקח' : 'משתמש'}`,
+          user_id: newUser?.id,
+          owner_id: ownerId,
+        })
+        .select()
+        .single();
+
+      if (contactError && !contactError.message.includes('duplicate')) {
+        console.log('Contact creation note:', contactError.message);
+      }
+
+      // If agent has a supervisor, also create a reference in supervisor's contacts
+      if (request.requested_role === 'agent' && request.supervisor_id && newContact) {
+        // Update contact to ensure supervisor can see this agent in their team
+        await supabase
+          .from('crm_contacts')
+          .update({
+            assigned_to: request.supervisor_id,
+          })
+          .eq('id', newContact.id);
+      }
+
+      toast.success('הבקשה אושרה בהצלחה');
+      await fetchData();
     } catch (error) {
+      console.error('Error approving request:', error);
       toast.error('שגיאה באישור הבקשה');
     }
   };
 
-  const handleRejectRequest = async (requestId: string) => {
+  const handleRejectRequest = async (requestId: string, notes?: string) => {
+    const supabase = createClient();
+
     try {
-      await new Promise(resolve => setTimeout(resolve, 300));
+      const { error } = await supabase
+        .from('registration_requests')
+        .update({ status: 'rejected' })
+        .eq('id', requestId);
+
+      if (error) {
+        throw error;
+      }
+
       toast.success('הבקשה נדחתה');
-      setRequests(prev => prev.filter(r => r.id !== requestId));
+      await fetchData();
     } catch (error) {
+      console.error('Error rejecting request:', error);
       toast.error('שגיאה בדחיית הבקשה');
     }
   };
 
   const handleToggleUserStatus = async (userId: string, currentStatus: boolean) => {
+    const supabase = createClient();
+
     try {
-      await new Promise(resolve => setTimeout(resolve, 300));
+      const { error } = await supabase
+        .from('users')
+        .update({ is_active: !currentStatus })
+        .eq('id', userId);
+
+      if (error) {
+        throw error;
+      }
+
       setUsers(prev =>
         prev.map(u => (u.id === userId ? { ...u, is_active: !currentStatus } : u))
       );
       toast.success(currentStatus ? 'המשתמש הושבת' : 'המשתמש הופעל');
     } catch (error) {
+      console.error('Error toggling user status:', error);
       toast.error('שגיאה בעדכון הסטטוס');
     }
   };
@@ -318,10 +375,16 @@ export default function AdminUsersContent() {
           </h2>
           <p className="text-muted-foreground">ניהול משתמשים, תפקידים והרשאות</p>
         </div>
-        <Button onClick={() => setCreateDialogOpen(true)}>
-          <Plus className="h-4 w-4 ml-2" />
-          משתמש חדש
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={handleRefresh} disabled={isRefreshing}>
+            <RefreshCw className={`h-4 w-4 ml-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+            רענן
+          </Button>
+          <Button onClick={() => setCreateDialogOpen(true)}>
+            <Plus className="h-4 w-4 ml-2" />
+            משתמש חדש
+          </Button>
+        </div>
       </div>
 
       {/* Stats */}
@@ -347,7 +410,6 @@ export default function AdminUsersContent() {
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
-          <TabsTrigger value="users">משתמשים ({users.length})</TabsTrigger>
           <TabsTrigger value="requests" className="relative">
             בקשות הרשמה
             {pendingRequests.length > 0 && (
@@ -356,6 +418,7 @@ export default function AdminUsersContent() {
               </Badge>
             )}
           </TabsTrigger>
+          <TabsTrigger value="users">משתמשים ({users.length})</TabsTrigger>
         </TabsList>
 
         <TabsContent value="users" className="mt-4 space-y-4">
@@ -492,53 +555,85 @@ export default function AdminUsersContent() {
                   {pendingRequests.map((request) => (
                     <div
                       key={request.id}
-                      className="flex items-center justify-between p-4 border rounded-lg"
+                      className="p-4 border rounded-lg hover:shadow-md transition-shadow"
                     >
-                      <div className="flex items-center gap-4">
-                        <Avatar className="h-12 w-12">
-                          <AvatarFallback className="bg-orange-100 text-orange-700">
-                            {request.full_name.charAt(0)}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <p className="font-medium">{request.full_name}</p>
-                            <Badge className={ROLE_COLORS[request.requested_role]}>
-                              {getRoleInfo(request.requested_role).labelHe}
-                            </Badge>
+                      <div className="flex justify-between items-start">
+                        <div className="flex items-center gap-4">
+                          <Avatar className="h-12 w-12">
+                            <AvatarFallback className="bg-blue-100 text-blue-700">
+                              {request.full_name.charAt(0)}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2">
+                              <p className="font-semibold text-lg">{request.full_name}</p>
+                              <Badge className={ROLE_COLORS[request.requested_role as SystemRole] || 'bg-gray-100 text-gray-700'}>
+                                {getRoleInfo(request.requested_role as SystemRole).labelHe}
+                              </Badge>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+                              <span className="flex items-center gap-1">
+                                <Mail className="h-4 w-4" />
+                                {request.email}
+                              </span>
+                              {request.phone && (
+                                <span className="flex items-center gap-1">
+                                  <Phone className="h-4 w-4" />
+                                  {request.phone}
+                                </span>
+                              )}
+                              {request.id_number && (
+                                <span className="flex items-center gap-1">
+                                  <FileText className="h-4 w-4" />
+                                  ת.ז: {request.id_number}
+                                </span>
+                              )}
+                            </div>
+                            {/* Match Status */}
+                            <div className="flex items-center gap-2 mt-2">
+                              {request.matched_external_id ? (
+                                <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">
+                                  <CheckCircle2 className="h-3 w-3 ml-1" />
+                                  נמצאה התאמה במאגר ({request.match_score}%)
+                                </Badge>
+                              ) : (
+                                <Badge className="bg-amber-100 text-amber-700 border-amber-200">
+                                  <AlertCircle className="h-3 w-3 ml-1" />
+                                  דורש בדיקה ידנית
+                                </Badge>
+                              )}
+                              {request.status === 'needs_review' && (
+                                <Badge className="bg-orange-100 text-orange-700 border-orange-200">
+                                  דורש סקירה
+                                </Badge>
+                              )}
+                            </div>
                           </div>
-                          <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                            <span className="flex items-center gap-1">
-                              <Mail className="h-3 w-3" />
-                              {request.email}
-                            </span>
-                            <span className="flex items-center gap-1">
-                              <Phone className="h-3 w-3" />
-                              {request.mobile}
-                            </span>
-                          </div>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            ת.ז: {request.id_number}
-                            {request.supervisor_name && ` | מפקח: ${request.supervisor_name}`}
-                            {' | '}
-                            נשלח: {new Date(request.created_at).toLocaleDateString('he-IL')}
-                          </p>
+                        </div>
+                        <div className="text-left">
+                          <Badge variant="outline" className="mb-2">
+                            <Clock className="h-3 w-3 ml-1" />
+                            {new Date(request.created_at).toLocaleDateString('he-IL')}
+                          </Badge>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex justify-end gap-2 mt-4 pt-4 border-t">
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => handleRejectRequest(request.id)}
-                          className="text-red-600 hover:text-red-700"
+                          onClick={() => {
+                            const notes = prompt('סיבת דחייה (אופציונלי):');
+                            handleRejectRequest(request.id, notes || undefined);
+                          }}
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
                         >
                           <UserX className="h-4 w-4 ml-1" />
                           דחה
                         </Button>
                         <Button
                           size="sm"
-                          onClick={() => handleApproveRequest(request.id)}
-                          className="bg-green-600 hover:bg-green-700"
+                          onClick={() => handleApproveRequest(request)}
+                          className="bg-emerald-600 hover:bg-emerald-700"
                         >
                           <UserCheck className="h-4 w-4 ml-1" />
                           אשר

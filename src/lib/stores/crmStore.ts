@@ -118,6 +118,8 @@ interface CRMState {
   setSelectedContact: (contact: Contact | null) => void;
   setContactsFilters: (filters: CRMFilters) => void;
   convertContactToLead: (contactId: string, leadData?: Partial<LeadInsert>) => Promise<Lead | null>;
+  markContactAsClient: (contactId: string) => Promise<Contact | null>;
+  checkAndMarkClientsWithFinancialData: () => Promise<number>;
 
   // =====================================================
   // LEADS ACTIONS
@@ -132,6 +134,7 @@ interface CRMState {
   deleteLead: (id: string) => Promise<boolean>;
   setSelectedLead: (lead: Lead | null) => void;
   convertLeadToDeal: (leadId: string, dealData?: Partial<DealInsert>) => Promise<Deal | null>;
+  convertLeadToContact: (leadId: string, contactData?: Partial<ContactInsert>) => Promise<Contact | null>;
 
   // =====================================================
   // DEALS ACTIONS
@@ -458,6 +461,107 @@ export const useCRMStore = create<CRMState>((set, get) => ({
 
   setContactsFilters: (filters) => set({ contactsFilters: filters }),
 
+  markContactAsClient: async (contactId: string) => {
+    set({ isLoadingContacts: true, error: null });
+    try {
+      const supabase = createClient();
+
+      // First get current tags
+      const { data: current } = await supabase
+        .from('crm_contacts')
+        .select('tags')
+        .eq('id', contactId)
+        .single();
+
+      const currentTags = current?.tags || [];
+      const newTags = currentTags.includes('לקוח') ? currentTags : [...currentTags, 'לקוח'];
+
+      const { data, error } = await supabase
+        .from('crm_contacts')
+        .update({
+          converted_to_client: true,
+          status: 'active',
+          tags: newTags,
+        })
+        .eq('id', contactId)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      set((state) => ({
+        contacts: state.contacts.map((c) => (c.id === contactId ? data : c)),
+        selectedContact: state.selectedContact?.id === contactId ? data : state.selectedContact,
+        isLoadingContacts: false,
+      }));
+      return data;
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to mark contact as client';
+      set({ error: message, isLoadingContacts: false });
+      return null;
+    }
+  },
+
+  checkAndMarkClientsWithFinancialData: async () => {
+    set({ isLoadingContacts: true, error: null });
+    try {
+      const supabase = createClient();
+
+      // Find contacts that have policies
+      const { data: contactsWithPolicies } = await supabase
+        .from('crm_policies')
+        .select('contact_id')
+        .not('contact_id', 'is', null);
+
+      // Also check contacts with won deals
+      const { data: contactsWithDeals } = await supabase
+        .from('crm_deals')
+        .select('contact_id')
+        .eq('status', 'won')
+        .not('contact_id', 'is', null);
+
+      // Combine unique contact IDs
+      const contactIds = new Set<string>();
+
+      if (contactsWithPolicies) {
+        contactsWithPolicies.forEach(p => {
+          if (p.contact_id) contactIds.add(p.contact_id);
+        });
+      }
+
+      if (contactsWithDeals) {
+        contactsWithDeals.forEach(d => {
+          if (d.contact_id) contactIds.add(d.contact_id);
+        });
+      }
+
+      // Update all contacts with financial data as clients
+      let updatedCount = 0;
+      for (const contactId of contactIds) {
+        const { error } = await supabase
+          .from('crm_contacts')
+          .update({
+            converted_to_client: true,
+            status: 'active',
+          })
+          .eq('id', contactId)
+          .eq('converted_to_client', false);
+
+        if (!error) updatedCount++;
+      }
+
+      // Refresh contacts list
+      await get().fetchContacts();
+
+      set({ isLoadingContacts: false });
+      return updatedCount;
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to check and mark clients';
+      set({ error: message, isLoadingContacts: false });
+      return 0;
+    }
+  },
+
   convertContactToLead: async (contactId: string, leadData?: Partial<LeadInsert>) => {
     set({ isLoadingContacts: true, error: null });
     try {
@@ -718,6 +822,83 @@ export const useCRMStore = create<CRMState>((set, get) => ({
       return deal;
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Failed to convert lead to deal';
+      set({ error: message, isLoadingLeads: false });
+      return null;
+    }
+  },
+
+  convertLeadToContact: async (leadId: string, contactData?: Partial<ContactInsert>) => {
+    set({ isLoadingLeads: true, error: null });
+    try {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+
+      // Get lead data
+      const { data: lead, error: leadError } = await supabase
+        .from('crm_leads')
+        .select('*')
+        .eq('id', leadId)
+        .single();
+
+      if (leadError) throw leadError;
+
+      // Check if contact already exists for this lead
+      if (lead.contact_id) {
+        // Update existing contact
+        const { data: contact, error: updateError } = await supabase
+          .from('crm_contacts')
+          .update({
+            status: 'active',
+            ...contactData,
+          })
+          .eq('id', lead.contact_id)
+          .select()
+          .single();
+
+        if (updateError) throw updateError;
+
+        set({ isLoadingLeads: false });
+        return contact;
+      }
+
+      // Create new contact from lead data
+      const nameParts = lead.name?.split(' ') || [''];
+      const firstName = nameParts[0] || lead.name || '';
+      const lastName = nameParts.slice(1).join(' ') || '';
+
+      const { data: contact, error: contactError } = await supabase
+        .from('crm_contacts')
+        .insert({
+          first_name: firstName,
+          last_name: lastName,
+          phone: lead.phone,
+          email: lead.email,
+          source: 'lead_conversion',
+          status: 'active',
+          agent_id: user?.id,
+          lead_id: leadId,
+          ...contactData,
+        })
+        .select()
+        .single();
+
+      if (contactError) throw contactError;
+
+      // Update lead with contact reference
+      await supabase
+        .from('crm_leads')
+        .update({ contact_id: contact.id, status: 'converted' })
+        .eq('id', leadId);
+
+      set((state) => ({
+        contacts: [contact, ...state.contacts],
+        contactsTotal: state.contactsTotal + 1,
+        isLoadingLeads: false,
+      }));
+
+      return contact;
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to convert lead to contact';
       set({ error: message, isLoadingLeads: false });
       return null;
     }

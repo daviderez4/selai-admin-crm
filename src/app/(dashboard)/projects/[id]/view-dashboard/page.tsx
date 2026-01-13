@@ -142,8 +142,19 @@ export default function ViewDashboardPage() {
   const [selectedProvider, setSelectedProvider] = useState<string>('all');
   const [selectedBranch, setSelectedBranch] = useState<string>('all');
   const [selectedMonth, setSelectedMonth] = useState<string>('all');
+  const [selectedYear, setSelectedYear] = useState<string>('all');
   const [agentSearch, setAgentSearch] = useState('');
   const [showTable, setShowTable] = useState(false);
+
+  // Extract unique years from months for year filter
+  const availableYears = Array.from(
+    new Set(filterOptions.months.map(m => m.substring(0, 4)))
+  ).sort((a, b) => b.localeCompare(a)); // Sort descending
+
+  // Filter months by selected year
+  const filteredMonths = selectedYear === 'all'
+    ? filterOptions.months
+    : filterOptions.months.filter(m => m.startsWith(selectedYear));
 
   // Navigation tabs
   const navTabs: NavTab[] = [
@@ -163,6 +174,7 @@ export default function ViewDashboardPage() {
       if (selectedProvider !== 'all') searchParams.append('provider', selectedProvider);
       if (selectedBranch !== 'all') searchParams.append('branch', selectedBranch);
       if (selectedMonth !== 'all') searchParams.append('month', selectedMonth);
+      if (selectedYear !== 'all' && selectedMonth === 'all') searchParams.append('year', selectedYear);
       if (agentSearch) searchParams.append('agent', agentSearch);
 
       const response = await fetch(
@@ -190,7 +202,7 @@ export default function ViewDashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, [projectId, selectedProvider, selectedBranch, selectedMonth, agentSearch]);
+  }, [projectId, selectedProvider, selectedBranch, selectedMonth, selectedYear, agentSearch]);
 
   useEffect(() => {
     fetchDashboard();
@@ -282,6 +294,25 @@ export default function ViewDashboardPage() {
                   </SelectContent>
                 </Select>
 
+                <Select value={selectedYear} onValueChange={(value) => {
+                  setSelectedYear(value);
+                  // Reset month when year changes
+                  if (value !== selectedYear) {
+                    setSelectedMonth('all');
+                  }
+                }}>
+                  <SelectTrigger className="w-[120px] h-9">
+                    <Calendar className="h-4 w-4 ml-2 text-slate-400" />
+                    <SelectValue placeholder="שנה" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">כל השנים</SelectItem>
+                    {availableYears.map((y) => (
+                      <SelectItem key={y} value={y}>{y}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
                 <Select value={selectedMonth} onValueChange={setSelectedMonth}>
                   <SelectTrigger className="w-[160px] h-9">
                     <Calendar className="h-4 w-4 ml-2 text-slate-400" />
@@ -289,9 +320,15 @@ export default function ViewDashboardPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">כל החודשים</SelectItem>
-                    {filterOptions.months.map((m) => (
-                      <SelectItem key={m} value={m}>{m}</SelectItem>
-                    ))}
+                    {filteredMonths.map((m) => {
+                      // Format month display: YYYY-MM -> MM/YYYY
+                      const [year, month] = m.split('-');
+                      const hebrewMonths = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני', 'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
+                      const monthName = hebrewMonths[parseInt(month, 10) - 1] || month;
+                      return (
+                        <SelectItem key={m} value={m}>{`${monthName} ${year}`}</SelectItem>
+                      );
+                    })}
                   </SelectContent>
                 </Select>
 
@@ -302,7 +339,7 @@ export default function ViewDashboardPage() {
                   className="w-48 h-9"
                 />
 
-                {(selectedProvider !== 'all' || selectedBranch !== 'all' || selectedMonth !== 'all' || agentSearch) && (
+                {(selectedProvider !== 'all' || selectedBranch !== 'all' || selectedMonth !== 'all' || selectedYear !== 'all' || agentSearch) && (
                   <Button
                     variant="ghost"
                     size="sm"
@@ -310,6 +347,7 @@ export default function ViewDashboardPage() {
                       setSelectedProvider('all');
                       setSelectedBranch('all');
                       setSelectedMonth('all');
+                      setSelectedYear('all');
                       setAgentSearch('');
                     }}
                     className="text-slate-500"

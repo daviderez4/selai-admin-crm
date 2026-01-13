@@ -9,12 +9,10 @@ import {
   Users,
   Settings,
   Shield,
-  UserCheck
 } from 'lucide-react';
 import DataHealthDashboard from '@/components/admin/health/DataHealthDashboard';
 import SchemaRegistryManager from '@/components/admin/health/SchemaRegistryManager';
 import ExcelUploader from '@/components/admin/ExcelUploader';
-import UserApprovalManager from '@/components/admin/UserApprovalManager';
 
 // Lazy imports for other admin sections
 import dynamic from 'next/dynamic';
@@ -79,13 +77,6 @@ export default function AdminPage() {
               <Users className="h-4 w-4 ml-2" />
               משתמשים
             </TabsTrigger>
-            <TabsTrigger
-              value="user-approval"
-              className="data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700 px-4 py-2 rounded-lg"
-            >
-              <UserCheck className="h-4 w-4 ml-2" />
-              אישור משתמשים
-            </TabsTrigger>
           </TabsList>
         </div>
 
@@ -106,10 +97,6 @@ export default function AdminPage() {
 
         <TabsContent value="users" className="m-0">
           <AdminUsersContent />
-        </TabsContent>
-
-        <TabsContent value="user-approval" className="m-0 p-6">
-          <UserApprovalManager />
         </TabsContent>
       </Tabs>
     </div>

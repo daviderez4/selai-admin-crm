@@ -128,6 +128,7 @@ export async function GET(
     const agentName = url.searchParams.get('agent');
     const branch = url.searchParams.get('branch');
     const month = url.searchParams.get('month');
+    const year = url.searchParams.get('year');
     const fromDate = url.searchParams.get('from');
     const toDate = url.searchParams.get('to');
 
@@ -140,9 +141,12 @@ export async function GET(
     if (agentName) countQuery = countQuery.ilike('agent_name', `%${agentName}%`);
     if (branch) countQuery = countQuery.eq('branch', branch);
     if (month) {
-      const monthStart = `${month}-01`;
-      const monthEnd = `${month}-31`;
-      countQuery = countQuery.gte('processing_month', monthStart).lte('processing_month', monthEnd);
+      // Filter by specific month (YYYY-MM format)
+      // Use LIKE pattern to match the month prefix in processing_month
+      countQuery = countQuery.like('processing_month', `${month}%`);
+    } else if (year) {
+      // Filter by year only (YYYY format)
+      countQuery = countQuery.like('processing_month', `${year}%`);
     }
     if (fromDate) countQuery = countQuery.gte('processing_month', fromDate);
     if (toDate) countQuery = countQuery.lte('processing_month', toDate);
@@ -163,9 +167,12 @@ export async function GET(
       if (agentName) query = query.ilike('agent_name', `%${agentName}%`);
       if (branch) query = query.eq('branch', branch);
       if (month) {
-        const monthStart = `${month}-01`;
-        const monthEnd = `${month}-31`;
-        query = query.gte('processing_month', monthStart).lte('processing_month', monthEnd);
+        // Filter by specific month (YYYY-MM format)
+        // Use LIKE pattern to match the month prefix in processing_month
+        query = query.like('processing_month', `${month}%`);
+      } else if (year) {
+        // Filter by year only (YYYY format)
+        query = query.like('processing_month', `${year}%`);
       }
       if (fromDate) query = query.gte('processing_month', fromDate);
       if (toDate) query = query.lte('processing_month', toDate);

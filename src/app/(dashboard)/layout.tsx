@@ -7,6 +7,7 @@ import { useAuthStore } from '@/lib/stores/authStore';
 import { useProjectsStore } from '@/lib/stores/projectsStore';
 import { useUserPreferencesStore } from '@/lib/stores/userPreferencesStore';
 import { Toaster } from '@/components/ui/sonner';
+import NavigationAssistant from '@/components/assistant/NavigationAssistant';
 
 export default function DashboardLayout({
   children,
@@ -75,6 +76,7 @@ export default function DashboardLayout({
         {children}
       </main>
       <Toaster position="top-center" richColors />
+      <NavigationAssistant />
     </div>
   );
 }
