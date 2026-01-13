@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Users, Plus, Shield, Mail, MoreVertical, Trash2, Edit, Loader2, RefreshCw, Clock, Send } from 'lucide-react';
+import { Users, Shield, Mail, MoreVertical, Trash2, Edit, Loader2, RefreshCw, UserX, UserCheck, Phone, CreditCard } from 'lucide-react';
 import { Header } from '@/components/layout/Header';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -12,7 +12,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
   Select,
@@ -25,6 +24,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
@@ -36,69 +36,49 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
-
-interface UserProject {
-  id: string;
-  name: string;
-  role: string;
-}
 
 interface User {
   id: string;
   email: string;
   full_name?: string;
-  projects: UserProject[];
+  phone?: string;
+  id_number?: string;
+  user_type: string;
+  supervisor_id?: string;
+  manager_id?: string;
+  is_active: boolean;
+  is_approved: boolean;
   created_at?: string;
 }
 
-interface ManagedProject {
-  id: string;
-  name: string;
-}
-
-interface PendingInvitation {
-  id: string;
-  email: string;
-  role: string;
-  project_ids: string[];
-  created_at: string;
-  expires_at: string;
-}
-
-const roleLabels: Record<string, string> = {
-  admin: 'מנהל',
-  editor: 'עורך',
-  viewer: 'צופה',
+const userTypeLabels: Record<string, string> = {
+  admin: 'מנהל מערכת',
+  manager: 'מנהל',
+  supervisor: 'מפקח',
+  agent: 'סוכן',
+  client: 'לקוח',
 };
 
-const roleColors: Record<string, string> = {
-  admin: 'bg-blue-50 text-blue-600 border-blue-200',
-  editor: 'bg-cyan-50 text-cyan-600 border-cyan-200',
-  viewer: 'bg-slate-500/10 text-slate-500 border-slate-500/30',
+const userTypeColors: Record<string, string> = {
+  admin: 'bg-purple-50 text-purple-600 border-purple-200',
+  manager: 'bg-blue-50 text-blue-600 border-blue-200',
+  supervisor: 'bg-cyan-50 text-cyan-600 border-cyan-200',
+  agent: 'bg-green-50 text-green-600 border-green-200',
+  client: 'bg-slate-50 text-slate-600 border-slate-200',
 };
 
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
-  const [pendingInvitations, setPendingInvitations] = useState<PendingInvitation[]>([]);
-  const [managedProjects, setManagedProjects] = useState<ManagedProject[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string>('');
+  const [currentUserType, setCurrentUserType] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [isInviteOpen, setIsInviteOpen] = useState(false);
-  const [inviteData, setInviteData] = useState({
-    email: '',
-    role: 'viewer',
-    projectIds: [] as string[],
-  });
-  const [isInviting, setIsInviting] = useState(false);
-
   const [editUser, setEditUser] = useState<User | null>(null);
   const [isEditOpen, setIsEditOpen] = useState(false);
-  const [editRole, setEditRole] = useState('viewer');
-  const [editProjectId, setEditProjectId] = useState('');
+  const [editData, setEditData] = useState({ user_type: '' });
+  const [isUpdating, setIsUpdating] = useState(false);
 
   // Fetch users
   const fetchUsers = async () => {
@@ -114,9 +94,8 @@ export default function UsersPage() {
 
       const data = await response.json();
       setUsers(data.users || []);
-      setPendingInvitations(data.pendingInvitations || []);
-      setManagedProjects(data.managedProjects || []);
       setCurrentUserId(data.currentUserId || '');
+      setCurrentUserType(data.currentUserType || '');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load users');
       toast.error('שגיאה בטעינת משתמשים');
@@ -129,126 +108,120 @@ export default function UsersPage() {
     fetchUsers();
   }, []);
 
-  const handleInvite = async () => {
-    if (!inviteData.email) {
-      toast.error('יש להזין אימייל');
-      return;
-    }
+  const handleSuspendUser = async (userId: string, isActive: boolean) => {
+    const action = isActive ? 'suspend' : 'activate';
+    const confirmMsg = isActive ? 'האם להשהות את המשתמש?' : 'האם להפעיל את המשתמש?';
 
-    if (inviteData.projectIds.length === 0) {
-      toast.error('יש לבחור לפחות פרויקט אחד');
-      return;
-    }
-
-    setIsInviting(true);
+    if (!confirm(confirmMsg)) return;
 
     try {
-      const response = await fetch('/api/users/invite', {
-        method: 'POST',
+      const response = await fetch('/api/users', {
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: inviteData.email,
-          role: inviteData.role,
-          projectIds: inviteData.projectIds,
-        }),
+        body: JSON.stringify({ userId, action }),
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to invite user');
+        throw new Error(data.error || 'Failed to update user');
       }
 
-      toast.success(data.message || 'הזמנה נשלחה בהצלחה');
-      setIsInviteOpen(false);
-      setInviteData({ email: '', role: 'viewer', projectIds: [] });
-      fetchUsers(); // Refresh list
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'שגיאה בשליחת ההזמנה');
-    } finally {
-      setIsInviting(false);
-    }
-  };
-
-  const handleUpdateAccess = async () => {
-    if (!editUser || !editProjectId) return;
-
-    try {
-      const response = await fetch(`/api/users/${editUser.id}/access`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          projectId: editProjectId,
-          role: editRole,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to update access');
-      }
-
-      toast.success('ההרשאות עודכנו בהצלחה');
-      setIsEditOpen(false);
-      setEditUser(null);
+      toast.success(data.message || 'המשתמש עודכן בהצלחה');
       fetchUsers();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'שגיאה בעדכון ההרשאות');
+      toast.error(err instanceof Error ? err.message : 'שגיאה בעדכון המשתמש');
     }
   };
 
-  const handleRemoveAccess = async (userId: string, projectId: string, projectName: string) => {
-    if (!confirm(`האם אתה בטוח שברצונך להסיר את הגישה לפרויקט "${projectName}"?`)) {
+  const handleDeleteUser = async (userId: string, userName: string) => {
+    if (!confirm(`האם אתה בטוח שברצונך למחוק את המשתמש "${userName}"? פעולה זו בלתי הפיכה.`)) {
       return;
     }
 
     try {
-      const response = await fetch(`/api/users/${userId}/access?projectId=${projectId}`, {
+      const response = await fetch(`/api/users?userId=${userId}`, {
         method: 'DELETE',
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to remove access');
+        throw new Error(data.error || 'Failed to delete user');
       }
 
-      toast.success('הגישה הוסרה בהצלחה');
+      toast.success('המשתמש נמחק בהצלחה');
       fetchUsers();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'שגיאה בהסרת הגישה');
+      toast.error(err instanceof Error ? err.message : 'שגיאה במחיקת המשתמש');
+    }
+  };
+
+  const handleUpdateRole = async () => {
+    if (!editUser) return;
+
+    setIsUpdating(true);
+
+    try {
+      const response = await fetch('/api/users', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: editUser.id,
+          action: 'update_role',
+          data: { user_type: editData.user_type }
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to update role');
+      }
+
+      toast.success('התפקיד עודכן בהצלחה');
+      setIsEditOpen(false);
+      setEditUser(null);
+      fetchUsers();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'שגיאה בעדכון התפקיד');
+    } finally {
+      setIsUpdating(false);
     }
   };
 
   const openEditDialog = (user: User) => {
     setEditUser(user);
-    if (user.projects.length > 0) {
-      setEditProjectId(user.projects[0].id);
-      setEditRole(user.projects[0].role);
-    }
+    setEditData({ user_type: user.user_type });
     setIsEditOpen(true);
   };
 
-  const toggleProjectSelection = (projectId: string) => {
-    setInviteData(prev => ({
-      ...prev,
-      projectIds: prev.projectIds.includes(projectId)
-        ? prev.projectIds.filter(id => id !== projectId)
-        : [...prev.projectIds, projectId]
-    }));
+  const canModifyUser = (targetUserType: string): boolean => {
+    const hierarchy: Record<string, number> = {
+      admin: 100,
+      manager: 80,
+      supervisor: 60,
+      agent: 40,
+      client: 20,
+    };
+    const currentLevel = hierarchy[currentUserType] || 0;
+    const targetLevel = hierarchy[targetUserType] || 0;
+    return currentLevel > targetLevel;
   };
 
-  // Get highest role for a user across all projects
-  const getUserHighestRole = (user: User): string => {
-    const roleOrder = { admin: 3, editor: 2, viewer: 1 };
-    let highest = 'viewer';
-    user.projects.forEach(p => {
-      if (roleOrder[p.role as keyof typeof roleOrder] > roleOrder[highest as keyof typeof roleOrder]) {
-        highest = p.role;
-      }
-    });
-    return highest;
+  const getAvailableRoles = (): string[] => {
+    const hierarchy: Record<string, number> = {
+      admin: 100,
+      manager: 80,
+      supervisor: 60,
+      agent: 40,
+      client: 20,
+    };
+    const currentLevel = hierarchy[currentUserType] || 0;
+
+    return Object.entries(hierarchy)
+      .filter(([, level]) => level < currentLevel)
+      .map(([role]) => role);
   };
 
   return (
@@ -260,26 +233,17 @@ export default function UsersPage() {
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-xl font-semibold text-slate-800">משתמשים</h2>
-            <p className="text-slate-500">נהל גישה למשתמשים בפרויקטים שלך</p>
+            <p className="text-slate-500">ניהול משתמשים וסטטוס חשבונות</p>
           </div>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              className="border-slate-200"
-              onClick={fetchUsers}
-              disabled={isLoading}
-            >
-              <RefreshCw className={`h-4 w-4 ml-2 ${isLoading ? 'animate-spin' : ''}`} />
-              רענן
-            </Button>
-            <Button
-              className="bg-blue-600 hover:bg-blue-700 text-white"
-              onClick={() => setIsInviteOpen(true)}
-            >
-              <Plus className="h-4 w-4 ml-2" />
-              הזמן משתמש
-            </Button>
-          </div>
+          <Button
+            variant="outline"
+            className="border-slate-200"
+            onClick={fetchUsers}
+            disabled={isLoading}
+          >
+            <RefreshCw className={`h-4 w-4 ml-2 ${isLoading ? 'animate-spin' : ''}`} />
+            רענן
+          </Button>
         </div>
 
         {/* Error State */}
@@ -298,43 +262,6 @@ export default function UsersPage() {
           </div>
         )}
 
-        {/* Pending Invitations */}
-        {!isLoading && pendingInvitations.length > 0 && (
-          <Card className="bg-amber-50 border-amber-200 shadow-sm">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <Send className="h-5 w-5 text-amber-600" />
-                <h3 className="font-medium text-amber-800">הזמנות ממתינות ({pendingInvitations.length})</h3>
-              </div>
-              <div className="space-y-2">
-                {pendingInvitations.map((invitation) => (
-                  <div key={invitation.id} className="flex items-center justify-between p-3 bg-white rounded-lg border border-amber-100">
-                    <div className="flex items-center gap-3">
-                      <Avatar className="h-8 w-8">
-                        <AvatarFallback className="bg-amber-100 text-amber-600 text-xs">
-                          <Clock className="h-4 w-4" />
-                        </AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <Mail className="h-4 w-4 text-slate-400" />
-                          <span className="text-slate-800">{invitation.email}</span>
-                        </div>
-                        <span className="text-slate-500 text-xs">
-                          הוזמן ב-{new Date(invitation.created_at).toLocaleDateString('he-IL')}
-                        </span>
-                      </div>
-                    </div>
-                    <Badge variant="outline" className={roleColors[invitation.role]}>
-                      {roleLabels[invitation.role]}
-                    </Badge>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
         {/* Users Table */}
         {!isLoading && users.length > 0 && (
           <Card className="bg-white border-slate-200 shadow-sm">
@@ -343,29 +270,30 @@ export default function UsersPage() {
                 <TableHeader className="bg-slate-50">
                   <TableRow className="border-slate-200 hover:bg-transparent">
                     <TableHead className="text-slate-700 text-right">משתמש</TableHead>
+                    <TableHead className="text-slate-700 text-right">פרטים</TableHead>
                     <TableHead className="text-slate-700 text-right">תפקיד</TableHead>
-                    <TableHead className="text-slate-700 text-right">פרויקטים</TableHead>
+                    <TableHead className="text-slate-700 text-right">סטטוס</TableHead>
                     <TableHead className="text-slate-700 text-right w-12"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {users.map((user) => (
-                    <TableRow key={user.id} className="border-slate-200">
+                    <TableRow key={user.id} className={`border-slate-200 ${!user.is_active ? 'opacity-50' : ''}`}>
                       <TableCell>
                         <div className="flex items-center gap-3">
-                          <Avatar className="h-8 w-8">
-                            <AvatarFallback className="bg-slate-100 text-blue-600 text-xs">
-                              {user.email.slice(0, 2).toUpperCase()}
+                          <Avatar className="h-10 w-10">
+                            <AvatarFallback className="bg-slate-100 text-blue-600 text-sm">
+                              {(user.full_name || user.email).slice(0, 2).toUpperCase()}
                             </AvatarFallback>
                           </Avatar>
                           <div>
-                            <div className="flex items-center gap-2">
-                              <Mail className="h-4 w-4 text-slate-500" />
-                              <span className="text-slate-800">{user.email}</span>
+                            <div className="font-medium text-slate-800">
+                              {user.full_name || 'ללא שם'}
                             </div>
-                            {user.full_name && (
-                              <span className="text-slate-500 text-sm">{user.full_name}</span>
-                            )}
+                            <div className="flex items-center gap-1 text-slate-500 text-sm">
+                              <Mail className="h-3 w-3" />
+                              {user.email}
+                            </div>
                           </div>
                           {user.id === currentUserId && (
                             <Badge variant="outline" className="border-blue-500 text-blue-600 text-xs">
@@ -375,27 +303,42 @@ export default function UsersPage() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline" className={roleColors[getUserHighestRole(user)]}>
-                          {roleLabels[getUserHighestRole(user)]}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-wrap gap-1">
-                          {user.projects.map((project) => (
-                            <Badge
-                              key={project.id}
-                              variant="outline"
-                              className="border-slate-200 text-slate-500 text-xs"
-                              title={`${project.name} - ${roleLabels[project.role]}`}
-                            >
-                              {project.name}
-                              <span className="mr-1 text-slate-500">({roleLabels[project.role]})</span>
-                            </Badge>
-                          ))}
+                        <div className="space-y-1">
+                          {user.phone && (
+                            <div className="flex items-center gap-1 text-slate-600 text-sm">
+                              <Phone className="h-3 w-3" />
+                              {user.phone}
+                            </div>
+                          )}
+                          {user.id_number && (
+                            <div className="flex items-center gap-1 text-slate-500 text-xs">
+                              <CreditCard className="h-3 w-3" />
+                              {user.id_number}
+                            </div>
+                          )}
                         </div>
                       </TableCell>
                       <TableCell>
-                        {user.id !== currentUserId && (
+                        <Badge variant="outline" className={userTypeColors[user.user_type]}>
+                          {userTypeLabels[user.user_type] || user.user_type}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-col gap-1">
+                          <Badge variant="outline" className={user.is_active
+                            ? 'bg-green-50 text-green-600 border-green-200'
+                            : 'bg-red-50 text-red-600 border-red-200'}>
+                            {user.is_active ? 'פעיל' : 'מושהה'}
+                          </Badge>
+                          {!user.is_approved && (
+                            <Badge variant="outline" className="bg-amber-50 text-amber-600 border-amber-200">
+                              ממתין לאישור
+                            </Badge>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {user.id !== currentUserId && canModifyUser(user.user_type) && (
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button variant="ghost" size="icon" className="text-slate-500">
@@ -408,18 +351,39 @@ export default function UsersPage() {
                                 onClick={() => openEditDialog(user)}
                               >
                                 <Edit className="h-4 w-4 ml-2" />
-                                ערוך הרשאות
+                                שנה תפקיד
                               </DropdownMenuItem>
-                              {user.projects.map(project => (
-                                <DropdownMenuItem
-                                  key={project.id}
-                                  className="text-red-600 focus:bg-red-50 cursor-pointer"
-                                  onClick={() => handleRemoveAccess(user.id, project.id, project.name)}
-                                >
-                                  <Trash2 className="h-4 w-4 ml-2" />
-                                  הסר מ-{project.name}
-                                </DropdownMenuItem>
-                              ))}
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                className={user.is_active
+                                  ? "text-amber-600 focus:bg-amber-50 cursor-pointer"
+                                  : "text-green-600 focus:bg-green-50 cursor-pointer"}
+                                onClick={() => handleSuspendUser(user.id, user.is_active)}
+                              >
+                                {user.is_active ? (
+                                  <>
+                                    <UserX className="h-4 w-4 ml-2" />
+                                    השהה משתמש
+                                  </>
+                                ) : (
+                                  <>
+                                    <UserCheck className="h-4 w-4 ml-2" />
+                                    הפעל משתמש
+                                  </>
+                                )}
+                              </DropdownMenuItem>
+                              {currentUserType === 'admin' && (
+                                <>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem
+                                    className="text-red-600 focus:bg-red-50 cursor-pointer"
+                                    onClick={() => handleDeleteUser(user.id, user.full_name || user.email)}
+                                  >
+                                    <Trash2 className="h-4 w-4 ml-2" />
+                                    מחק משתמש
+                                  </DropdownMenuItem>
+                                </>
+                              )}
                             </DropdownMenuContent>
                           </DropdownMenu>
                         )}
@@ -438,164 +402,61 @@ export default function UsersPage() {
             <CardContent className="p-12 text-center">
               <Users className="h-12 w-12 text-slate-500 mx-auto mb-4" />
               <h3 className="text-lg font-medium text-slate-800 mb-2">אין משתמשים</h3>
-              <p className="text-slate-500 mb-4">הזמן משתמשים לפרויקטים שלך</p>
-              <Button
-                className="bg-blue-600 hover:bg-blue-700 text-white"
-                onClick={() => setIsInviteOpen(true)}
-              >
-                <Plus className="h-4 w-4 ml-2" />
-                הזמן משתמש
-              </Button>
+              <p className="text-slate-500">אשר בקשות הרשמה כדי להוסיף משתמשים למערכת</p>
             </CardContent>
           </Card>
         )}
 
-        {/* Invite Dialog */}
-        <Dialog open={isInviteOpen} onOpenChange={setIsInviteOpen}>
-          <DialogContent className="bg-white border-slate-200" dir="rtl">
-            <DialogHeader>
-              <DialogTitle className="text-slate-800">הזמנת משתמש חדש</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label className="text-slate-700">אימייל</Label>
-                <Input
-                  type="email"
-                  placeholder="user@example.com"
-                  value={inviteData.email}
-                  onChange={(e) =>
-                    setInviteData({ ...inviteData, email: e.target.value })
-                  }
-                  className="bg-white border-slate-200 text-slate-800"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-slate-700">תפקיד</Label>
-                <Select
-                  value={inviteData.role}
-                  onValueChange={(value) =>
-                    setInviteData({ ...inviteData, role: value })
-                  }
-                >
-                  <SelectTrigger className="bg-white border-slate-200">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-white border-slate-200">
-                    <SelectItem value="admin" className="text-slate-800 focus:bg-slate-100">
-                      מנהל - גישה מלאה
-                    </SelectItem>
-                    <SelectItem value="editor" className="text-slate-800 focus:bg-slate-100">
-                      עורך - קריאה ועריכה
-                    </SelectItem>
-                    <SelectItem value="viewer" className="text-slate-800 focus:bg-slate-100">
-                      צופה - קריאה בלבד
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label className="text-slate-700">פרויקטים</Label>
-                <div className="space-y-2 max-h-48 overflow-y-auto p-2 bg-slate-50 rounded-md border border-slate-200">
-                  {managedProjects.length === 0 ? (
-                    <p className="text-slate-500 text-sm">אין פרויקטים זמינים</p>
-                  ) : (
-                    managedProjects.map((project) => (
-                      <div key={project.id} className="flex items-center gap-2">
-                        <Checkbox
-                          id={project.id}
-                          checked={inviteData.projectIds.includes(project.id)}
-                          onCheckedChange={() => toggleProjectSelection(project.id)}
-                        />
-                        <label
-                          htmlFor={project.id}
-                          className="text-slate-800 text-sm cursor-pointer"
-                        >
-                          {project.name}
-                        </label>
-                      </div>
-                    ))
-                  )}
-                </div>
-                {inviteData.projectIds.length > 0 && (
-                  <p className="text-slate-500 text-xs">
-                    נבחרו {inviteData.projectIds.length} פרויקטים
-                  </p>
-                )}
-              </div>
-              <Button
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-                onClick={handleInvite}
-                disabled={isInviting}
-              >
-                {isInviting ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin ml-2" />
-                    שולח...
-                  </>
-                ) : (
-                  <>
-                    <Mail className="h-4 w-4 ml-2" />
-                    שלח הזמנה
-                  </>
-                )}
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
-
-        {/* Edit Dialog */}
+        {/* Edit Role Dialog */}
         <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
           <DialogContent className="bg-white border-slate-200" dir="rtl">
             <DialogHeader>
               <DialogTitle className="text-slate-800">
-                עריכת הרשאות - {editUser?.email}
+                שינוי תפקיד - {editUser?.full_name || editUser?.email}
               </DialogTitle>
             </DialogHeader>
             <div className="space-y-4 py-4">
               <div className="space-y-2">
-                <Label className="text-slate-700">פרויקט</Label>
-                <Select value={editProjectId} onValueChange={setEditProjectId}>
+                <Label className="text-slate-700">תפקיד נוכחי</Label>
+                <Badge variant="outline" className={userTypeColors[editUser?.user_type || '']}>
+                  {userTypeLabels[editUser?.user_type || ''] || editUser?.user_type}
+                </Badge>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-slate-700">תפקיד חדש</Label>
+                <Select value={editData.user_type} onValueChange={(value) => setEditData({ user_type: value })}>
                   <SelectTrigger className="bg-white border-slate-200">
-                    <SelectValue placeholder="בחר פרויקט" />
+                    <SelectValue placeholder="בחר תפקיד" />
                   </SelectTrigger>
                   <SelectContent className="bg-white border-slate-200">
-                    {managedProjects.map((project) => (
+                    {getAvailableRoles().map((role) => (
                       <SelectItem
-                        key={project.id}
-                        value={project.id}
+                        key={role}
+                        value={role}
                         className="text-slate-800 focus:bg-slate-100"
                       >
-                        {project.name}
+                        {userTypeLabels[role]}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2">
-                <Label className="text-slate-700">תפקיד</Label>
-                <Select value={editRole} onValueChange={setEditRole}>
-                  <SelectTrigger className="bg-white border-slate-200">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-white border-slate-200">
-                    <SelectItem value="admin" className="text-slate-800 focus:bg-slate-100">
-                      מנהל - גישה מלאה
-                    </SelectItem>
-                    <SelectItem value="editor" className="text-slate-800 focus:bg-slate-100">
-                      עורך - קריאה ועריכה
-                    </SelectItem>
-                    <SelectItem value="viewer" className="text-slate-800 focus:bg-slate-100">
-                      צופה - קריאה בלבד
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
               <Button
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-                onClick={handleUpdateAccess}
+                onClick={handleUpdateRole}
+                disabled={isUpdating || editData.user_type === editUser?.user_type}
               >
-                <Shield className="h-4 w-4 ml-2" />
-                עדכן הרשאות
+                {isUpdating ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin ml-2" />
+                    מעדכן...
+                  </>
+                ) : (
+                  <>
+                    <Shield className="h-4 w-4 ml-2" />
+                    עדכן תפקיד
+                  </>
+                )}
               </Button>
             </div>
           </DialogContent>

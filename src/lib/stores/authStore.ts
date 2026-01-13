@@ -119,16 +119,26 @@ export const useAuthStore = create<AuthState>()(
         const supabase = createClient();
 
         try {
-          // Try to find by auth_id first, then by email
-          const { data, error } = await supabase
+          // Try to find by auth_id first
+          let data = null;
+
+          const { data: byAuthId } = await supabase
             .from('users')
             .select('*')
-            .or(`auth_id.eq.${user.id},email.eq.${user.email?.toLowerCase()}`)
+            .eq('auth_id', user.id)
             .maybeSingle();
 
-          if (error) {
-            console.log('Error fetching user record:', error.message);
-            return;
+          if (byAuthId) {
+            data = byAuthId;
+          } else {
+            // If not found by auth_id, try by email
+            const { data: byEmail } = await supabase
+              .from('users')
+              .select('*')
+              .eq('email', user.email?.toLowerCase() || '')
+              .maybeSingle();
+
+            data = byEmail;
           }
 
           if (data) {
@@ -142,23 +152,9 @@ export const useAuthStore = create<AuthState>()(
                 .eq('id', data.id);
             }
           } else {
-            // Create user record if not exists
-            const { data: newUser, error: createError } = await supabase
-              .from('users')
-              .insert({
-                auth_id: user.id,
-                email: user.email?.toLowerCase() || '',
-                full_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'משתמש',
-                user_type: 'pending',
-                is_active: true,
-                is_approved: false,
-              })
-              .select()
-              .single();
-
-            if (!createError && newUser) {
-              set({ userRecord: newUser as UserRecord });
-            }
+            // Don't auto-create user records - users must go through registration
+            console.log('No user record found for', user.email);
+            set({ userRecord: null });
           }
         } catch (error) {
           console.error('Error fetching user record:', error);

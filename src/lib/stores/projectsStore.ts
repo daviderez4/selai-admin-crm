@@ -60,6 +60,40 @@ export const useProjectsStore = create<ProjectsState>((set, get) => ({
     set({ isLoadingProjects: true });
 
     try {
+      // First check if user has permission to view projects (admin/manager only)
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        set({ projects: [], isLoadingProjects: false });
+        return;
+      }
+
+      // Get user's profile to check user_type
+      let userProfile = null;
+
+      const { data: byAuthId } = await supabase
+        .from('users')
+        .select('user_type')
+        .eq('auth_id', user.id)
+        .maybeSingle();
+
+      if (byAuthId) {
+        userProfile = byAuthId;
+      } else {
+        const { data: byEmail } = await supabase
+          .from('users')
+          .select('user_type')
+          .eq('email', user.email?.toLowerCase() || '')
+          .maybeSingle();
+        userProfile = byEmail;
+      }
+
+      // Only admin and manager can access projects
+      if (!userProfile || !['admin', 'manager'].includes(userProfile.user_type)) {
+        console.log('User does not have permission to view projects - user_type:', userProfile?.user_type);
+        set({ projects: [], isLoadingProjects: false });
+        return;
+      }
+
       // Get projects the user has access to
       const { data: accessData, error: accessError } = await supabase
         .from('user_project_access')

@@ -141,6 +141,9 @@ export function Sidebar() {
     return dashboards;
   };
 
+  // Check if user is agent or supervisor (needs workspace)
+  const needsWorkspace = userRecord?.user_type === 'agent' || userRecord?.user_type === 'supervisor';
+
   // Main navigation items (always visible)
   const mainNavItems: NavItem[] = [
     {
@@ -154,6 +157,14 @@ export function Sidebar() {
     ...(hasProjectAccess ? [{
       id: 'projects',
       title: 'פרויקטים',
+      href: '/projects',
+      icon: FolderKanban,
+      alwaysShow: true,
+    }] : []),
+    // Workspace for agents/supervisors
+    ...(needsWorkspace ? [{
+      id: 'workspace',
+      title: 'אזור עבודה',
       href: '/projects',
       icon: FolderKanban,
       alwaysShow: true,
@@ -180,6 +191,28 @@ export function Sidebar() {
       icon: Workflow,
     }] : []),
   ];
+
+  // Workspace navigation items (for agents/supervisors)
+  const workspaceNavItems: NavItem[] = needsWorkspace ? [
+    {
+      id: 'contacts',
+      title: 'אנשי קשר',
+      href: '/workspace/contacts',
+      icon: Contact,
+    },
+    {
+      id: 'campaigns',
+      title: 'קמפיינים',
+      href: '/workspace/campaigns',
+      icon: Megaphone,
+    },
+    {
+      id: 'documents',
+      title: 'מסמכים',
+      href: '/workspace/documents',
+      icon: FileText,
+    },
+  ] : [];
 
   // Project-specific navigation items
   const projectNavItems: NavItem[] = projectId ? [
@@ -462,6 +495,25 @@ export function Sidebar() {
               )}
               <nav className="space-y-0.5">
                 {projectNavItems.map(renderNavItem)}
+              </nav>
+            </>
+          )}
+
+          {/* Workspace Navigation - for agents/supervisors */}
+          {workspaceNavItems.length > 0 && (
+            <>
+              <div className="my-3">
+                <Separator className="bg-slate-100" />
+              </div>
+              {!collapsed && (
+                <div className="px-3 mb-1.5">
+                  <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">
+                    אזור עבודה
+                  </p>
+                </div>
+              )}
+              <nav className="space-y-0.5">
+                {workspaceNavItems.map(renderNavItem)}
               </nav>
             </>
           )}

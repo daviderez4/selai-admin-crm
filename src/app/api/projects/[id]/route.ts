@@ -14,6 +14,30 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // First check user_type - only admin and manager can access projects
+    let userProfile = null;
+
+    const { data: byAuthId } = await supabase
+      .from('users')
+      .select('user_type')
+      .eq('auth_id', user.id)
+      .maybeSingle();
+
+    if (byAuthId) {
+      userProfile = byAuthId;
+    } else {
+      const { data: byEmail } = await supabase
+        .from('users')
+        .select('user_type')
+        .eq('email', user.email?.toLowerCase() || '')
+        .maybeSingle();
+      userProfile = byEmail;
+    }
+
+    if (!userProfile || !['admin', 'manager'].includes(userProfile.user_type)) {
+      return NextResponse.json({ error: 'אין לך הרשאה לצפות בפרויקטים' }, { status: 403 });
+    }
+
     // Check access
     const { data: access } = await supabase
       .from('user_project_access')

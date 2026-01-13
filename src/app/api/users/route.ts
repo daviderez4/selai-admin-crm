@@ -1,8 +1,17 @@
-import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { createClient, createAdminClient } from '@/lib/supabase/server';
 
-// GET /api/users - List all users with their project access
-export async function GET() {
+// User types hierarchy for permission checks
+const USER_HIERARCHY: Record<string, number> = {
+  admin: 100,
+  manager: 80,
+  supervisor: 60,
+  agent: 40,
+  client: 20,
+};
+
+// GET /api/users - List all users (for admin/manager)
+export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient();
     const { data: { user }, error: userError } = await supabase.auth.getUser();
@@ -11,118 +20,286 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Check if current user is admin of at least one project
-    const { data: adminAccess } = await supabase
-      .from('user_project_access')
-      .select('project_id')
-      .eq('user_id', user.id)
-      .eq('role', 'admin');
+    // Get current user's profile - search by auth_id first, then by email
+    let currentProfile = null;
 
-    if (!adminAccess || adminAccess.length === 0) {
-      return NextResponse.json({ error: 'Only admins can view users' }, { status: 403 });
+    const { data: byAuthId } = await supabase
+      .from('users')
+      .select('*')
+      .eq('auth_id', user.id)
+      .maybeSingle();
+
+    if (byAuthId) {
+      currentProfile = byAuthId;
+    } else {
+      // Try by email
+      const { data: byEmail } = await supabase
+        .from('users')
+        .select('*')
+        .eq('email', user.email?.toLowerCase() || '')
+        .maybeSingle();
+
+      currentProfile = byEmail;
     }
 
-    const adminProjectIds = adminAccess.map(a => a.project_id);
+    if (!currentProfile) {
+      return NextResponse.json({ error: 'User profile not found' }, { status: 403 });
+    }
 
-    // Get all users who have access to projects where current user is admin
-    const { data: accessData, error: accessError } = await supabase
-      .from('user_project_access')
+    const userType = currentProfile.user_type;
+
+    // Only admin and manager can view all users
+    if (!['admin', 'manager'].includes(userType)) {
+      return NextResponse.json({ error: 'Only admins and managers can view users' }, { status: 403 });
+    }
+
+    // Build query based on user type
+    let query = supabase
+      .from('users')
       .select(`
         id,
-        user_id,
-        project_id,
-        role,
+        email,
+        full_name,
+        phone,
+        id_number,
+        user_type,
+        supervisor_id,
+        manager_id,
+        is_active,
+        is_approved,
         created_at,
-        projects (
-          id,
-          name
-        )
+        updated_at
       `)
-      .in('project_id', adminProjectIds);
+      .order('created_at', { ascending: false });
 
-    if (accessError) {
-      console.error('Error fetching access data:', accessError);
+    // Managers can only see users below them (supervisors, agents, clients)
+    if (userType === 'manager') {
+      query = query.in('user_type', ['supervisor', 'agent', 'client']);
+    }
+
+    const { data: users, error: usersError } = await query;
+
+    if (usersError) {
+      console.error('Error fetching users:', usersError);
       return NextResponse.json({ error: 'Failed to fetch users' }, { status: 500 });
     }
 
-    // Get unique user IDs
-    const userIds = [...new Set(accessData?.map(a => a.user_id) || [])];
-
-    // Fetch user details from auth.users via admin API or profiles
-    // For now, we'll use the access data and get emails from a separate query
-    const { data: profiles, error: profilesError } = await supabase
-      .from('profiles')
-      .select('id, email, full_name, avatar_url, created_at, last_sign_in_at')
-      .in('id', userIds);
-
-    // If profiles table doesn't exist, try to get from auth metadata
-    let usersMap: Record<string, { email: string; full_name?: string; created_at?: string }> = {};
-
-    if (profiles && !profilesError) {
-      profiles.forEach(p => {
-        usersMap[p.id] = {
-          email: p.email,
-          full_name: p.full_name,
-          created_at: p.created_at
-        };
-      });
-    }
-
-    // Group access by user
-    const usersWithAccess: Record<string, {
-      id: string;
-      email: string;
-      full_name?: string;
-      projects: Array<{ id: string; name: string; role: string }>;
-      created_at?: string;
-    }> = {};
-
-    accessData?.forEach(access => {
-      const userId = access.user_id;
-      if (!usersWithAccess[userId]) {
-        usersWithAccess[userId] = {
-          id: userId,
-          email: usersMap[userId]?.email || `user-${userId.slice(0, 8)}`,
-          full_name: usersMap[userId]?.full_name,
-          projects: [],
-          created_at: usersMap[userId]?.created_at || access.created_at
-        };
-      }
-
-      const project = access.projects as unknown as { id: string; name: string } | null;
-      if (project) {
-        usersWithAccess[userId].projects.push({
-          id: project.id,
-          name: project.name,
-          role: access.role
-        });
-      }
-    });
-
-    // Convert to array
-    const users = Object.values(usersWithAccess);
-
-    // Also return list of projects the admin manages (for the UI)
-    const { data: adminProjects } = await supabase
-      .from('projects')
-      .select('id, name')
-      .in('id', adminProjectIds);
-
-    // Fetch pending invitations
-    const { data: pendingInvitations } = await supabase
-      .from('pending_invitations')
+    // Fetch pending registration requests
+    const { data: pendingRequests } = await supabase
+      .from('registration_requests')
       .select('*')
+      .in('status', ['pending', 'needs_review'])
       .order('created_at', { ascending: false });
 
     return NextResponse.json({
-      users,
-      managedProjects: adminProjects || [],
+      users: users || [],
+      pendingRequests: pendingRequests || [],
       currentUserId: user.id,
-      pendingInvitations: pendingInvitations || []
+      currentUserType: userType
     });
 
   } catch (error) {
     console.error('Users API error:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
+
+// PATCH /api/users - Update user (suspend/activate/change role)
+export async function PATCH(request: NextRequest) {
+  try {
+    const supabase = await createClient();
+    const adminClient = createAdminClient();
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Get current user's profile - search by auth_id first, then by email
+    let currentProfile = null;
+
+    const { data: byAuthId } = await supabase
+      .from('users')
+      .select('*')
+      .eq('auth_id', user.id)
+      .maybeSingle();
+
+    if (byAuthId) {
+      currentProfile = byAuthId;
+    } else {
+      const { data: byEmail } = await supabase
+        .from('users')
+        .select('*')
+        .eq('email', user.email?.toLowerCase() || '')
+        .maybeSingle();
+
+      currentProfile = byEmail;
+    }
+
+    if (!currentProfile || !['admin', 'manager'].includes(currentProfile.user_type)) {
+      return NextResponse.json({ error: 'Not authorized to modify users' }, { status: 403 });
+    }
+
+    const body = await request.json();
+    const { userId, action, data } = body;
+
+    if (!userId || !action) {
+      return NextResponse.json({ error: 'Missing userId or action' }, { status: 400 });
+    }
+
+    // Get target user
+    const { data: targetUser } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', userId)
+      .single();
+
+    if (!targetUser) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    // Check hierarchy - can only modify users below you
+    const currentLevel = USER_HIERARCHY[currentProfile.user_type] || 0;
+    const targetLevel = USER_HIERARCHY[targetUser.user_type] || 0;
+
+    if (targetLevel >= currentLevel) {
+      return NextResponse.json({ error: 'Cannot modify user with same or higher role' }, { status: 403 });
+    }
+
+    let updateData: Record<string, any> = {};
+
+    switch (action) {
+      case 'suspend':
+        updateData = { is_active: false };
+        break;
+
+      case 'activate':
+        updateData = { is_active: true };
+        break;
+
+      case 'update_role':
+        if (!data?.user_type) {
+          return NextResponse.json({ error: 'Missing user_type' }, { status: 400 });
+        }
+        // Can't promote to same or higher level
+        const newLevel = USER_HIERARCHY[data.user_type] || 0;
+        if (newLevel >= currentLevel) {
+          return NextResponse.json({ error: 'Cannot promote user to same or higher role' }, { status: 403 });
+        }
+        updateData = { user_type: data.user_type };
+        break;
+
+      case 'update_supervisor':
+        updateData = { supervisor_id: data?.supervisor_id || null };
+        break;
+
+      case 'update':
+        // General update - filter allowed fields
+        const allowedFields = ['full_name', 'phone', 'supervisor_id', 'manager_id'];
+        allowedFields.forEach(field => {
+          if (data?.[field] !== undefined) {
+            updateData[field] = data[field];
+          }
+        });
+        break;
+
+      default:
+        return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
+    }
+
+    updateData.updated_at = new Date().toISOString();
+
+    const { error: updateError } = await adminClient
+      .from('users')
+      .update(updateData)
+      .eq('id', userId);
+
+    if (updateError) {
+      console.error('Error updating user:', updateError);
+      return NextResponse.json({ error: 'Failed to update user' }, { status: 500 });
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: `User ${action === 'suspend' ? 'suspended' : action === 'activate' ? 'activated' : 'updated'} successfully`
+    });
+
+  } catch (error) {
+    console.error('Users PATCH error:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
+
+// DELETE /api/users - Delete user (admin only)
+export async function DELETE(request: NextRequest) {
+  try {
+    const supabase = await createClient();
+    const adminClient = createAdminClient();
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Get current user's profile - only admin can delete
+    let currentProfile = null;
+
+    const { data: byAuthId } = await supabase
+      .from('users')
+      .select('*')
+      .eq('auth_id', user.id)
+      .maybeSingle();
+
+    if (byAuthId) {
+      currentProfile = byAuthId;
+    } else {
+      const { data: byEmail } = await supabase
+        .from('users')
+        .select('*')
+        .eq('email', user.email?.toLowerCase() || '')
+        .maybeSingle();
+
+      currentProfile = byEmail;
+    }
+
+    if (!currentProfile || currentProfile.user_type !== 'admin') {
+      return NextResponse.json({ error: 'Only admins can delete users' }, { status: 403 });
+    }
+
+    const { searchParams } = new URL(request.url);
+    const userId = searchParams.get('userId');
+
+    if (!userId) {
+      return NextResponse.json({ error: 'Missing userId' }, { status: 400 });
+    }
+
+    if (userId === user.id) {
+      return NextResponse.json({ error: 'Cannot delete yourself' }, { status: 400 });
+    }
+
+    // Delete from users table
+    const { error: deleteUserError } = await adminClient
+      .from('users')
+      .delete()
+      .eq('id', userId);
+
+    if (deleteUserError) {
+      console.error('Error deleting user:', deleteUserError);
+      return NextResponse.json({ error: 'Failed to delete user' }, { status: 500 });
+    }
+
+    // Delete from auth
+    const { error: deleteAuthError } = await adminClient.auth.admin.deleteUser(userId);
+
+    if (deleteAuthError) {
+      console.error('Error deleting auth user:', deleteAuthError);
+      // User already deleted from users table, continue
+    }
+
+    return NextResponse.json({ success: true, message: 'User deleted successfully' });
+
+  } catch (error) {
+    console.error('Users DELETE error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

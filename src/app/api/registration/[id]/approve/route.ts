@@ -120,6 +120,37 @@ export async function POST(
         .eq('email', registration.email.toLowerCase())
         .maybeSingle();
 
+      // Step 3.5: Validate supervisor_id exists in users table (if provided)
+      let validSupervisorId = null;
+      const requestedSupervisorId = registration.requested_supervisor_id || registration.supervisor_id;
+      if (requestedSupervisorId) {
+        const { data: supervisorExists } = await supabase
+          .from('users')
+          .select('id')
+          .eq('id', requestedSupervisorId)
+          .maybeSingle();
+
+        if (supervisorExists) {
+          validSupervisorId = requestedSupervisorId;
+        } else {
+          console.log(`Supervisor ${requestedSupervisorId} not found in users table, skipping assignment`);
+        }
+      }
+
+      // Step 3.6: Validate manager_id exists in users table (if provided)
+      let validManagerId = null;
+      if (registration.requested_manager_id) {
+        const { data: managerExists } = await supabase
+          .from('users')
+          .select('id')
+          .eq('id', registration.requested_manager_id)
+          .maybeSingle();
+
+        if (managerExists) {
+          validManagerId = registration.requested_manager_id;
+        }
+      }
+
       let newUser;
       let userError;
 
@@ -134,8 +165,8 @@ export async function POST(
             id_number: registration.id_number || registration.national_id,
             license_number: registration.license_number,
             user_type: registration.requested_role || 'agent',
-            supervisor_id: registration.requested_supervisor_id || registration.supervisor_id,
-            manager_id: registration.requested_manager_id,
+            supervisor_id: validSupervisorId,
+            manager_id: validManagerId,
             approved_by: reviewer.id,
             approved_at: new Date().toISOString(),
             is_active: true,
@@ -158,8 +189,8 @@ export async function POST(
             id_number: registration.id_number || registration.national_id,
             license_number: registration.license_number,
             user_type: registration.requested_role || 'agent',
-            supervisor_id: registration.requested_supervisor_id || registration.supervisor_id,
-            manager_id: registration.requested_manager_id,
+            supervisor_id: validSupervisorId,
+            manager_id: validManagerId,
             approved_by: reviewer.id,
             approved_at: new Date().toISOString(),
             is_active: true,

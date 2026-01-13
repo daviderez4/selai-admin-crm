@@ -6,7 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient, createSelaiClient } from '@/lib/supabase/server';
+import { createAdminClient, createSelaiClient } from '@/lib/supabase/server';
 
 // Simple encryption for temporary password storage (until admin approval)
 // In production, use proper encryption with environment-based keys
@@ -35,7 +35,8 @@ export function decryptPassword(encrypted: string): string {
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
+    // Use admin client for registration (no auth required)
+    const supabase = createAdminClient();
 
     const body = await request.json();
     const {

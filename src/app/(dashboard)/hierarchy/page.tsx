@@ -93,18 +93,32 @@ export default function HierarchyPage() {
       const agentsRes = await fetch('/api/selai/agents?limit=500');
       const agentsData = await agentsRes.json();
 
+      // Fetch hierarchy stats (includes connected users from our users table)
+      const statsRes = await fetch('/api/hierarchy/stats');
+      const statsData = await statsRes.json();
+
       if (supervisorsData.success && agentsData.success) {
         setSupervisors(supervisorsData.data.supervisors || []);
         setAgents(agentsData.data.agents || []);
 
-        // Calculate stats
-        const allAgents = agentsData.data.agents || [];
-        setStats({
-          totalSupervisors: supervisorsData.data.total || 0,
-          totalAgents: allAgents.length,
-          activeAgents: allAgents.filter((a: ExternalAgent) => a.is_active_in_sela).length,
-          onboardedAgents: allAgents.filter((a: ExternalAgent) => a.onboarded_to_app).length
-        });
+        // Use stats from our API (includes connected users from users table)
+        if (statsData.success) {
+          setStats({
+            totalSupervisors: statsData.data.totalSupervisors || 0,
+            totalAgents: statsData.data.totalAgents || 0,
+            activeAgents: statsData.data.activeAgents || 0,
+            onboardedAgents: statsData.data.connectedAgents || 0
+          });
+        } else {
+          // Fallback to calculating from agents data
+          const allAgents = agentsData.data.agents || [];
+          setStats({
+            totalSupervisors: supervisorsData.data.total || 0,
+            totalAgents: allAgents.length,
+            activeAgents: allAgents.filter((a: ExternalAgent) => a.is_active_in_sela).length,
+            onboardedAgents: allAgents.filter((a: ExternalAgent) => a.onboarded_to_app).length
+          });
+        }
       }
     } catch (error) {
       console.error('Error fetching data:', error);

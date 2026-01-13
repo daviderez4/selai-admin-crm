@@ -28,17 +28,48 @@ export default function LoginPage() {
     }
 
     setIsLoading(true);
+    const normalizedEmail = email.toLowerCase().trim();
 
     try {
       const supabase = createClient();
+
+      // Step 1: Try to sign in with Supabase Auth
       const { data, error } = await supabase.auth.signInWithPassword({
-        email,
+        email: normalizedEmail,
         password,
       });
 
       if (error) {
+        // Auth failed - could be wrong credentials OR user doesn't exist yet (pending approval)
+        // Check if there's a pending registration request
+        const { data: regRequest } = await supabase
+          .from('registration_requests')
+          .select('id, status')
+          .eq('email', normalizedEmail)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (regRequest) {
+          if (regRequest.status === 'pending' || regRequest.status === 'needs_review') {
+            // User is waiting for approval - redirect to pending page
+            localStorage.setItem('pending_registration_email', normalizedEmail);
+            toast.info('החשבון שלך ממתין לאישור מנהל');
+            router.push(`/pending-approval?email=${encodeURIComponent(normalizedEmail)}`);
+            return;
+          } else if (regRequest.status === 'rejected') {
+            toast.error('בקשת ההרשמה שלך נדחתה. פנה למנהל המערכת.');
+            setIsLoading(false);
+            return;
+          }
+          // If status is 'approved', auth user should exist - so it's wrong password
+        }
+
+        // No pending request or approved - must be wrong credentials
         if (error.message.includes('Invalid login credentials')) {
           toast.error('אימייל או סיסמה שגויים');
+        } else if (error.message.includes('Email not confirmed')) {
+          toast.error('האימייל לא אומת. בדוק את תיבת הדואר שלך.');
         } else {
           toast.error(error.message);
         }
@@ -46,55 +77,38 @@ export default function LoginPage() {
         return;
       }
 
+      // Step 2: Auth succeeded - check user status in users table
       if (data.user) {
-        // Check if user exists in users table (existing users)
         const { data: userProfile, error: profileError } = await supabase
           .from('users')
-          .select('id, user_type, is_active')
-          .eq('email', email.toLowerCase())
+          .select('id, user_type, is_active, is_approved')
+          .eq('auth_id', data.user.id)
           .maybeSingle();
 
-        // If error or no profile, just go to dashboard - authStore will handle it
         if (profileError) {
           console.log('Profile check error (non-blocking):', profileError.message);
-          router.push('/');
-          return;
         }
 
-        if (userProfile && userProfile.is_active !== false) {
-          // User exists and is active - go to dashboard
-          router.push('/');
-          return;
-        }
-
-        // Check registration_requests for pending/needs_review status
-        const { data: regRequest } = await supabase
-          .from('registration_requests')
-          .select('id, status, matched_external_id')
-          .eq('email', email)
-          .single();
-
-        if (regRequest) {
-          if (regRequest.status === 'approved') {
-            // Approved but not yet verified - go to verify profile
-            router.push('/verify-profile');
-          } else if (regRequest.status === 'pending' || regRequest.status === 'needs_review') {
-            // Still waiting for approval
-            router.push('/pending-approval');
-          } else if (regRequest.status === 'rejected') {
-            toast.error('בקשת ההרשמה שלך נדחתה. פנה למנהל המערכת.');
+        // Check if user is approved and active
+        if (userProfile) {
+          if (!userProfile.is_approved) {
+            toast.error('החשבון שלך עדיין לא אושר. המתן לאישור מנהל.');
             await supabase.auth.signOut();
-          } else {
-            // Unknown status or completed - go to dashboard
-            router.push('/');
+            setIsLoading(false);
+            return;
           }
-        } else if (userProfile) {
-          // User exists in users table but not active - still let them in
-          router.push('/');
-        } else {
-          // No user and no registration request - need to register
-          router.push('/signup');
+
+          if (userProfile.is_active === false) {
+            toast.error('החשבון שלך הושעה. פנה למנהל המערכת.');
+            await supabase.auth.signOut();
+            setIsLoading(false);
+            return;
+          }
         }
+
+        // All good - go to dashboard
+        toast.success('התחברת בהצלחה!');
+        router.push('/');
       }
     } catch (err) {
       console.error('Login error:', err);

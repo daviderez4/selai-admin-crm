@@ -74,14 +74,21 @@ export default function AgentDashboardPage() {
 
   const fetchDashboardData = async () => {
     try {
-      // In production, this would fetch from /api/agent/dashboard
-      // For now, using mock data
-      await new Promise(resolve => setTimeout(resolve, 500));
-
-      setAgentProfile({
-        full_name: 'ישראל ישראלי',
-        supervisor_name: 'משה כהן',
-      });
+      // Fetch real profile data from API
+      const profileResponse = await fetch('/api/agent/profile');
+      if (profileResponse.ok) {
+        const profileData = await profileResponse.json();
+        setAgentProfile({
+          full_name: profileData.profile?.full_name || 'סוכן',
+          supervisor_name: profileData.supervisor?.full_name,
+        });
+      } else {
+        // Fallback to default
+        setAgentProfile({
+          full_name: 'סוכן',
+          supervisor_name: undefined,
+        });
+      }
 
       setStats({
         totalClients: 45,

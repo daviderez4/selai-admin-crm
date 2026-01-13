@@ -18,12 +18,15 @@ import {
   TrendingUp,
   Activity,
   ChevronLeft,
+  Lock,
+  Home,
 } from 'lucide-react';
 import { Header } from '@/components/layout/Header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useProjectsStore } from '@/lib/stores/projectsStore';
+import { useAuthStore } from '@/lib/stores/authStore';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
@@ -136,10 +139,44 @@ export default function ProjectHomePage() {
   const projectId = params.id as string;
 
   const { projects, selectedProject, connectToProject, fetchProjects } = useProjectsStore();
+  const { userRecord, canAccessProjects } = useAuthStore();
   const [stats, setStats] = useState<ProjectStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [projectNotFound, setProjectNotFound] = useState(false);
   const [activeTab, setActiveTab] = useState('dashboard');
+
+  // Check if user has project access
+  const hasAccess = canAccessProjects();
+
+  // Show access denied for non-admin/manager users
+  if (userRecord && !hasAccess) {
+    return (
+      <div className="flex flex-col h-full">
+        <Header title="פרויקט" />
+        <div className="flex-1 p-6 flex items-center justify-center bg-slate-50">
+          <Card className="max-w-md w-full">
+            <CardContent className="pt-6 text-center">
+              <div className="p-4 bg-amber-50 rounded-full w-fit mx-auto mb-4">
+                <Lock className="h-12 w-12 text-amber-600" />
+              </div>
+              <h2 className="text-xl font-bold text-slate-800 mb-2">
+                אזור זה מוגבל להנהלה
+              </h2>
+              <p className="text-slate-600 mb-6">
+                רק מנהלים יכולים לגשת לפרויקטים.
+                <br />
+                עבור לדשבורד הראשי לצפייה בכלים הזמינים עבורך.
+              </p>
+              <Button onClick={() => router.push('/dashboard')} className="w-full">
+                <Home className="h-4 w-4 ml-2" />
+                חזרה לדשבורד הראשי
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   // Dynamic navigation tabs based on project type
   const getNavTabs = (): NavTab[] => {

@@ -14,26 +14,35 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Get user role
-    const { data: currentUser } = await supabase
+    // Get user role - search by auth_id first, then by email
+    let currentUser = null;
+
+    const { data: byAuthId } = await supabase
       .from('users')
       .select('user_type, id')
       .eq('auth_id', user.id)
-      .single();
+      .maybeSingle();
+
+    if (byAuthId) {
+      currentUser = byAuthId;
+    } else {
+      const { data: byEmail } = await supabase
+        .from('users')
+        .select('user_type, id')
+        .eq('email', user.email?.toLowerCase() || '')
+        .maybeSingle();
+
+      currentUser = byEmail;
+    }
 
     if (!currentUser || !['admin', 'manager', 'supervisor'].includes(currentUser.user_type)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    // Build query based on role
+    // Build query - select all fields without FK joins (no FK relationships defined)
     let query = supabase
       .from('registration_requests')
-      .select(`
-        *,
-        reviewer:reviewed_by(full_name, email),
-        supervisor:requested_supervisor_id(full_name, email),
-        manager:requested_manager_id(full_name, email)
-      `)
+      .select('*')
       .order('created_at', { ascending: false });
 
     // Filter by status if not 'all'
