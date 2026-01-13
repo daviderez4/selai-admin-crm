@@ -57,17 +57,23 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
-    // Check if email already exists in users table (already registered)
+    // Check if email already exists in users table (already registered AND approved)
     const { data: existingUser } = await supabase
       .from('users')
-      .select('id')
-      .eq('email', email)
-      .single();
+      .select('id, is_approved, user_type')
+      .eq('email', email.toLowerCase())
+      .maybeSingle();
 
-    if (existingUser) {
+    // Only block if user exists AND is approved (active user)
+    if (existingUser && existingUser.is_approved) {
       return NextResponse.json({
         error: 'Email already registered'
       }, { status: 400 });
+    }
+
+    // If user exists but not approved, delete it so they can re-register
+    if (existingUser && !existingUser.is_approved) {
+      await supabase.from('users').delete().eq('id', existingUser.id);
     }
 
     // Step 1: Create auth user in Supabase
