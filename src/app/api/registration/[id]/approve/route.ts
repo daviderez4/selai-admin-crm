@@ -1,3 +1,9 @@
+/**
+ * @feature AUTH-REG-005
+ * @module Authentication
+ * @description Admin approval/rejection of registration requests
+ * @related AUTH-REG-001, AUTH-REG-004
+ */
 import { NextResponse } from 'next/server';
 import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { decryptPassword } from '@/app/api/auth/register-request/route';

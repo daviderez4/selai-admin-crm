@@ -1,3 +1,9 @@
+/**
+ * @feature AUTH-LOGIN-003
+ * @module Authentication
+ * @description User session state management, role checks, auth operations
+ * @related AUTH-LOGIN-001, AUTH-LOGIN-002, USER-STORE-001
+ */
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { createClient } from '../supabase/client';

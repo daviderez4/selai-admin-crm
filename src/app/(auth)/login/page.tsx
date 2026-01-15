@@ -1,3 +1,9 @@
+/**
+ * @feature AUTH-LOGIN-001
+ * @module Authentication
+ * @description User login page - email/password authentication
+ * @related AUTH-LOGIN-002, AUTH-LOGIN-003, AUTH-2FA-002
+ */
 'use client';
 
 import { useState } from 'react';

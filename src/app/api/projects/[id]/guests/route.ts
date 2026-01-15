@@ -1,6 +1,8 @@
 /**
- * Project Guests API
- * Manage guest access to projects
+ * @feature GUEST-MANAGE-001
+ * @module Guest Access
+ * @description Manage guest access - list, invite, revoke guests
+ * @related GUEST-API-001, GUEST-VIEW-001, GUEST-EMAIL-001
  */
 
 import { NextResponse } from 'next/server'

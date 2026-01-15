@@ -1,6 +1,8 @@
 /**
- * Guest Token Verification API (Public)
- * Verifies guest access tokens without authentication
+ * @feature GUEST-API-001
+ * @module Guest Access
+ * @description Verify guest token and get project info (public endpoint)
+ * @related GUEST-VIEW-001, GUEST-MANAGE-001
  */
 
 import { NextResponse } from 'next/server'

@@ -1,3 +1,9 @@
+/**
+ * @feature HIER-AGT-003
+ * @module Hierarchy
+ * @description Get agents under a supervisor, full hierarchy data
+ * @related HIER-SUP-001, HIER-AGT-001
+ */
 import { NextRequest, NextResponse } from 'next/server';
 import { createSelaiServerClient } from '@/lib/supabase/selai-client';
 

@@ -1,3 +1,9 @@
+/**
+ * @feature CRM-STORE-001
+ * @module CRM
+ * @description CRM state management - contacts, leads, deals, tasks, meetings
+ * @related CRM-CONTACT-001, CRM-LEAD-001, CRM-DEAL-001, CRM-TASK-001
+ */
 import { create } from 'zustand';
 import { createClient } from '@/lib/supabase/client';
 import type {

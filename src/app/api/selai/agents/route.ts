@@ -1,3 +1,9 @@
+/**
+ * @feature HIER-AGT-001
+ * @module Hierarchy
+ * @description Get all agents with filtering, search, pagination
+ * @related HIER-AGT-003, HIER-SUP-001
+ */
 import { NextRequest, NextResponse } from 'next/server';
 import { createSelaiServerClient } from '@/lib/supabase/selai-client';
 

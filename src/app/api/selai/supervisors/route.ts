@@ -1,3 +1,9 @@
+/**
+ * @feature HIER-SUP-001
+ * @module Hierarchy
+ * @description Get all supervisors with their agents count
+ * @related HIER-AGT-001, HIER-AGT-003
+ */
 import { NextRequest, NextResponse } from 'next/server';
 import { createSelaiServerClient } from '@/lib/supabase/selai-client';
 

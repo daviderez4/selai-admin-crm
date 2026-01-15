@@ -1,3 +1,9 @@
+/**
+ * @feature DASH-VIEW-001
+ * @module Dashboards
+ * @description Generic view dashboard (Gemel/Nifraim) - displays project data visualizations
+ * @related DASH-VIEW-002, DASH-UNIFIED-001, PROJ-DATA-001
+ */
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';

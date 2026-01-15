@@ -1,3 +1,9 @@
+/**
+ * @feature GUEST-MANAGE-001
+ * @module Guest Access
+ * @description UI for managing project guests - invite, view, revoke
+ * @related GUEST-API-001, GUEST-VIEW-001
+ */
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'

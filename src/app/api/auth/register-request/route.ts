@@ -1,8 +1,8 @@
 /**
- * Registration Request API
- * Creates a pending registration request in registration_requests table
- * NO auth user created here - only after admin approval
- * Automatically matches with external_agents using find_external_agent_match
+ * @feature AUTH-REG-001
+ * @module Authentication
+ * @description New user registration request - creates pending request for admin approval
+ * @related AUTH-REG-004, AUTH-REG-005, HIER-AGT-002
  */
 
 import { NextRequest, NextResponse } from 'next/server';

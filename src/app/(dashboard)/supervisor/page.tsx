@@ -1,3 +1,9 @@
+/**
+ * @feature HIER-SUP-PAGE-001
+ * @module Hierarchy
+ * @description Supervisor dashboard - view team, agents under supervision
+ * @related HIER-AGT-003, HIER-SUP-001, HIER-AGT-001
+ */
 'use client';
 
 import { useState, useEffect } from 'react';

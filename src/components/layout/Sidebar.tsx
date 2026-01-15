@@ -1,3 +1,9 @@
+/**
+ * @feature SYS-LAYOUT-001
+ * @module System
+ * @description Main navigation sidebar - controls all menu visibility
+ * @related SYS-LAYOUT-002, AUTH-LOGIN-003
+ */
 'use client';
 
 import Link from 'next/link';

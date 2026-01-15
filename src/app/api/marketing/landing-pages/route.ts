@@ -1,3 +1,9 @@
+/**
+ * @feature MKT-LP-001
+ * @module Marketing
+ * @description Landing pages CRUD - list, create landing pages
+ * @related MKT-LP-002, MKT-LP-003, MKT-LP-005
+ */
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 

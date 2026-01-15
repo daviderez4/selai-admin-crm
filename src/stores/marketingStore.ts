@@ -1,3 +1,9 @@
+/**
+ * @feature MKT-STORE-001
+ * @module Marketing
+ * @description Marketing state management - campaigns, landing pages, leads
+ * @related MKT-LP-001, MKT-CAMP-001, MKT-LEAD-001
+ */
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 

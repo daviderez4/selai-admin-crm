@@ -1,3 +1,9 @@
+/**
+ * @feature SYS-PROTECT-001
+ * @module System
+ * @description Main auth middleware - session management, route protection
+ * @related AUTH-LOGIN-003, DB-MW-001
+ */
 import { type NextRequest } from 'next/server';
 import { updateSession } from '@/lib/supabase/middleware';
 

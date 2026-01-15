@@ -1,3 +1,9 @@
+/**
+ * @feature PROJ-LIST-001
+ * @module Projects
+ * @description Projects state management - list, select, connect to project DBs
+ * @related PROJ-VIEW-001, PROJ-DATA-001
+ */
 import { create } from 'zustand';
 import { createClient } from '../supabase/client';
 import type { Project, TableInfo, TableRow, PaginatedResponse } from '@/types';
