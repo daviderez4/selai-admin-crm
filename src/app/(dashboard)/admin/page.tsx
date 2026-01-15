@@ -11,6 +11,7 @@ import {
   Shield,
   UserPlus,
   Cog,
+  Network,
 } from 'lucide-react';
 import DataHealthDashboard from '@/components/admin/health/DataHealthDashboard';
 import SchemaRegistryManager from '@/components/admin/health/SchemaRegistryManager';
@@ -36,6 +37,11 @@ const AdminRegistrationsContent = dynamic(
 
 const AdminSettingsContent = dynamic(
   () => import('@/components/admin/AdminSettingsContent'),
+  { loading: () => <div className="flex items-center justify-center h-96"><div className="animate-spin h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full"></div></div> }
+);
+
+const IntegrationsContent = dynamic(
+  () => import('@/components/admin/IntegrationsContent'),
   { loading: () => <div className="flex items-center justify-center h-96"><div className="animate-spin h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full"></div></div> }
 );
 
@@ -103,6 +109,13 @@ export default function AdminPage() {
               <Cog className="h-4 w-4 ml-2" />
               הגדרות מערכת
             </TabsTrigger>
+            <TabsTrigger
+              value="integrations"
+              className="data-[state=active]:bg-cyan-50 data-[state=active]:text-cyan-700 px-4 py-2 rounded-lg"
+            >
+              <Network className="h-4 w-4 ml-2" />
+              אינטגרציות
+            </TabsTrigger>
           </TabsList>
         </div>
 
@@ -131,6 +144,10 @@ export default function AdminPage() {
 
         <TabsContent value="settings" className="m-0">
           <AdminSettingsContent />
+        </TabsContent>
+
+        <TabsContent value="integrations" className="m-0">
+          <IntegrationsContent />
         </TabsContent>
       </Tabs>
     </div>
