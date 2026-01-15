@@ -15,7 +15,9 @@ export const config = {
      * - public folder
      * - partner (partner portal)
      * - share (public share pages)
+     * - guest (guest access pages)
+     * - api/guest (guest API endpoints)
      */
-    '/((?!_next/static|_next/image|favicon.ico|partner|share|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|partner|share|guest|api/guest|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 };

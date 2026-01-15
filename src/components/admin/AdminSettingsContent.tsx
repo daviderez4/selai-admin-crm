@@ -472,7 +472,7 @@ export default function AdminSettingsContent() {
               <Input
                 id="system_email"
                 type="email"
-                placeholder="noreply@company.com"
+                placeholder="selai@selam.co.il"
                 value={emailSettings.system_email}
                 onChange={(e) => setEmailSettings({ ...emailSettings, system_email: e.target.value })}
                 dir="ltr"

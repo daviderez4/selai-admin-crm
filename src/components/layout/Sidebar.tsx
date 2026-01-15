@@ -33,6 +33,9 @@ import {
   UsersRound,
   AppWindow,
   UserPlus,
+  Rocket,
+  Image as ImageIcon,
+  Share2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -190,6 +193,40 @@ export function Sidebar() {
       href: '/workflows',
       icon: Workflow,
     }] : []),
+  ];
+
+  // Marketing Studio navigation items
+  const marketingNavItems: NavItem[] = [
+    {
+      id: 'marketing',
+      title: 'Marketing Studio',
+      href: '/marketing',
+      icon: Rocket,
+    },
+    {
+      id: 'campaigns',
+      title: 'קמפיינים',
+      href: '/marketing/campaigns',
+      icon: Megaphone,
+    },
+    {
+      id: 'landing-pages',
+      title: 'דפי נחיתה',
+      href: '/marketing/landing-pages',
+      icon: Layout,
+    },
+    {
+      id: 'marketing-analytics',
+      title: 'אנליטיקס',
+      href: '/marketing/analytics',
+      icon: BarChart3,
+    },
+    {
+      id: 'assets',
+      title: 'ספריית מדיה',
+      href: '/marketing/assets',
+      icon: ImageIcon,
+    },
   ];
 
   // Workspace navigation items (for agents/supervisors)
@@ -478,6 +515,21 @@ export function Sidebar() {
           {/* Main Navigation */}
           <nav className="space-y-0.5">
             {mainNavItems.map(renderNavItem)}
+          </nav>
+
+          {/* Marketing Studio */}
+          <div className="my-3">
+            <Separator className="bg-slate-100" />
+          </div>
+          {!collapsed && (
+            <div className="px-3 mb-1.5">
+              <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">
+                שיווק
+              </p>
+            </div>
+          )}
+          <nav className="space-y-0.5">
+            {marketingNavItems.map(renderNavItem)}
           </nav>
 
           {/* Project Navigation */}

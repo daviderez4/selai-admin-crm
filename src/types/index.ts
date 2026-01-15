@@ -41,6 +41,25 @@ export interface UserProjectAccess {
   created_at: string;
 }
 
+export interface ProjectGuest {
+  id: string;
+  project_id: string;
+  email: string;
+  name?: string;
+  access_token: string;
+  role: 'viewer';
+  invited_by: string;
+  expires_at: string;
+  is_active: boolean;
+  last_accessed_at?: string;
+  access_count: number;
+  created_at: string;
+  updated_at: string;
+  // Joined fields
+  project_name?: string;
+  inviter_name?: string;
+}
+
 export interface AuditLog {
   id: string;
   user_id: string;

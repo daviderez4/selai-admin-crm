@@ -29,6 +29,7 @@ import { Badge } from '@/components/ui/badge';
 import { useProjectsStore } from '@/lib/stores/projectsStore';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { GuestManagement } from '@/components/projects/GuestManagement';
 
 interface ConnectionTestResult {
   success: boolean;
@@ -549,6 +550,12 @@ export default function ProjectSettingsPage() {
               )}
             </CardContent>
           </Card>
+
+          {/* Guest Management */}
+          <GuestManagement
+            projectId={projectId}
+            projectName={selectedProject.name || formData.name || 'Project'}
+          />
 
           {/* Save Button */}
           <div className="flex items-center justify-end gap-3">
