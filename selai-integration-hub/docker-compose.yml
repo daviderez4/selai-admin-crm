@@ -1,0 +1,108 @@
+version: '3.8'
+
+services:
+  # ===========================================
+  # SELAI Integration Hub
+  # ===========================================
+  integration-hub:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3001:3000"
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+      - USE_MOCKS=${USE_MOCKS:-true}
+      - LOG_LEVEL=debug
+      # Supabase
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_KEY=${SUPABASE_KEY}
+      # Har HaBitouach
+      - HAR_HABITOUACH_API_URL=${HAR_HABITOUACH_API_URL}
+      - HAR_HABITOUACH_CLIENT_ID=${HAR_HABITOUACH_CLIENT_ID}
+      - HAR_HABITOUACH_CLIENT_SECRET=${HAR_HABITOUACH_CLIENT_SECRET}
+      - HAR_HABITOUACH_API_KEY=${HAR_HABITOUACH_API_KEY}
+      # Mislaka
+      - MISLAKA_API_URL=${MISLAKA_API_URL}
+      - MISLAKA_CLIENT_ID=${MISLAKA_CLIENT_ID}
+      - MISLAKA_CLIENT_SECRET=${MISLAKA_CLIENT_SECRET}
+      # Kafka
+      - KAFKA_BROKERS=kafka:9092
+      # Redis
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - postgres
+      - kafka
+      - redis
+    volumes:
+      - ./logs:/app/logs
+    networks:
+      - selai-network
+    restart: unless-stopped
+
+  # ===========================================
+  # PostgreSQL (for local testing)
+  # ===========================================
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=selai
+      - POSTGRES_PASSWORD=selai_password
+      - POSTGRES_DB=selai_integration
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d
+    networks:
+      - selai-network
+    restart: unless-stopped
+
+  # ===========================================
+  # Kafka (for event streaming)
+  # ===========================================
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - selai-network
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+    networks:
+      - selai-network
+
+  # ===========================================
+  # Redis (for caching)
+  # ===========================================
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - selai-network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  selai-network:
+    driver: bridge
