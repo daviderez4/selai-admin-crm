@@ -173,13 +173,50 @@ export default function CampaignsPage() {
   const [previewDialogOpen, setPreviewDialogOpen] = useState(false)
   const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [isInitialLoading, setIsInitialLoading] = useState(true)
 
-  // Initialize with mock data if empty
+  // Fetch campaigns from API on mount
   useEffect(() => {
-    if (campaigns.length === 0) {
-      setCampaigns(generateMockCampaigns())
+    fetchCampaigns()
+  }, [])
+
+  const fetchCampaigns = async () => {
+    try {
+      const res = await fetch('/api/marketing/campaigns')
+      if (res.ok) {
+        const data = await res.json()
+        if (data.campaigns && data.campaigns.length > 0) {
+          // Map API data to Campaign type
+          const mappedCampaigns: Campaign[] = data.campaigns.map((c: any) => ({
+            id: c.id,
+            name: c.name,
+            description: c.description,
+            type: c.type || 'social',
+            status: c.status,
+            platforms: c.platforms || [],
+            content: c.content || {},
+            landing_page_id: c.landing_page_id,
+            created_at: c.created_at,
+            updated_at: c.updated_at,
+          }))
+          setCampaigns(mappedCampaigns)
+        } else if (campaigns.length === 0) {
+          // Use mock data if no campaigns in DB
+          setCampaigns(generateMockCampaigns())
+        }
+      } else if (campaigns.length === 0) {
+        // Fallback to mock data
+        setCampaigns(generateMockCampaigns())
+      }
+    } catch (error) {
+      console.error('Error fetching campaigns:', error)
+      if (campaigns.length === 0) {
+        setCampaigns(generateMockCampaigns())
+      }
+    } finally {
+      setIsInitialLoading(false)
     }
-  }, [campaigns.length, setCampaigns])
+  }
 
   const filteredCampaigns = campaigns.filter((campaign) => {
     const matchesSearch =
@@ -323,6 +360,18 @@ export default function CampaignsPage() {
     router.push(`/marketing/analytics?campaign=${campaignId}`)
   }
 
+  // Show loading state
+  if (isInitialLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-purple-50/30 flex items-center justify-center" dir="rtl">
+        <div className="text-center">
+          <Loader2 className="h-12 w-12 text-purple-500 animate-spin mx-auto mb-4" />
+          <p className="text-slate-600">טוען קמפיינים...</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-purple-50/30 p-6" dir="rtl">
       {/* Header */}
@@ -335,12 +384,23 @@ export default function CampaignsPage() {
           <h1 className="text-3xl font-bold text-slate-900 mb-1">קמפיינים</h1>
           <p className="text-slate-500">נהל את כל הקמפיינים השיווקיים שלך</p>
         </div>
-        <Link href="/marketing/create">
-          <Button className="gap-2 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 shadow-lg shadow-purple-500/25">
-            <Plus className="h-4 w-4" />
-            קמפיין חדש
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={fetchCampaigns}
+            disabled={isLoading}
+            className="gap-2"
+          >
+            {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <BarChart3 className="h-4 w-4" />}
+            רענן
           </Button>
-        </Link>
+          <Link href="/marketing/create">
+            <Button className="gap-2 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 shadow-lg shadow-purple-500/25">
+              <Plus className="h-4 w-4" />
+              קמפיין חדש
+            </Button>
+          </Link>
+        </div>
       </motion.div>
 
       {/* Stats Summary */}

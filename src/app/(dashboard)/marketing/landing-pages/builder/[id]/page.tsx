@@ -106,10 +106,15 @@ export default function LandingPageBuilderPage() {
   const { toast } = useToast()
   const isNew = params.id === 'new'
 
+  // Get URL search params for template pre-selection
+  const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null
+  const urlTemplate = searchParams?.get('template')
+  const campaignId = searchParams?.get('campaign')
+
   // Store
   const { addLandingPage, updateLandingPage, landingPages } = useMarketingStore()
 
-  const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null)
+  const [selectedTemplate, setSelectedTemplate] = useState<string | null>(urlTemplate || null)
   const [pageName, setPageName] = useState('')
   const [pageSlug, setPageSlug] = useState('')
   const [content, setContent] = useState<LandingPageContent | null>(null)
@@ -121,6 +126,19 @@ export default function LandingPageBuilderPage() {
   const [imageCategory, setImageCategory] = useState<string>('all')
   const [existingPageId, setExistingPageId] = useState<string | null>(null)
   const [pageStatus, setPageStatus] = useState<'draft' | 'published'>('draft')
+
+  // Auto-select template from URL and initialize content
+  useEffect(() => {
+    if (isNew && urlTemplate && !content) {
+      const template = TEMPLATE_INFO.find(t => t.slug === urlTemplate)
+      if (template) {
+        setSelectedTemplate(urlTemplate)
+        setPageName(template.name_he)
+        setPageSlug(`${urlTemplate}-${Date.now().toString(36)}`)
+        setContent(getDefaultContent(urlTemplate))
+      }
+    }
+  }, [isNew, urlTemplate])
 
   // Load existing page for editing
   useEffect(() => {

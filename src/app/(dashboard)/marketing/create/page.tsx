@@ -539,8 +539,40 @@ export default function CreateCampaignPage() {
               <div className="space-y-6">
                 <div className="text-center mb-8">
                   <h2 className="text-2xl font-bold text-slate-900 mb-2">בחר דף נחיתה</h2>
-                  <p className="text-slate-500">בחר תבנית או צור דף נחיתה חדש</p>
+                  <p className="text-slate-500">בחר תבנית מוכנה ועבור לעורך דפי הנחיתה</p>
                 </div>
+
+                {/* Quick Create Landing Page Button */}
+                <Card className="border-2 border-dashed border-purple-300 bg-purple-50/50 mb-6">
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center">
+                          <Sparkles className="h-6 w-6 text-white" />
+                        </div>
+                        <div>
+                          <h3 className="font-semibold text-slate-900">צור דף נחיתה מותאם אישית</h3>
+                          <p className="text-sm text-slate-500">עבור לעורך דפי הנחיתה המתקדם</p>
+                        </div>
+                      </div>
+                      <Button
+                        onClick={() => {
+                          // Save current campaign data before navigating
+                          updateWizardData({
+                            name: campaignName,
+                            platforms: selectedPlatforms as any,
+                            content: { text: contentText, cta_text: ctaText, image_url: selectedImage },
+                          })
+                          router.push('/marketing/landing-pages/builder/new')
+                        }}
+                        className="gap-2 bg-gradient-to-r from-purple-600 to-blue-600"
+                      >
+                        <FileText className="h-4 w-4" />
+                        פתח עורך
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                   {TEMPLATE_INFO.map((template) => {
@@ -562,7 +594,7 @@ export default function CreateCampaignPage() {
                           onClick={() => setSelectedTemplate(template.slug)}
                         >
                           <div
-                            className="h-24 flex items-center justify-center"
+                            className="h-24 flex items-center justify-center relative"
                             style={{ backgroundColor: template.colors.background }}
                           >
                             <div
@@ -571,10 +603,31 @@ export default function CreateCampaignPage() {
                             >
                               <FileText className="h-6 w-6 text-white" />
                             </div>
+                            {isSelected && (
+                              <div className="absolute top-2 left-2">
+                                <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center">
+                                  <Check className="h-4 w-4 text-white" />
+                                </div>
+                              </div>
+                            )}
                           </div>
                           <CardContent className="p-4">
                             <h3 className="font-semibold text-slate-900">{template.name_he}</h3>
                             <p className="text-sm text-slate-500">{template.description_he}</p>
+                            {isSelected && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="w-full mt-3 gap-1"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  router.push(`/marketing/landing-pages/builder/new?template=${template.slug}`)
+                                }}
+                              >
+                                <Eye className="h-3 w-3" />
+                                ערוך תבנית זו
+                              </Button>
+                            )}
                           </CardContent>
                         </Card>
                       </motion.div>
