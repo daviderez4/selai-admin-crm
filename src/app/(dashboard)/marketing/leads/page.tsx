@@ -176,8 +176,8 @@ const insuranceTypeLabels: Record<string, string> = {
 
 export default function MarketingLeadsPage() {
   const router = useRouter()
-  const [leads, setLeads] = useState<MarketingLead[]>(mockLeads)
-  const [filteredLeads, setFilteredLeads] = useState<MarketingLead[]>(mockLeads)
+  const [leads, setLeads] = useState<MarketingLead[]>([])
+  const [filteredLeads, setFilteredLeads] = useState<MarketingLead[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [sourceFilter, setSourceFilter] = useState<string>('all')
@@ -185,6 +185,39 @@ export default function MarketingLeadsPage() {
   const [isDetailOpen, setIsDetailOpen] = useState(false)
   const [isConvertDialogOpen, setIsConvertDialogOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const [isInitialLoading, setIsInitialLoading] = useState(true)
+
+  // Fetch leads from API on mount
+  useEffect(() => {
+    fetchLeads()
+  }, [])
+
+  const fetchLeads = async () => {
+    try {
+      const res = await fetch('/api/marketing/leads?limit=100')
+      if (res.ok) {
+        const data = await res.json()
+        if (data.leads && data.leads.length > 0) {
+          setLeads(data.leads)
+          setFilteredLeads(data.leads)
+        } else {
+          // Use mock data if no leads in DB
+          setLeads(mockLeads)
+          setFilteredLeads(mockLeads)
+        }
+      } else {
+        // Fallback to mock data
+        setLeads(mockLeads)
+        setFilteredLeads(mockLeads)
+      }
+    } catch (error) {
+      console.error('Error fetching leads:', error)
+      setLeads(mockLeads)
+      setFilteredLeads(mockLeads)
+    } finally {
+      setIsInitialLoading(false)
+    }
+  }
 
   // Filter leads based on search and filters
   useEffect(() => {
@@ -299,11 +332,17 @@ export default function MarketingLeadsPage() {
           variant="outline"
           className="gap-2"
           onClick={() => {
-            setLeads([...mockLeads])
+            setIsInitialLoading(true)
+            fetchLeads()
             toast.success('הנתונים רועננו')
           }}
+          disabled={isInitialLoading}
         >
-          <RefreshCw className="h-4 w-4" />
+          {isInitialLoading ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <RefreshCw className="h-4 w-4" />
+          )}
           רענן
         </Button>
       </motion.div>

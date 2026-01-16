@@ -434,19 +434,22 @@ export default function CampaignsPage() {
             </div>
           </CardContent>
         </Card>
-        <Card className="border-0 shadow-lg bg-white/80 backdrop-blur-sm">
-          <CardContent className="p-4 flex items-center gap-4">
-            <div className="p-3 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 text-white">
-              <Users className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold text-slate-900">
-                {Object.values(campaignStats).reduce((sum, s) => sum + s.leads, 0).toLocaleString()}
-              </p>
-              <p className="text-sm text-slate-500">סה״כ לידים</p>
-            </div>
-          </CardContent>
-        </Card>
+        <Link href="/marketing/leads">
+          <Card className="border-0 shadow-lg bg-white/80 backdrop-blur-sm cursor-pointer hover:shadow-xl transition-all hover:-translate-y-0.5">
+            <CardContent className="p-4 flex items-center gap-4">
+              <div className="p-3 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 text-white">
+                <Users className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-slate-900">
+                  {Object.values(campaignStats).reduce((sum, s) => sum + s.leads, 0).toLocaleString()}
+                </p>
+                <p className="text-sm text-slate-500">סה״כ לידים</p>
+              </div>
+              <ExternalLink className="h-4 w-4 text-slate-400 mr-auto" />
+            </CardContent>
+          </Card>
+        </Link>
         <Card className="border-0 shadow-lg bg-white/80 backdrop-blur-sm">
           <CardContent className="p-4 flex items-center gap-4">
             <div className="p-3 rounded-xl bg-gradient-to-br from-orange-500 to-orange-600 text-white">
@@ -566,6 +569,12 @@ export default function CampaignsPage() {
                           >
                             <BarChart3 className="h-4 w-4" />
                             אנליטיקה
+                          </DropdownMenuItem>
+                          <DropdownMenuItem asChild>
+                            <Link href={`/marketing/leads?campaign=${campaign.id}`} className="gap-2">
+                              <Users className="h-4 w-4" />
+                              צפה בלידים
+                            </Link>
                           </DropdownMenuItem>
                           <DropdownMenuItem asChild>
                             <Link href={`/marketing/create?edit=${campaign.id}`} className="gap-2">

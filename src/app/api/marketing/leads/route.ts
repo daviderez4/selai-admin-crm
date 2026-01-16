@@ -105,7 +105,8 @@ export async function POST(request: NextRequest) {
 
     // Also add to CRM leads table for unified lead management
     // Get the landing page owner or campaign owner as the agent
-    let agentId: string | null = null
+    // Note: landing_pages.created_by stores auth.uid() but CRM tables need users.id
+    let authId: string | null = null
 
     if (landing_page_id) {
       const { data: landingPage } = await supabase
@@ -115,11 +116,11 @@ export async function POST(request: NextRequest) {
         .single()
 
       if (landingPage?.created_by) {
-        agentId = landingPage.created_by
+        authId = landingPage.created_by
       }
     }
 
-    if (!agentId && campaign_id) {
+    if (!authId && campaign_id) {
       const { data: campaign } = await supabase
         .from('marketing_campaigns')
         .select('created_by')
@@ -127,8 +128,20 @@ export async function POST(request: NextRequest) {
         .single()
 
       if (campaign?.created_by) {
-        agentId = campaign.created_by
+        authId = campaign.created_by
       }
+    }
+
+    // Convert auth_id to users.id for CRM tables
+    let agentId: string | null = null
+    if (authId) {
+      const { data: userRecord } = await supabase
+        .from('users')
+        .select('id')
+        .eq('auth_id', authId)
+        .single()
+
+      agentId = userRecord?.id || null
     }
 
     // If we have an agent, create CRM lead
