@@ -1,8 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import {
   ArrowLeft,
   ArrowRight,
@@ -21,6 +21,7 @@ import {
   Calendar,
   Send,
   Clock,
+  Loader2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -28,8 +29,10 @@ import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { useMarketingStore } from '@/stores/marketingStore'
+import { useMarketingStore, type Campaign } from '@/stores/marketingStore'
 import { TEMPLATE_INFO } from '@/types/marketing'
+import { toast } from 'sonner'
+import { MARKETING_IMAGES } from '@/lib/marketing-images'
 
 // Steps configuration
 const steps = [
@@ -81,7 +84,10 @@ const platforms = [
 
 export default function CreateCampaignPage() {
   const router = useRouter()
-  const { wizardStep, wizardData, setWizardStep, updateWizardData, resetWizard } = useMarketingStore()
+  const searchParams = useSearchParams()
+  const editId = searchParams.get('edit')
+
+  const { wizardStep, wizardData, setWizardStep, updateWizardData, resetWizard, addCampaign, updateCampaign, campaigns } = useMarketingStore()
 
   const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(wizardData.platforms || [])
   const [campaignName, setCampaignName] = useState(wizardData.name || '')
@@ -89,8 +95,54 @@ export default function CreateCampaignPage() {
   const [ctaText, setCtaText] = useState(wizardData.content?.cta_text || 'קבל הצעת מחיר')
   const [selectedTemplate, setSelectedTemplate] = useState(wizardData.selectedTemplate || '')
   const [publishMode, setPublishMode] = useState<'now' | 'schedule'>('now')
+  const [scheduledDate, setScheduledDate] = useState('')
+  const [isPublishing, setIsPublishing] = useState(false)
+  const [selectedImage, setSelectedImage] = useState<string>(wizardData.content?.image_url || '')
+  const [isImagePickerOpen, setIsImagePickerOpen] = useState(false)
+  const [existingCampaign, setExistingCampaign] = useState<Campaign | null>(null)
 
   const currentStep = wizardStep
+
+  // Load existing campaign for editing
+  useEffect(() => {
+    if (editId) {
+      // Check local store first
+      const campaign = campaigns.find(c => c.id === editId)
+      if (campaign) {
+        setExistingCampaign(campaign)
+        setCampaignName(campaign.name)
+        setContentText(campaign.content.text || '')
+        setCtaText(campaign.content.cta_text || 'קבל הצעת מחיר')
+        setSelectedPlatforms(campaign.platforms || [])
+        setSelectedImage(campaign.content.image_url || '')
+        // If there's a landing page, set the template
+        if (campaign.landing_page_id) {
+          // TODO: Could fetch the landing page template
+        }
+      } else {
+        // Try to fetch from API
+        fetchCampaign(editId)
+      }
+    }
+  }, [editId, campaigns])
+
+  const fetchCampaign = async (id: string) => {
+    try {
+      const res = await fetch(`/api/marketing/campaigns/${id}`)
+      if (res.ok) {
+        const { campaign } = await res.json()
+        setExistingCampaign(campaign)
+        setCampaignName(campaign.name)
+        setContentText(campaign.content?.text || '')
+        setCtaText(campaign.content?.cta_text || 'קבל הצעת מחיר')
+        setSelectedPlatforms(campaign.platforms || [])
+        setSelectedImage(campaign.content?.image_url || '')
+      }
+    } catch (error) {
+      console.error('Error fetching campaign:', error)
+      toast.error('שגיאה בטעינת הקמפיין')
+    }
+  }
 
   const togglePlatform = (platformId: string) => {
     setSelectedPlatforms((prev) =>
@@ -119,17 +171,85 @@ export default function CreateCampaignPage() {
     }
   }
 
-  const handlePublish = () => {
-    // TODO: Implement actual publish logic
-    console.log('Publishing campaign:', {
-      name: campaignName,
-      platforms: selectedPlatforms,
-      content: { text: contentText, cta_text: ctaText },
-      template: selectedTemplate,
-      publishMode,
-    })
-    resetWizard()
-    router.push('/marketing/campaigns')
+  const handlePublish = async () => {
+    setIsPublishing(true)
+
+    try {
+      const campaignData = {
+        name: campaignName,
+        description: contentText.substring(0, 100) + (contentText.length > 100 ? '...' : ''),
+        type: 'social',
+        platforms: selectedPlatforms,
+        content: {
+          text: contentText,
+          cta_text: ctaText,
+          image_url: selectedImage,
+        },
+        scheduled_at: publishMode === 'schedule' ? scheduledDate : null,
+        status: publishMode === 'now' ? 'active' : 'draft',
+      }
+
+      if (existingCampaign) {
+        // Update existing campaign
+        const res = await fetch(`/api/marketing/campaigns/${existingCampaign.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(campaignData),
+        })
+
+        if (!res.ok) {
+          const data = await res.json()
+          throw new Error(data.error || 'Failed to update campaign')
+        }
+
+        const { campaign } = await res.json()
+        updateCampaign(existingCampaign.id, campaign)
+        toast.success('הקמפיין עודכן בהצלחה!')
+      } else {
+        // Create new campaign via API
+        const res = await fetch('/api/marketing/campaigns', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(campaignData),
+        })
+
+        if (!res.ok) {
+          const data = await res.json()
+          throw new Error(data.error || 'Failed to create campaign')
+        }
+
+        const { campaign } = await res.json()
+
+        // Add to local store
+        const newCampaign: Campaign = {
+          id: campaign.id || Date.now().toString(),
+          name: campaignName,
+          description: campaignData.description,
+          type: 'social',
+          status: publishMode === 'now' ? 'active' : 'draft',
+          platforms: selectedPlatforms as any[],
+          content: {
+            text: contentText,
+            cta_text: ctaText,
+            image_url: selectedImage,
+          },
+          landing_page_id: selectedTemplate ? undefined : undefined,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }
+
+        addCampaign(newCampaign)
+        toast.success(publishMode === 'now' ? 'הקמפיין פורסם בהצלחה!' : 'הקמפיין נשמר ותזומן לפרסום')
+      }
+
+      resetWizard()
+      router.push('/marketing/campaigns')
+    } catch (error) {
+      console.error('Error publishing campaign:', error)
+      toast.error(error instanceof Error ? error.message : 'שגיאה בפרסום הקמפיין')
+    } finally {
+      setIsPublishing(false)
+    }
   }
 
   const canProceed = () => {
@@ -319,19 +439,85 @@ export default function CreateCampaignPage() {
                     {/* Media Upload */}
                     <div className="space-y-2">
                       <Label>מדיה</Label>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="border-2 border-dashed border-slate-200 rounded-xl p-8 text-center hover:border-purple-300 transition-colors cursor-pointer group">
-                          <ImageIcon className="h-8 w-8 text-slate-300 mx-auto mb-2 group-hover:text-purple-500 transition-colors" />
-                          <p className="text-sm text-slate-500">העלה תמונה</p>
-                          <p className="text-xs text-slate-400">PNG, JPG עד 5MB</p>
+                      {selectedImage ? (
+                        <div className="relative rounded-xl overflow-hidden group">
+                          <img
+                            src={selectedImage}
+                            alt="Campaign image"
+                            className="w-full h-40 object-cover"
+                          />
+                          <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => setIsImagePickerOpen(true)}
+                            >
+                              החלף תמונה
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => setSelectedImage('')}
+                            >
+                              הסר
+                            </Button>
+                          </div>
                         </div>
-                        <div className="border-2 border-dashed border-slate-200 rounded-xl p-8 text-center hover:border-purple-300 transition-colors cursor-pointer group">
-                          <Video className="h-8 w-8 text-slate-300 mx-auto mb-2 group-hover:text-purple-500 transition-colors" />
-                          <p className="text-sm text-slate-500">העלה סרטון</p>
-                          <p className="text-xs text-slate-400">MP4 עד 100MB</p>
+                      ) : (
+                        <div className="grid grid-cols-2 gap-4">
+                          <div
+                            className="border-2 border-dashed border-slate-200 rounded-xl p-8 text-center hover:border-purple-300 transition-colors cursor-pointer group"
+                            onClick={() => setIsImagePickerOpen(true)}
+                          >
+                            <ImageIcon className="h-8 w-8 text-slate-300 mx-auto mb-2 group-hover:text-purple-500 transition-colors" />
+                            <p className="text-sm text-slate-500">בחר תמונה</p>
+                            <p className="text-xs text-purple-400">36 תמונות זמינות</p>
+                          </div>
+                          <div className="border-2 border-dashed border-slate-200 rounded-xl p-8 text-center hover:border-purple-300 transition-colors cursor-pointer group">
+                            <Video className="h-8 w-8 text-slate-300 mx-auto mb-2 group-hover:text-purple-500 transition-colors" />
+                            <p className="text-sm text-slate-500">העלה סרטון</p>
+                            <p className="text-xs text-slate-400">MP4 עד 100MB</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Image Picker Dialog */}
+                    {isImagePickerOpen && (
+                      <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setIsImagePickerOpen(false)}>
+                        <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[80vh] overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                          <div className="p-4 border-b flex items-center justify-between">
+                            <h3 className="font-semibold text-lg">בחר תמונה לקמפיין</h3>
+                            <Button variant="ghost" size="sm" onClick={() => setIsImagePickerOpen(false)}>✕</Button>
+                          </div>
+                          <div className="p-4 overflow-y-auto max-h-[60vh]">
+                            <div className="grid grid-cols-3 gap-4">
+                              {MARKETING_IMAGES.map((img) => (
+                                <div
+                                  key={img.id}
+                                  className={`cursor-pointer rounded-xl overflow-hidden border-2 transition-all ${
+                                    selectedImage === img.url ? 'border-purple-500 ring-2 ring-purple-200' : 'border-transparent hover:border-slate-300'
+                                  }`}
+                                  onClick={() => {
+                                    setSelectedImage(img.url)
+                                    setIsImagePickerOpen(false)
+                                  }}
+                                >
+                                  <img
+                                    src={img.thumbnail}
+                                    alt={img.name_he}
+                                    className="w-full h-24 object-cover"
+                                  />
+                                  <p className="text-xs text-center p-1 truncate">{img.name_he}</p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
                         </div>
                       </div>
-                    </div>
+                    )}
 
                     {/* CTA Button */}
                     <div className="space-y-2">
@@ -506,7 +692,12 @@ export default function CreateCampaignPage() {
                     {publishMode === 'schedule' && (
                       <div className="space-y-2">
                         <Label>תאריך ושעה</Label>
-                        <Input type="datetime-local" className="bg-white" />
+                        <Input
+                          type="datetime-local"
+                          className="bg-white"
+                          value={scheduledDate}
+                          onChange={(e) => setScheduledDate(e.target.value)}
+                        />
                       </div>
                     )}
                   </CardContent>
@@ -536,10 +727,20 @@ export default function CreateCampaignPage() {
           {currentStep === steps.length - 1 ? (
             <Button
               onClick={handlePublish}
+              disabled={isPublishing}
               className="gap-2 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 shadow-lg shadow-purple-500/25"
             >
-              <Rocket className="h-4 w-4" />
-              {publishMode === 'now' ? 'פרסם עכשיו' : 'תזמן פרסום'}
+              {isPublishing ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  מפרסם...
+                </>
+              ) : (
+                <>
+                  <Rocket className="h-4 w-4" />
+                  {existingCampaign ? 'עדכן קמפיין' : publishMode === 'now' ? 'פרסם עכשיו' : 'תזמן פרסום'}
+                </>
+              )}
             </Button>
           ) : (
             <Button

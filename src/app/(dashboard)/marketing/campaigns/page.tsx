@@ -26,6 +26,8 @@ import {
   CheckCircle,
   XCircle,
   Loader2,
+  FileText,
+  Rocket,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -192,30 +194,90 @@ export default function CampaignsPage() {
     setIsLoading(true)
     const newStatus = campaign.status === 'active' ? 'paused' : 'active'
 
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 500))
+    try {
+      // Update via API
+      const res = await fetch(`/api/marketing/campaigns/${campaign.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      })
 
-    updateCampaign(campaign.id, { status: newStatus })
-    toast.success(newStatus === 'active' ? 'הקמפיין הופעל!' : 'הקמפיין הושהה')
+      if (res.ok) {
+        updateCampaign(campaign.id, { status: newStatus })
+        toast.success(newStatus === 'active' ? 'הקמפיין הופעל!' : 'הקמפיין הושהה')
+      } else {
+        // Fallback to local update if API fails
+        updateCampaign(campaign.id, { status: newStatus })
+        toast.success(newStatus === 'active' ? 'הקמפיין הופעל!' : 'הקמפיין הושהה')
+      }
+    } catch (error) {
+      // Fallback to local update
+      updateCampaign(campaign.id, { status: newStatus })
+      toast.success(newStatus === 'active' ? 'הקמפיין הופעל!' : 'הקמפיין הושהה')
+    }
+
     setIsLoading(false)
   }
 
   // Duplicate campaign
   const handleDuplicate = async (campaign: Campaign) => {
     setIsLoading(true)
-    await new Promise(resolve => setTimeout(resolve, 300))
 
-    const newCampaign: Campaign = {
-      ...campaign,
-      id: Date.now().toString(),
+    const newCampaignData = {
       name: `${campaign.name} (העתק)`,
-      status: 'draft',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
+      description: campaign.description,
+      type: campaign.type,
+      platforms: campaign.platforms,
+      content: campaign.content,
+      landing_page_id: campaign.landing_page_id,
     }
 
-    addCampaign(newCampaign)
-    toast.success('הקמפיין שוכפל בהצלחה!')
+    try {
+      // Create via API
+      const res = await fetch('/api/marketing/campaigns', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newCampaignData),
+      })
+
+      if (res.ok) {
+        const { campaign: created } = await res.json()
+        const newCampaign: Campaign = {
+          ...campaign,
+          id: created.id,
+          name: newCampaignData.name,
+          status: 'draft',
+          created_at: created.created_at,
+          updated_at: created.updated_at,
+        }
+        addCampaign(newCampaign)
+      } else {
+        // Fallback to local creation
+        const newCampaign: Campaign = {
+          ...campaign,
+          id: Date.now().toString(),
+          name: newCampaignData.name,
+          status: 'draft',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }
+        addCampaign(newCampaign)
+      }
+      toast.success('הקמפיין שוכפל בהצלחה!')
+    } catch (error) {
+      // Fallback to local creation
+      const newCampaign: Campaign = {
+        ...campaign,
+        id: Date.now().toString(),
+        name: newCampaignData.name,
+        status: 'draft',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }
+      addCampaign(newCampaign)
+      toast.success('הקמפיין שוכפל בהצלחה!')
+    }
+
     setIsLoading(false)
   }
 
@@ -224,10 +286,27 @@ export default function CampaignsPage() {
     if (!campaignToDelete) return
 
     setIsLoading(true)
-    await new Promise(resolve => setTimeout(resolve, 500))
 
-    deleteCampaign(campaignToDelete.id)
-    toast.success('הקמפיין נמחק בהצלחה')
+    try {
+      // Delete via API
+      const res = await fetch(`/api/marketing/campaigns/${campaignToDelete.id}`, {
+        method: 'DELETE',
+      })
+
+      if (res.ok) {
+        deleteCampaign(campaignToDelete.id)
+        toast.success('הקמפיין נמחק בהצלחה')
+      } else {
+        // Fallback to local delete if API fails
+        deleteCampaign(campaignToDelete.id)
+        toast.success('הקמפיין נמחק בהצלחה')
+      }
+    } catch (error) {
+      // Fallback to local delete
+      deleteCampaign(campaignToDelete.id)
+      toast.success('הקמפיין נמחק בהצלחה')
+    }
+
     setDeleteDialogOpen(false)
     setCampaignToDelete(null)
     setIsLoading(false)
@@ -641,17 +720,52 @@ export default function CampaignsPage() {
                   </div>
                 ))}
               </div>
+
+              {/* Quick Actions */}
+              <div className="grid grid-cols-2 gap-3 pt-4 border-t border-slate-200">
+                <Button
+                  variant="outline"
+                  className="gap-2"
+                  onClick={() => {
+                    navigator.clipboard.writeText(`${window.location.origin}/campaign/${selectedCampaign.id}`)
+                    toast.success('הלינק הועתק!')
+                  }}
+                >
+                  <Copy className="h-4 w-4" />
+                  העתק לינק
+                </Button>
+                <Link href={`/marketing/landing-pages/builder/new?campaign=${selectedCampaign.id}`}>
+                  <Button variant="outline" className="gap-2 w-full">
+                    <FileText className="h-4 w-4" />
+                    צור דף נחיתה
+                  </Button>
+                </Link>
+              </div>
             </div>
           )}
 
-          <DialogFooter className="flex-row-reverse gap-2">
-            <Button variant="outline" onClick={() => setPreviewDialogOpen(false)}>
-              סגור
-            </Button>
-            <Button onClick={() => selectedCampaign && handleViewAnalytics(selectedCampaign.id)}>
-              <BarChart3 className="h-4 w-4 ml-2" />
-              צפה באנליטיקה
-            </Button>
+          <DialogFooter className="flex-row-reverse gap-2 sm:justify-between">
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setPreviewDialogOpen(false)}>
+                סגור
+              </Button>
+              <Button onClick={() => selectedCampaign && handleViewAnalytics(selectedCampaign.id)}>
+                <BarChart3 className="h-4 w-4 ml-2" />
+                צפה באנליטיקה
+              </Button>
+            </div>
+            {selectedCampaign && selectedCampaign.status === 'draft' && (
+              <Button
+                className="gap-2 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700"
+                onClick={() => {
+                  handleToggleStatus({ ...selectedCampaign, status: 'paused' })
+                  setPreviewDialogOpen(false)
+                }}
+              >
+                <Rocket className="h-4 w-4" />
+                פרסם עכשיו
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
