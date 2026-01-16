@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { sendNewLeadNotification, type SystemEmailSettings, DEFAULT_EMAIL_SETTINGS } from '@/lib/email/email-service'
 
 // GET /api/marketing/leads - List all leads
 export async function GET(request: NextRequest) {
@@ -207,6 +208,60 @@ export async function POST(request: NextRequest) {
     // Update landing page conversions count
     if (landing_page_id) {
       await supabase.rpc('increment_page_conversions', { page_id: landing_page_id })
+    }
+
+    // Send email notification for new lead
+    try {
+      // Get email settings
+      const { data: settingsData } = await supabase
+        .from('system_settings')
+        .select('value')
+        .eq('key', 'email_notifications')
+        .single()
+
+      const emailSettings: SystemEmailSettings = settingsData?.value || DEFAULT_EMAIL_SETTINGS
+      const newLeadConfig = emailSettings.notifications?.new_lead
+
+      if (newLeadConfig?.enabled && newLeadConfig?.recipients?.length > 0) {
+        // Get landing page and campaign names for the email
+        let landingPageName: string | undefined
+        let campaignName: string | undefined
+
+        if (landing_page_id) {
+          const { data: lp } = await supabase
+            .from('landing_pages')
+            .select('name')
+            .eq('id', landing_page_id)
+            .single()
+          landingPageName = lp?.name
+        }
+
+        if (campaign_id) {
+          const { data: camp } = await supabase
+            .from('marketing_campaigns')
+            .select('name')
+            .eq('id', campaign_id)
+            .single()
+          campaignName = camp?.name
+        }
+
+        // Send notification email
+        await sendNewLeadNotification({
+          leadName: name,
+          leadPhone: phone,
+          leadEmail: email,
+          insuranceType: insurance_type,
+          source: source || 'direct',
+          landingPageName,
+          campaignName,
+          message,
+          recipients: newLeadConfig.recipients,
+        })
+        console.log('Lead notification email sent to:', newLeadConfig.recipients)
+      }
+    } catch (emailError) {
+      // Log but don't fail the request
+      console.error('Error sending lead notification email (non-critical):', emailError)
     }
 
     return NextResponse.json({ lead: data, success: true }, { status: 201 })

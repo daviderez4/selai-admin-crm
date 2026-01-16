@@ -23,6 +23,10 @@ import {
   CheckCircle2,
   XCircle,
   AlertCircle,
+  Mail,
+  Bell,
+  Send,
+  Loader2,
 } from 'lucide-react';
 import { Header } from '@/components/layout/Header';
 import { Button } from '@/components/ui/button';
@@ -84,9 +88,136 @@ export default function SettingsPage() {
   const [openaiApiKey, setOpenaiApiKey] = useState('');
   const [anthropicApiKey, setAnthropicApiKey] = useState('');
 
+  // Email settings states
+  const [emailSettings, setEmailSettings] = useState<{
+    notifications: {
+      new_lead: { enabled: boolean; recipients: string[] };
+      lead_assigned: { enabled: boolean; recipients: string[] };
+      daily_report: { enabled: boolean; recipients: string[] };
+      weekly_report: { enabled: boolean; recipients: string[] };
+      campaign_alert: { enabled: boolean; recipients: string[] };
+      system_alert: { enabled: boolean; recipients: string[] };
+    };
+  } | null>(null);
+  const [emailConfigured, setEmailConfigured] = useState(false);
+  const [fromEmail, setFromEmail] = useState('');
+  const [isLoadingEmail, setIsLoadingEmail] = useState(false);
+  const [isSendingTest, setIsSendingTest] = useState(false);
+  const [newRecipient, setNewRecipient] = useState('');
+
   useEffect(() => {
     loadIntegrations();
+    loadEmailSettings();
   }, []);
+
+  const loadEmailSettings = async () => {
+    setIsLoadingEmail(true);
+    try {
+      const res = await fetch('/api/settings/email');
+      if (res.ok) {
+        const data = await res.json();
+        setEmailSettings(data.settings);
+        setEmailConfigured(data.configured);
+        setFromEmail(data.from_email);
+      }
+    } catch (error) {
+      console.error('Error loading email settings:', error);
+    } finally {
+      setIsLoadingEmail(false);
+    }
+  };
+
+  const saveEmailSettings = async () => {
+    if (!emailSettings) return;
+    setIsLoadingEmail(true);
+    try {
+      const res = await fetch('/api/settings/email', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ settings: emailSettings }),
+      });
+      if (res.ok) {
+        toast.success('הגדרות המייל נשמרו');
+      } else {
+        const data = await res.json();
+        toast.error(data.error || 'שגיאה בשמירת ההגדרות');
+      }
+    } catch (error) {
+      toast.error('שגיאה בשמירת ההגדרות');
+    } finally {
+      setIsLoadingEmail(false);
+    }
+  };
+
+  const sendTestEmail = async () => {
+    setIsSendingTest(true);
+    try {
+      const res = await fetch('/api/settings/email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      if (res.ok) {
+        toast.success('מייל בדיקה נשלח בהצלחה!');
+      } else {
+        const data = await res.json();
+        toast.error(data.error || 'שגיאה בשליחת מייל בדיקה');
+      }
+    } catch (error) {
+      toast.error('שגיאה בשליחת מייל בדיקה');
+    } finally {
+      setIsSendingTest(false);
+    }
+  };
+
+  const toggleEmailNotification = (type: keyof typeof emailSettings.notifications, enabled: boolean) => {
+    if (!emailSettings) return;
+    setEmailSettings({
+      ...emailSettings,
+      notifications: {
+        ...emailSettings.notifications,
+        [type]: { ...emailSettings.notifications[type], enabled },
+      },
+    });
+  };
+
+  const addRecipient = (type: keyof typeof emailSettings.notifications) => {
+    if (!emailSettings || !newRecipient || !newRecipient.includes('@')) {
+      toast.error('יש להזין כתובת מייל תקינה');
+      return;
+    }
+    const current = emailSettings.notifications[type].recipients || [];
+    if (current.includes(newRecipient)) {
+      toast.error('הכתובת כבר קיימת');
+      return;
+    }
+    setEmailSettings({
+      ...emailSettings,
+      notifications: {
+        ...emailSettings.notifications,
+        [type]: {
+          ...emailSettings.notifications[type],
+          recipients: [...current, newRecipient],
+        },
+      },
+    });
+    setNewRecipient('');
+  };
+
+  const removeRecipient = (type: keyof typeof emailSettings.notifications, email: string) => {
+    if (!emailSettings) return;
+    const current = emailSettings.notifications[type].recipients || [];
+    setEmailSettings({
+      ...emailSettings,
+      notifications: {
+        ...emailSettings.notifications,
+        [type]: {
+          ...emailSettings.notifications[type],
+          recipients: current.filter((e) => e !== email),
+        },
+      },
+    });
+  };
 
   const loadIntegrations = async () => {
     setIsLoadingIntegrations(true);
@@ -246,6 +377,10 @@ export default function SettingsPage() {
             <TabsTrigger value="appearance" className="gap-2">
               <Moon className="h-4 w-4" />
               תצוגה
+            </TabsTrigger>
+            <TabsTrigger value="email" className="gap-2">
+              <Mail className="h-4 w-4" />
+              התראות מייל
             </TabsTrigger>
           </TabsList>
 
@@ -557,6 +692,242 @@ export default function SettingsPage() {
                     </SelectContent>
                   </Select>
                 </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Email Notifications Tab */}
+          <TabsContent value="email" className="space-y-6 max-w-4xl">
+            {/* Email Status Card */}
+            <Card className={`border-2 ${emailConfigured ? 'border-green-200 bg-green-50' : 'border-yellow-200 bg-yellow-50'}`}>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    {emailConfigured ? (
+                      <CheckCircle2 className="h-6 w-6 text-green-600" />
+                    ) : (
+                      <AlertCircle className="h-6 w-6 text-yellow-600" />
+                    )}
+                    <div>
+                      <h3 className={`font-semibold ${emailConfigured ? 'text-green-800' : 'text-yellow-800'}`}>
+                        {emailConfigured ? 'שירות המייל מוגדר' : 'שירות המייל לא מוגדר'}
+                      </h3>
+                      <p className={`text-sm ${emailConfigured ? 'text-green-600' : 'text-yellow-600'}`}>
+                        {emailConfigured ? `שולח מ: ${fromEmail}` : 'יש להגדיר RESEND_API_KEY בקובץ .env'}
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    variant="outline"
+                    onClick={sendTestEmail}
+                    disabled={!emailConfigured || isSendingTest}
+                    className="gap-2"
+                  >
+                    {isSendingTest ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Send className="h-4 w-4" />
+                    )}
+                    שלח מייל בדיקה
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Notifications Settings */}
+            <Card className="bg-white border-slate-200 shadow-sm">
+              <CardHeader>
+                <div className="flex items-center gap-2">
+                  <Bell className="h-5 w-5 text-blue-600" />
+                  <CardTitle className="text-slate-800">התראות מייל</CardTitle>
+                </div>
+                <CardDescription className="text-slate-500">
+                  הגדר אילו התראות יישלחו במייל ולמי
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {isLoadingEmail ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+                  </div>
+                ) : emailSettings ? (
+                  <>
+                    {/* New Lead Notifications */}
+                    <div className="p-4 bg-green-50 rounded-xl border border-green-200">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 bg-green-100 rounded-lg">
+                            <User className="h-5 w-5 text-green-600" />
+                          </div>
+                          <div>
+                            <h4 className="font-semibold text-green-800">ליד חדש</h4>
+                            <p className="text-sm text-green-600">התראה כשמתקבל ליד חדש מדף נחיתה</p>
+                          </div>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={emailSettings.notifications.new_lead?.enabled}
+                            onChange={(e) => toggleEmailNotification('new_lead', e.target.checked)}
+                            className="sr-only peer"
+                          />
+                          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-green-300 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
+                        </label>
+                      </div>
+                      {emailSettings.notifications.new_lead?.enabled && (
+                        <div className="space-y-2">
+                          <div className="flex gap-2">
+                            <Input
+                              placeholder="הוסף כתובת מייל..."
+                              value={newRecipient}
+                              onChange={(e) => setNewRecipient(e.target.value)}
+                              className="flex-1 bg-white"
+                              dir="ltr"
+                            />
+                            <Button size="sm" onClick={() => addRecipient('new_lead')}>
+                              הוסף
+                            </Button>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {(emailSettings.notifications.new_lead?.recipients || []).map((email) => (
+                              <Badge key={email} variant="secondary" className="gap-1 bg-green-100 text-green-700">
+                                {email}
+                                <button
+                                  onClick={() => removeRecipient('new_lead', email)}
+                                  className="mr-1 hover:text-red-500"
+                                >
+                                  ×
+                                </button>
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Daily Report */}
+                    <div className="p-4 bg-purple-50 rounded-xl border border-purple-200">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 bg-purple-100 rounded-lg">
+                            <Calendar className="h-5 w-5 text-purple-600" />
+                          </div>
+                          <div>
+                            <h4 className="font-semibold text-purple-800">דוח יומי</h4>
+                            <p className="text-sm text-purple-600">סיכום יומי של לידים וקמפיינים</p>
+                          </div>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={emailSettings.notifications.daily_report?.enabled}
+                            onChange={(e) => toggleEmailNotification('daily_report', e.target.checked)}
+                            className="sr-only peer"
+                          />
+                          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-purple-300 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
+                        </label>
+                      </div>
+                      {emailSettings.notifications.daily_report?.enabled && (
+                        <div className="space-y-2">
+                          <div className="flex gap-2">
+                            <Input
+                              placeholder="הוסף כתובת מייל..."
+                              value={newRecipient}
+                              onChange={(e) => setNewRecipient(e.target.value)}
+                              className="flex-1 bg-white"
+                              dir="ltr"
+                            />
+                            <Button size="sm" onClick={() => addRecipient('daily_report')}>
+                              הוסף
+                            </Button>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {(emailSettings.notifications.daily_report?.recipients || []).map((email) => (
+                              <Badge key={email} variant="secondary" className="gap-1 bg-purple-100 text-purple-700">
+                                {email}
+                                <button
+                                  onClick={() => removeRecipient('daily_report', email)}
+                                  className="mr-1 hover:text-red-500"
+                                >
+                                  ×
+                                </button>
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* System Alerts */}
+                    <div className="p-4 bg-red-50 rounded-xl border border-red-200">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 bg-red-100 rounded-lg">
+                            <AlertCircle className="h-5 w-5 text-red-600" />
+                          </div>
+                          <div>
+                            <h4 className="font-semibold text-red-800">התראות מערכת</h4>
+                            <p className="text-sm text-red-600">התראות על שגיאות ובעיות במערכת</p>
+                          </div>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={emailSettings.notifications.system_alert?.enabled}
+                            onChange={(e) => toggleEmailNotification('system_alert', e.target.checked)}
+                            className="sr-only peer"
+                          />
+                          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-red-300 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-600"></div>
+                        </label>
+                      </div>
+                      {emailSettings.notifications.system_alert?.enabled && (
+                        <div className="space-y-2">
+                          <div className="flex gap-2">
+                            <Input
+                              placeholder="הוסף כתובת מייל..."
+                              value={newRecipient}
+                              onChange={(e) => setNewRecipient(e.target.value)}
+                              className="flex-1 bg-white"
+                              dir="ltr"
+                            />
+                            <Button size="sm" onClick={() => addRecipient('system_alert')}>
+                              הוסף
+                            </Button>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {(emailSettings.notifications.system_alert?.recipients || []).map((email) => (
+                              <Badge key={email} variant="secondary" className="gap-1 bg-red-100 text-red-700">
+                                {email}
+                                <button
+                                  onClick={() => removeRecipient('system_alert', email)}
+                                  className="mr-1 hover:text-red-500"
+                                >
+                                  ×
+                                </button>
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Save Button */}
+                    <div className="flex justify-end pt-4 border-t">
+                      <Button onClick={saveEmailSettings} disabled={isLoadingEmail} className="gap-2">
+                        {isLoadingEmail ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Check className="h-4 w-4" />
+                        )}
+                        שמור הגדרות
+                      </Button>
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-center py-8 text-muted-foreground">
+                    לא ניתן לטעון את ההגדרות
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
