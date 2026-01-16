@@ -78,6 +78,7 @@ export async function POST(request: NextRequest) {
                        'unknown'
     const user_agent = request.headers.get('user-agent') || 'unknown'
 
+    // Save to landing_page_leads table
     const { data, error } = await supabase
       .from('landing_page_leads')
       .insert({
@@ -102,9 +103,97 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
+    // Also add to CRM leads table for unified lead management
+    // Get the landing page owner or campaign owner as the agent
+    let agentId: string | null = null
+
+    if (landing_page_id) {
+      const { data: landingPage } = await supabase
+        .from('landing_pages')
+        .select('created_by')
+        .eq('id', landing_page_id)
+        .single()
+
+      if (landingPage?.created_by) {
+        agentId = landingPage.created_by
+      }
+    }
+
+    if (!agentId && campaign_id) {
+      const { data: campaign } = await supabase
+        .from('marketing_campaigns')
+        .select('created_by')
+        .eq('id', campaign_id)
+        .single()
+
+      if (campaign?.created_by) {
+        agentId = campaign.created_by
+      }
+    }
+
+    // If we have an agent, create CRM lead
+    if (agentId) {
+      try {
+        // First check/create contact
+        const { data: existingContact } = await supabase
+          .from('crm_contacts')
+          .select('id')
+          .eq('agent_id', agentId)
+          .eq('phone', phone)
+          .single()
+
+        let contactId = existingContact?.id
+
+        if (!contactId) {
+          // Create new contact
+          const nameParts = name.trim().split(' ')
+          const firstName = nameParts[0] || name
+          const lastName = nameParts.slice(1).join(' ') || null
+
+          const { data: newContact } = await supabase
+            .from('crm_contacts')
+            .insert({
+              agent_id: agentId,
+              first_name: firstName,
+              last_name: lastName,
+              phone,
+              email,
+              source: 'landing_page',
+              notes: message || null,
+            })
+            .select('id')
+            .single()
+
+          contactId = newContact?.id
+        }
+
+        // Create CRM lead
+        await supabase
+          .from('crm_leads')
+          .insert({
+            agent_id: agentId,
+            contact_id: contactId,
+            name,
+            phone,
+            email,
+            source: 'landing_page',
+            source_landing_page_id: landing_page_id,
+            source_campaign_id: campaign_id,
+            status: 'new',
+            interested_in: insurance_type ? [insurance_type] : [],
+            notes: message || null,
+          })
+
+        console.log('Lead also added to CRM for agent:', agentId)
+      } catch (crmError) {
+        // Log but don't fail the request - marketing lead was saved
+        console.error('Error adding to CRM (non-critical):', crmError)
+      }
+    }
+
     // Update landing page conversions count
     if (landing_page_id) {
-      await supabase.rpc('increment_page_conversions', { page_slug: landing_page_id })
+      await supabase.rpc('increment_page_conversions', { page_id: landing_page_id })
     }
 
     return NextResponse.json({ lead: data, success: true }, { status: 201 })

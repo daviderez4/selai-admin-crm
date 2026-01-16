@@ -1,16 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { v4 as uuidv4 } from 'uuid'
+import crypto from 'crypto'
+
+// Generate UUID without external dependency
+function generateUUID(): string {
+  return crypto.randomUUID()
+}
 
 // POST /api/marketing/upload - Upload a file (image or video)
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient()
 
-    // Get current user
+    // Get current user (optional for marketing uploads)
     const { data: { user } } = await supabase.auth.getUser()
+
+    // For now, allow authenticated users only to prevent abuse
+    // TODO: Add rate limiting for public uploads
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return NextResponse.json({ error: 'יש להתחבר כדי להעלות קבצים' }, { status: 401 })
     }
 
     const formData = await request.formData()
@@ -47,7 +55,7 @@ export async function POST(request: NextRequest) {
     // Generate unique filename
     const extension = file.name.split('.').pop()?.toLowerCase() || 'bin'
     const folder = isImage ? 'images' : 'videos'
-    const filename = `marketing/${folder}/${uuidv4()}.${extension}`
+    const filename = `marketing/${folder}/${generateUUID()}.${extension}`
 
     // Convert File to ArrayBuffer
     const arrayBuffer = await file.arrayBuffer()
