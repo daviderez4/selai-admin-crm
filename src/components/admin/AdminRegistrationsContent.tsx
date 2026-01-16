@@ -41,6 +41,7 @@ import {
   Phone,
   Building,
   User,
+  Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -88,6 +89,7 @@ export default function AdminRegistrationsContent() {
   const [selectedRequest, setSelectedRequest] = useState<RegistrationRequest | null>(null);
   const [showApproveDialog, setShowApproveDialog] = useState(false);
   const [showRejectDialog, setShowRejectDialog] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [adminNotes, setAdminNotes] = useState('');
   const [assignedRole, setAssignedRole] = useState('');
   const [processing, setProcessing] = useState(false);
@@ -195,6 +197,32 @@ export default function AdminRegistrationsContent() {
     } catch (error) {
       console.error('Error rejecting request:', error);
       toast.error('שגיאה בדחיית הבקשה');
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!selectedRequest) return;
+    setProcessing(true);
+
+    try {
+      const supabase = createClient();
+
+      const { error } = await supabase
+        .from('registration_requests')
+        .delete()
+        .eq('id', selectedRequest.id);
+
+      if (error) throw error;
+
+      toast.success('הבקשה נמחקה');
+      setShowDeleteDialog(false);
+      setSelectedRequest(null);
+      fetchRegistrations();
+    } catch (error) {
+      console.error('Error deleting request:', error);
+      toast.error('שגיאה במחיקת הבקשה');
     } finally {
       setProcessing(false);
     }
@@ -351,37 +379,50 @@ export default function AdminRegistrationsContent() {
                         {format(new Date(reg.created_at), 'dd/MM/yyyy HH:mm', { locale: he })}
                       </TableCell>
                       <TableCell>
-                        {reg.status === 'pending' || reg.status === 'needs_review' ? (
-                          <div className="flex gap-2">
+                        <div className="flex gap-2">
+                          {(reg.status === 'pending' || reg.status === 'needs_review') && (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="text-green-600 hover:bg-green-50"
+                                onClick={() => {
+                                  setSelectedRequest(reg);
+                                  setAssignedRole(reg.requested_role);
+                                  setShowApproveDialog(true);
+                                }}
+                              >
+                                <CheckCircle2 className="h-4 w-4 ml-1" />
+                                אשר
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="text-red-600 hover:bg-red-50"
+                                onClick={() => {
+                                  setSelectedRequest(reg);
+                                  setShowRejectDialog(true);
+                                }}
+                              >
+                                <XCircle className="h-4 w-4 ml-1" />
+                                דחה
+                              </Button>
+                            </>
+                          )}
+                          {(reg.status === 'rejected' || reg.status === 'approved') && (
                             <Button
                               size="sm"
-                              variant="outline"
-                              className="text-green-600 hover:bg-green-50"
+                              variant="ghost"
+                              className="text-slate-400 hover:text-red-600 hover:bg-red-50"
                               onClick={() => {
                                 setSelectedRequest(reg);
-                                setAssignedRole(reg.requested_role);
-                                setShowApproveDialog(true);
+                                setShowDeleteDialog(true);
                               }}
                             >
-                              <CheckCircle2 className="h-4 w-4 ml-1" />
-                              אשר
+                              <Trash2 className="h-4 w-4" />
                             </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="text-red-600 hover:bg-red-50"
-                              onClick={() => {
-                                setSelectedRequest(reg);
-                                setShowRejectDialog(true);
-                              }}
-                            >
-                              <XCircle className="h-4 w-4 ml-1" />
-                              דחה
-                            </Button>
-                          </div>
-                        ) : (
-                          <span className="text-slate-400 text-sm">טופל</span>
-                        )}
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   );
@@ -497,6 +538,40 @@ export default function AdminRegistrationsContent() {
               variant="destructive"
             >
               {processing ? 'דוחה...' : 'דחה בקשה'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Dialog */}
+      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>מחיקת בקשת הרשמה</DialogTitle>
+          </DialogHeader>
+          {selectedRequest && (
+            <div className="space-y-4">
+              <p className="text-slate-600">
+                האם אתה בטוח שברצונך למחוק את בקשת ההרשמה של{' '}
+                <span className="font-medium">{selectedRequest.full_name}</span>?
+              </p>
+              <div className="bg-amber-50 p-3 rounded-lg border border-amber-200">
+                <p className="text-sm text-amber-700">
+                  פעולה זו תאפשר למשתמש להירשם מחדש עם אותו אימייל.
+                </p>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDeleteDialog(false)}>
+              ביטול
+            </Button>
+            <Button
+              onClick={handleDelete}
+              disabled={processing}
+              variant="destructive"
+            >
+              {processing ? 'מוחק...' : 'מחק בקשה'}
             </Button>
           </DialogFooter>
         </DialogContent>

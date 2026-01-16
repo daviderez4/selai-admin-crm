@@ -98,7 +98,10 @@ export default function CreateCampaignPage() {
   const [scheduledDate, setScheduledDate] = useState('')
   const [isPublishing, setIsPublishing] = useState(false)
   const [selectedImage, setSelectedImage] = useState<string>(wizardData.content?.image_url || '')
+  const [selectedVideo, setSelectedVideo] = useState<string>(wizardData.content?.video_url || '')
   const [isImagePickerOpen, setIsImagePickerOpen] = useState(false)
+  const [isUploading, setIsUploading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(0)
   const [existingCampaign, setExistingCampaign] = useState<Campaign | null>(null)
 
   const currentStep = wizardStep
@@ -137,10 +140,95 @@ export default function CreateCampaignPage() {
         setCtaText(campaign.content?.cta_text || 'קבל הצעת מחיר')
         setSelectedPlatforms(campaign.platforms || [])
         setSelectedImage(campaign.content?.image_url || '')
+        setSelectedVideo(campaign.content?.video_url || '')
       }
     } catch (error) {
       console.error('Error fetching campaign:', error)
       toast.error('שגיאה בטעינת הקמפיין')
+    }
+  }
+
+  // Handle file upload (image or video)
+  const handleFileUpload = async (file: File, type: 'image' | 'video') => {
+    if (!file) return
+
+    // Validate file
+    const maxSize = type === 'image' ? 10 * 1024 * 1024 : 100 * 1024 * 1024 // 10MB for images, 100MB for videos
+    if (file.size > maxSize) {
+      toast.error(`הקובץ גדול מדי. מקסימום ${type === 'image' ? '10MB' : '100MB'}`)
+      return
+    }
+
+    const validImageTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
+    const validVideoTypes = ['video/mp4', 'video/webm', 'video/quicktime']
+
+    if (type === 'image' && !validImageTypes.includes(file.type)) {
+      toast.error('סוג קובץ לא נתמך. השתמש ב-JPG, PNG, GIF או WebP')
+      return
+    }
+
+    if (type === 'video' && !validVideoTypes.includes(file.type)) {
+      toast.error('סוג קובץ לא נתמך. השתמש ב-MP4, WebM או MOV')
+      return
+    }
+
+    setIsUploading(true)
+    setUploadProgress(0)
+
+    try {
+      // Create FormData for upload
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('type', type)
+
+      // Simulate progress for now (real upload would use XMLHttpRequest or fetch with progress)
+      const progressInterval = setInterval(() => {
+        setUploadProgress(prev => Math.min(prev + 10, 90))
+      }, 200)
+
+      const res = await fetch('/api/marketing/upload', {
+        method: 'POST',
+        body: formData,
+      })
+
+      clearInterval(progressInterval)
+      setUploadProgress(100)
+
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'Failed to upload file')
+      }
+
+      const { url } = await res.json()
+
+      if (type === 'image') {
+        setSelectedImage(url)
+        toast.success('התמונה הועלתה בהצלחה!')
+      } else {
+        setSelectedVideo(url)
+        toast.success('הסרטון הועלה בהצלחה!')
+      }
+    } catch (error) {
+      console.error('Upload error:', error)
+      toast.error(error instanceof Error ? error.message : 'שגיאה בהעלאת הקובץ')
+    } finally {
+      setIsUploading(false)
+      setUploadProgress(0)
+    }
+  }
+
+  // Handle file input change
+  const handleImageInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      handleFileUpload(file, 'image')
+    }
+  }
+
+  const handleVideoInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      handleFileUpload(file, 'video')
     }
   }
 
@@ -184,6 +272,7 @@ export default function CreateCampaignPage() {
           text: contentText,
           cta_text: ctaText,
           image_url: selectedImage,
+          video_url: selectedVideo,
         },
         scheduled_at: publishMode === 'schedule' ? scheduledDate : null,
         status: publishMode === 'now' ? 'active' : 'draft',
@@ -232,6 +321,7 @@ export default function CreateCampaignPage() {
             text: contentText,
             cta_text: ctaText,
             image_url: selectedImage,
+            video_url: selectedVideo,
           },
           landing_page_id: selectedTemplate ? undefined : undefined,
           created_at: new Date().toISOString(),
@@ -439,7 +529,25 @@ export default function CreateCampaignPage() {
                     {/* Media Upload */}
                     <div className="space-y-2">
                       <Label>מדיה</Label>
-                      {selectedImage ? (
+
+                      {/* Upload Progress */}
+                      {isUploading && (
+                        <div className="bg-purple-50 rounded-xl p-4">
+                          <div className="flex items-center gap-3 mb-2">
+                            <Loader2 className="h-5 w-5 text-purple-600 animate-spin" />
+                            <span className="text-sm text-purple-700">מעלה קובץ...</span>
+                          </div>
+                          <div className="h-2 bg-purple-200 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-purple-600 transition-all duration-300"
+                              style={{ width: `${uploadProgress}%` }}
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Selected Image Preview */}
+                      {selectedImage && !isUploading && (
                         <div className="relative rounded-xl overflow-hidden group">
                           <img
                             src={selectedImage}
@@ -453,8 +561,19 @@ export default function CreateCampaignPage() {
                               variant="secondary"
                               onClick={() => setIsImagePickerOpen(true)}
                             >
-                              החלף תמונה
+                              החלף מספריה
                             </Button>
+                            <label className="cursor-pointer">
+                              <Button type="button" size="sm" variant="secondary" asChild>
+                                <span>העלה חדשה</span>
+                              </Button>
+                              <input
+                                type="file"
+                                accept="image/jpeg,image/png,image/gif,image/webp"
+                                onChange={handleImageInputChange}
+                                className="hidden"
+                              />
+                            </label>
                             <Button
                               type="button"
                               size="sm"
@@ -465,22 +584,90 @@ export default function CreateCampaignPage() {
                             </Button>
                           </div>
                         </div>
-                      ) : (
-                        <div className="grid grid-cols-2 gap-4">
-                          <div
-                            className="border-2 border-dashed border-slate-200 rounded-xl p-8 text-center hover:border-purple-300 transition-colors cursor-pointer group"
-                            onClick={() => setIsImagePickerOpen(true)}
-                          >
-                            <ImageIcon className="h-8 w-8 text-slate-300 mx-auto mb-2 group-hover:text-purple-500 transition-colors" />
-                            <p className="text-sm text-slate-500">בחר תמונה</p>
-                            <p className="text-xs text-purple-400">36 תמונות זמינות</p>
-                          </div>
-                          <div className="border-2 border-dashed border-slate-200 rounded-xl p-8 text-center hover:border-purple-300 transition-colors cursor-pointer group">
-                            <Video className="h-8 w-8 text-slate-300 mx-auto mb-2 group-hover:text-purple-500 transition-colors" />
-                            <p className="text-sm text-slate-500">העלה סרטון</p>
-                            <p className="text-xs text-slate-400">MP4 עד 100MB</p>
+                      )}
+
+                      {/* Selected Video Preview */}
+                      {selectedVideo && !isUploading && (
+                        <div className="relative rounded-xl overflow-hidden group mt-4">
+                          <video
+                            src={selectedVideo}
+                            className="w-full h-40 object-cover"
+                            controls
+                          />
+                          <div className="absolute top-2 right-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => setSelectedVideo('')}
+                            >
+                              הסר סרטון
+                            </Button>
                           </div>
                         </div>
+                      )}
+
+                      {/* Upload Options */}
+                      {!selectedImage && !selectedVideo && !isUploading && (
+                        <div className="grid grid-cols-2 gap-4">
+                          {/* Image Options */}
+                          <div className="space-y-2">
+                            <div
+                              className="border-2 border-dashed border-slate-200 rounded-xl p-6 text-center hover:border-purple-300 transition-colors cursor-pointer group"
+                              onClick={() => setIsImagePickerOpen(true)}
+                            >
+                              <ImageIcon className="h-8 w-8 text-slate-300 mx-auto mb-2 group-hover:text-purple-500 transition-colors" />
+                              <p className="text-sm text-slate-500">בחר מספריה</p>
+                              <p className="text-xs text-purple-400">36 תמונות מקצועיות</p>
+                            </div>
+                            <label className="block cursor-pointer">
+                              <div className="border-2 border-dashed border-slate-200 rounded-xl p-6 text-center hover:border-green-300 transition-colors group">
+                                <ImageIcon className="h-8 w-8 text-slate-300 mx-auto mb-2 group-hover:text-green-500 transition-colors" />
+                                <p className="text-sm text-slate-500">העלה תמונה</p>
+                                <p className="text-xs text-slate-400">JPG, PNG עד 10MB</p>
+                              </div>
+                              <input
+                                type="file"
+                                accept="image/jpeg,image/png,image/gif,image/webp"
+                                onChange={handleImageInputChange}
+                                className="hidden"
+                              />
+                            </label>
+                          </div>
+
+                          {/* Video Option */}
+                          <label className="block cursor-pointer h-full">
+                            <div className="border-2 border-dashed border-slate-200 rounded-xl p-6 text-center hover:border-blue-300 transition-colors cursor-pointer group h-full flex flex-col items-center justify-center">
+                              <Video className="h-8 w-8 text-slate-300 mx-auto mb-2 group-hover:text-blue-500 transition-colors" />
+                              <p className="text-sm text-slate-500">העלה סרטון</p>
+                              <p className="text-xs text-slate-400">MP4, WebM עד 100MB</p>
+                            </div>
+                            <input
+                              type="file"
+                              accept="video/mp4,video/webm,video/quicktime"
+                              onChange={handleVideoInputChange}
+                              className="hidden"
+                            />
+                          </label>
+                        </div>
+                      )}
+
+                      {/* Show upload button if already has image but no video */}
+                      {selectedImage && !selectedVideo && !isUploading && (
+                        <label className="block cursor-pointer mt-4">
+                          <div className="border-2 border-dashed border-slate-200 rounded-xl p-4 text-center hover:border-blue-300 transition-colors group">
+                            <div className="flex items-center justify-center gap-2">
+                              <Video className="h-5 w-5 text-slate-400 group-hover:text-blue-500 transition-colors" />
+                              <span className="text-sm text-slate-500">הוסף סרטון</span>
+                            </div>
+                          </div>
+                          <input
+                            type="file"
+                            accept="video/mp4,video/webm,video/quicktime"
+                            onChange={handleVideoInputChange}
+                            className="hidden"
+                          />
+                        </label>
                       )}
                     </div>
 

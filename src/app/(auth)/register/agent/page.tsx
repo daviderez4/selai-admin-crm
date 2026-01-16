@@ -124,9 +124,14 @@ export default function AgentRegisterPage() {
 
       setSuccess(true);
 
+      // Save email for pending-approval page
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('pending_registration_email', formData.email);
+      }
+
       // Redirect after 3 seconds
       setTimeout(() => {
-        router.push('/register/pending');
+        router.push(`/pending-approval?email=${encodeURIComponent(formData.email)}`);
       }, 3000);
 
     } catch (err: unknown) {

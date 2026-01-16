@@ -119,15 +119,26 @@ export async function POST(request: Request) {
     // Check if pending request exists
     const { data: existingRequest } = await supabase
       .from('registration_requests')
-      .select('id')
+      .select('id, status')
       .eq('email', email)
-      .eq('status', 'pending')
+      .order('created_at', { ascending: false })
+      .limit(1)
       .maybeSingle();
 
     if (existingRequest) {
-      return NextResponse.json({
-        error: 'בקשת הרשמה כבר קיימת עבור אימייל זה'
-      }, { status: 400 });
+      if (existingRequest.status === 'pending') {
+        return NextResponse.json({
+          error: 'בקשת הרשמה כבר קיימת עבור אימייל זה'
+        }, { status: 400 });
+      }
+
+      // If rejected, delete the old request so user can re-register
+      if (existingRequest.status === 'rejected') {
+        await supabase
+          .from('registration_requests')
+          .delete()
+          .eq('id', existingRequest.id);
+      }
     }
 
     // For agents - try to match against Sela database

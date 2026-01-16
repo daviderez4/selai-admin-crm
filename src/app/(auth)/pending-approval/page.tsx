@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Clock, Mail, Phone, User, RefreshCw, CheckCircle2, ArrowRight, LogIn } from 'lucide-react';
+import { Clock, Mail, Phone, User, RefreshCw, CheckCircle2, ArrowRight, LogIn, XCircle, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { createClient } from '@/lib/supabase/client';
@@ -78,8 +78,8 @@ export default function PendingApprovalPage() {
       }
 
       if (regRequest.status === 'rejected') {
-        toast.error('בקשת ההרשמה נדחתה. פנה למנהל המערכת.');
-        localStorage.removeItem('pending_registration_email');
+        // Keep the request data to show rejection UI with re-register option
+        setRequest(regRequest);
         setIsLoading(false);
         return;
       }
@@ -138,6 +138,84 @@ export default function PendingApprovalPage() {
                 <Button variant="outline" className="w-full">
                   <LogIn className="h-4 w-4 ml-2" />
                   התחבר
+                </Button>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Handle rejected status - show special UI with re-register option
+  if (request.status === 'rejected') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-red-50 to-rose-100 p-4" dir="rtl">
+        <div className="fixed top-6 left-6">
+          <Image src="/sela-logo.png" alt="סלע ביטוח" width={120} height={120} priority />
+        </div>
+
+        <Card className="w-full max-w-md bg-white/80 backdrop-blur-sm border-red-200 shadow-xl">
+          <CardHeader className="text-center">
+            <div className="flex justify-center mb-4">
+              <div className="w-20 h-20 rounded-full bg-red-100 flex items-center justify-center">
+                <XCircle className="h-10 w-10 text-red-600" />
+              </div>
+            </div>
+            <CardTitle className="text-2xl font-bold text-red-800">בקשת ההרשמה נדחתה</CardTitle>
+            <CardDescription className="text-red-600">
+              לצערנו, בקשת ההרשמה שלך לא אושרה.
+              <br />
+              תוכל לנסות להירשם שוב עם פרטים מעודכנים.
+            </CardDescription>
+          </CardHeader>
+
+          <CardContent className="space-y-4">
+            {/* User Details */}
+            <div className="p-4 bg-slate-50 rounded-xl space-y-3 border border-slate-100">
+              <h3 className="text-sm font-medium text-slate-500 mb-2">פרטים שנשלחו:</h3>
+
+              <div className="flex items-center gap-3 text-slate-700">
+                <User className="h-4 w-4 text-slate-400" />
+                <span>{request.full_name}</span>
+              </div>
+
+              <div className="flex items-center gap-3 text-slate-700">
+                <Mail className="h-4 w-4 text-slate-400" />
+                <span>{request.email}</span>
+              </div>
+            </div>
+
+            {/* Status Badge */}
+            <div className="flex justify-center">
+              <span className="px-4 py-2 rounded-full text-sm font-medium bg-red-100 text-red-600">
+                נדחה
+              </span>
+            </div>
+
+            {/* Info Message */}
+            <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl">
+              <p className="text-sm text-amber-700 text-center">
+                אם אתה סבור שיש טעות, פנה למנהל המערכת או נסה להירשם שוב
+              </p>
+            </div>
+
+            {/* Actions */}
+            <div className="space-y-3 pt-2">
+              <Link href="/register" className="block">
+                <Button className="w-full h-12 bg-indigo-600 hover:bg-indigo-700 text-white">
+                  <RotateCcw className="h-4 w-4 ml-2" />
+                  הירשם שוב
+                </Button>
+              </Link>
+
+              <Link href="/login" className="block">
+                <Button
+                  variant="ghost"
+                  className="w-full text-slate-500 hover:text-slate-700 hover:bg-slate-100"
+                >
+                  <LogIn className="h-4 w-4 ml-2" />
+                  חזור להתחברות
                 </Button>
               </Link>
             </div>
