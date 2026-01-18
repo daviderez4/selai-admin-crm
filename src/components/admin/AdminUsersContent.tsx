@@ -123,9 +123,18 @@ export default function AdminUsersContent() {
   const [activeTab, setActiveTab] = useState('requests');
 
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
   const [resetPasswordDialogOpen, setResetPasswordDialogOpen] = useState(false);
   const [selectedUserForReset, setSelectedUserForReset] = useState<UserProfile | null>(null);
+  const [selectedUserForEdit, setSelectedUserForEdit] = useState<UserProfile | null>(null);
+  const [editFormData, setEditFormData] = useState({
+    full_name: '',
+    email: '',
+    mobile: '',
+    role: 'agent' as SystemRole,
+    supervisor_id: '',
+  });
   const [newUser, setNewUser] = useState({
     full_name: '',
     email: '',
@@ -136,8 +145,10 @@ export default function AdminUsersContent() {
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<SystemRole>('agent');
   const [isCreating, setIsCreating] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
   const [isSendingInvite, setIsSendingInvite] = useState(false);
   const [isSendingReset, setIsSendingReset] = useState(false);
+  const [managers, setManagers] = useState<UserProfile[]>([]);
 
   useEffect(() => {
     fetchData();
@@ -173,26 +184,38 @@ export default function AdminUsersContent() {
         toast.error(`שגיאה בטעינת משתמשים: ${usersError.message}`);
       } else if (usersData) {
         // Map to UserProfile format
-        const mappedUsers: UserProfile[] = usersData.map((u: Record<string, unknown>) => ({
-          id: u.id as string,
-          full_name: (u.full_name as string) || 'לא צוין',
-          email: (u.email as string) || '',
-          mobile: u.phone as string | undefined,
-          id_number: u.national_id as string | undefined,
-          role: (u.user_type as SystemRole) || (u.role as SystemRole) || 'agent',
-          supervisor_id: u.supervisor_id as string | undefined,
-          is_active: u.is_active as boolean ?? true,
-          is_verified: u.is_approved as boolean ?? false,
-          registration_status: u.is_approved ? 'approved' : 'pending',
-          last_login_at: u.last_login_at as string | undefined,
-          created_at: u.created_at as string,
-        }));
+        // First pass: create user map for supervisor lookups
+        const userMap = new Map<string, string>();
+        usersData.forEach((u: Record<string, unknown>) => {
+          userMap.set(u.id as string, (u.full_name as string) || 'לא צוין');
+        });
+
+        const mappedUsers: UserProfile[] = usersData.map((u: Record<string, unknown>) => {
+          const supervisorId = u.supervisor_id as string | undefined;
+          return {
+            id: u.id as string,
+            full_name: (u.full_name as string) || 'לא צוין',
+            email: (u.email as string) || '',
+            mobile: u.phone as string | undefined,
+            id_number: u.national_id as string | undefined,
+            role: (u.user_type as SystemRole) || (u.role as SystemRole) || 'agent',
+            supervisor_id: supervisorId,
+            supervisor_name: supervisorId ? userMap.get(supervisorId) : undefined,
+            is_active: u.is_active as boolean ?? true,
+            is_verified: u.is_approved as boolean ?? false,
+            registration_status: u.is_approved ? 'approved' : 'pending',
+            last_login_at: u.last_login_at as string | undefined,
+            created_at: u.created_at as string,
+          };
+        });
 
         setUsers(mappedUsers);
 
-        // Extract supervisors
+        // Extract supervisors and managers
         const supervisorsList = mappedUsers.filter(u => u.role === 'supervisor');
         setSupervisors(supervisorsList);
+        const managersList = mappedUsers.filter(u => u.role === 'manager');
+        setManagers(managersList);
       }
     } catch (error) {
       console.error('Failed to fetch data:', error);
@@ -316,6 +339,63 @@ export default function AdminUsersContent() {
     } catch (error) {
       console.error('Error rejecting request:', error);
       toast.error('שגיאה בדחיית הבקשה');
+    }
+  };
+
+  const handleOpenEditDialog = (user: UserProfile) => {
+    setSelectedUserForEdit(user);
+    setEditFormData({
+      full_name: user.full_name,
+      email: user.email,
+      mobile: user.mobile || '',
+      role: user.role,
+      supervisor_id: user.supervisor_id || '',
+    });
+    setEditDialogOpen(true);
+  };
+
+  const handleUpdateUser = async () => {
+    if (!selectedUserForEdit) return;
+
+    setIsUpdating(true);
+    const supabase = createClient();
+
+    try {
+      const updateData: Record<string, unknown> = {
+        full_name: editFormData.full_name,
+        phone: editFormData.mobile || null,
+        user_type: editFormData.role,
+        updated_at: new Date().toISOString(),
+      };
+
+      // Handle supervisor assignment based on role
+      if (editFormData.role === 'agent') {
+        updateData.supervisor_id = editFormData.supervisor_id || null;
+      } else if (editFormData.role === 'supervisor') {
+        // Supervisor doesn't have a supervisor, but might have a manager
+        updateData.supervisor_id = null;
+        updateData.manager_id = editFormData.supervisor_id || null; // Use the field for manager
+      } else {
+        updateData.supervisor_id = null;
+        updateData.manager_id = null;
+      }
+
+      const { error } = await supabase
+        .from('users')
+        .update(updateData)
+        .eq('id', selectedUserForEdit.id);
+
+      if (error) throw error;
+
+      toast.success('המשתמש עודכן בהצלחה');
+      setEditDialogOpen(false);
+      setSelectedUserForEdit(null);
+      await fetchData();
+    } catch (error) {
+      console.error('Error updating user:', error);
+      toast.error('שגיאה בעדכון המשתמש');
+    } finally {
+      setIsUpdating(false);
     }
   };
 
@@ -606,7 +686,7 @@ export default function AdminUsersContent() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleOpenEditDialog(user)}>
                               <Edit className="h-4 w-4 ml-2" />
                               עריכה
                             </DropdownMenuItem>
@@ -913,6 +993,133 @@ export default function AdminUsersContent() {
                 <Send className="h-4 w-4 ml-2" />
               )}
               שלח הזמנה
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit User Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent dir="rtl" className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Edit className="h-5 w-5" />
+              עריכת משתמש
+            </DialogTitle>
+            <DialogDescription>
+              עדכן פרטי משתמש, תפקיד ושיוך להיררכיה
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>שם מלא</Label>
+              <Input
+                value={editFormData.full_name}
+                onChange={(e) => setEditFormData({ ...editFormData, full_name: e.target.value })}
+                placeholder="ישראל ישראלי"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>אימייל</Label>
+              <Input
+                type="email"
+                value={editFormData.email}
+                disabled
+                className="bg-gray-50"
+                dir="ltr"
+              />
+              <p className="text-xs text-muted-foreground">לא ניתן לשנות אימייל</p>
+            </div>
+
+            <div className="space-y-2">
+              <Label>טלפון</Label>
+              <Input
+                value={editFormData.mobile}
+                onChange={(e) => setEditFormData({ ...editFormData, mobile: e.target.value })}
+                placeholder="050-1234567"
+                dir="ltr"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>תפקיד</Label>
+              <Select
+                value={editFormData.role}
+                onValueChange={(value: SystemRole) => setEditFormData({ ...editFormData, role: value, supervisor_id: '' })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(ROLE_CONFIGS).map(([role, config]) => (
+                    <SelectItem key={role} value={role}>
+                      {config.labelHe}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Show supervisor selector for agents */}
+            {editFormData.role === 'agent' && (
+              <div className="space-y-2">
+                <Label>מפקח אחראי</Label>
+                <Select
+                  value={editFormData.supervisor_id}
+                  onValueChange={(value) => setEditFormData({ ...editFormData, supervisor_id: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="בחר מפקח" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">ללא מפקח</SelectItem>
+                    {supervisors.map((sup) => (
+                      <SelectItem key={sup.id} value={sup.id}>
+                        {sup.full_name} ({sup.email})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {/* Show manager selector for supervisors */}
+            {editFormData.role === 'supervisor' && (
+              <div className="space-y-2">
+                <Label>מנהל אחראי</Label>
+                <Select
+                  value={editFormData.supervisor_id}
+                  onValueChange={(value) => setEditFormData({ ...editFormData, supervisor_id: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="בחר מנהל" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">ללא מנהל</SelectItem>
+                    {managers.map((mgr) => (
+                      <SelectItem key={mgr.id} value={mgr.id}>
+                        {mgr.full_name} ({mgr.email})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
+              ביטול
+            </Button>
+            <Button onClick={handleUpdateUser} disabled={isUpdating}>
+              {isUpdating ? (
+                <Loader2 className="h-4 w-4 animate-spin ml-2" />
+              ) : (
+                <CheckCircle className="h-4 w-4 ml-2" />
+              )}
+              שמור שינויים
             </Button>
           </DialogFooter>
         </DialogContent>
