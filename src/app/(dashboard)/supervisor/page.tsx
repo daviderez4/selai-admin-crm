@@ -177,13 +177,13 @@ export default function SupervisorDashboardPage() {
           const { count: contactsCount } = await supabase
             .from('crm_contacts')
             .select('*', { count: 'exact', head: true })
-            .eq('owner_id', agent.id);
+            .eq('agent_id', agent.id);
 
           // Get leads count
           const { count: leadsCount } = await supabase
             .from('crm_leads')
             .select('*', { count: 'exact', head: true })
-            .eq('assigned_to', agent.id);
+            .eq('agent_id', agent.id);
 
           // Get open deals count
           const { count: openDealsCount } = await supabase
@@ -215,26 +215,56 @@ export default function SupervisorDashboardPage() {
         }
       }
 
+      // Also include supervisor's own data if they have any contacts
+      const { count: supervisorContactsCount } = await supabase
+        .from('crm_contacts')
+        .select('*', { count: 'exact', head: true })
+        .eq('agent_id', supervisorId);
+
+      const { count: supervisorLeadsCount } = await supabase
+        .from('crm_leads')
+        .select('*', { count: 'exact', head: true })
+        .eq('agent_id', supervisorId);
+
+      const { count: supervisorOpenDealsCount } = await supabase
+        .from('crm_deals')
+        .select('*', { count: 'exact', head: true })
+        .eq('agent_id', supervisorId)
+        .not('status', 'in', '("won","lost")');
+
+      const { count: supervisorWonDealsCount } = await supabase
+        .from('crm_deals')
+        .select('*', { count: 'exact', head: true })
+        .eq('agent_id', supervisorId)
+        .eq('status', 'won');
+
+      console.log('Supervisor ID:', supervisorId);
+      console.log('Agents found:', agentsData?.length || 0, agentsData);
+      console.log('Supervisor contacts:', supervisorContactsCount);
+
       setAgents(agentsWithStats);
       setPendingRequests(requestsData || []);
 
-      // Calculate team totals
+      // Calculate team totals (including supervisor's own data)
       const teamStats: TeamStats = {
         totalAgents: agentsWithStats.length,
         activeAgents: agentsWithStats.filter(a => a.status === 'active').length,
-        totalContacts: agentsWithStats.reduce((sum, a) => sum + a.totalContacts, 0),
-        totalLeads: agentsWithStats.reduce((sum, a) => sum + a.totalLeads, 0),
-        openDeals: agentsWithStats.reduce((sum, a) => sum + a.openDeals, 0),
-        wonDeals: agentsWithStats.reduce((sum, a) => sum + a.wonDeals, 0),
-        totalPolicies: 0, // Would come from policies count
+        totalContacts: agentsWithStats.reduce((sum, a) => sum + a.totalContacts, 0) + (supervisorContactsCount || 0),
+        totalLeads: agentsWithStats.reduce((sum, a) => sum + a.totalLeads, 0) + (supervisorLeadsCount || 0),
+        openDeals: agentsWithStats.reduce((sum, a) => sum + a.openDeals, 0) + (supervisorOpenDealsCount || 0),
+        wonDeals: agentsWithStats.reduce((sum, a) => sum + a.wonDeals, 0) + (supervisorWonDealsCount || 0),
+        totalPolicies: 0,
         pendingRequests: requestsData?.length || 0,
       };
 
-      // Get total policies
+      // Get total policies - only query if there are agents
+      const allAgentIds = agentsWithStats.map(a => a.id);
+      allAgentIds.push(supervisorId); // Include supervisor's own policies
+
       const { count: policiesCount } = await supabase
         .from('crm_policies')
         .select('*', { count: 'exact', head: true })
-        .in('agent_id', agentsWithStats.map(a => a.id));
+        .in('agent_id', allAgentIds);
 
       teamStats.totalPolicies = policiesCount || 0;
 
