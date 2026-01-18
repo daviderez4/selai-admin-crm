@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import type { Contact, ContactUpdate } from '@/types/crm';
+import { getCurrentUser, getTeamUserIds } from '@/lib/utils/teamHierarchy';
 
 // GET /api/projects/[id]/crm/contacts/[contactId] - Get single contact with relations
 export async function GET(
@@ -32,26 +33,28 @@ export async function GET(
     const url = new URL(request.url);
     const includeRelations = url.searchParams.get('include')?.split(',') || [];
 
+    // Get current user info for RLS
+    const currentUser = await getCurrentUser(supabase, user.id);
+    if (!currentUser) {
+      return NextResponse.json({ error: 'User not found' }, { status: 401 });
+    }
+
     // Fetch contact with optional relations
     let query = supabase
       .from('crm_contacts')
       .select('*')
       .eq('id', contactId);
 
-    // Apply RLS based on role
-    if (access.role === 'agent') {
-      query = query.eq('agent_id', user.id);
-    } else if (access.role === 'supervisor') {
-      const { data: teamMembers } = await supabase
-        .from('agent_supervisor_relations')
-        .select('agent_id')
-        .eq('supervisor_id', user.id)
-        .eq('is_active', true);
-
-      const teamIds = teamMembers?.map(m => m.agent_id) || [];
-      teamIds.push(user.id);
-      query = query.in('agent_id', teamIds);
+    // Apply RLS based on user type
+    const teamIds = await getTeamUserIds(supabase, currentUser);
+    if (teamIds !== null) {
+      if (teamIds.length === 1) {
+        query = query.eq('agent_id', teamIds[0]);
+      } else {
+        query = query.in('agent_id', teamIds);
+      }
     }
+    // teamIds === null means admin, no filter needed
 
     const { data: contact, error: queryError } = await query.single();
 
@@ -239,6 +242,12 @@ export async function PUT(
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
+    // Get current user info for RLS
+    const currentUser = await getCurrentUser(supabase, user.id);
+    if (!currentUser) {
+      return NextResponse.json({ error: 'User not found' }, { status: 401 });
+    }
+
     // Parse request body
     const body: ContactUpdate = await request.json();
 
@@ -251,19 +260,14 @@ export async function PUT(
       })
       .eq('id', contactId);
 
-    // Apply RLS based on role
-    if (access.role === 'agent') {
-      query = query.eq('agent_id', user.id);
-    } else if (access.role === 'supervisor') {
-      const { data: teamMembers } = await supabase
-        .from('agent_supervisor_relations')
-        .select('agent_id')
-        .eq('supervisor_id', user.id)
-        .eq('is_active', true);
-
-      const teamIds = teamMembers?.map(m => m.agent_id) || [];
-      teamIds.push(user.id);
-      query = query.in('agent_id', teamIds);
+    // Apply RLS based on user type
+    const teamIds = await getTeamUserIds(supabase, currentUser);
+    if (teamIds !== null) {
+      if (teamIds.length === 1) {
+        query = query.eq('agent_id', teamIds[0]);
+      } else {
+        query = query.in('agent_id', teamIds);
+      }
     }
 
     const { data: contact, error: updateError } = await query.select().single();
@@ -319,51 +323,33 @@ export async function DELETE(
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
-    // Only admin and supervisors can delete contacts
-    if (access.role === 'agent') {
-      // Agents can only delete their own contacts
-      const { error: deleteError } = await supabase
-        .from('crm_contacts')
-        .delete()
-        .eq('id', contactId)
-        .eq('agent_id', user.id);
+    // Get current user info for RLS
+    const currentUser = await getCurrentUser(supabase, user.id);
+    if (!currentUser) {
+      return NextResponse.json({ error: 'User not found' }, { status: 401 });
+    }
 
-      if (deleteError) {
-        console.error('Contact delete error:', deleteError);
-        return NextResponse.json({ error: deleteError.message }, { status: 500 });
+    // Build delete query with RLS based on user type
+    let deleteQuery = supabase
+      .from('crm_contacts')
+      .delete()
+      .eq('id', contactId);
+
+    const teamIds = await getTeamUserIds(supabase, currentUser);
+    if (teamIds !== null) {
+      if (teamIds.length === 1) {
+        deleteQuery = deleteQuery.eq('agent_id', teamIds[0]);
+      } else {
+        deleteQuery = deleteQuery.in('agent_id', teamIds);
       }
-    } else if (access.role === 'supervisor') {
-      // Supervisors can delete their team's contacts
-      const { data: teamMembers } = await supabase
-        .from('agent_supervisor_relations')
-        .select('agent_id')
-        .eq('supervisor_id', user.id)
-        .eq('is_active', true);
+    }
+    // teamIds === null means admin, no filter needed
 
-      const teamIds = teamMembers?.map(m => m.agent_id) || [];
-      teamIds.push(user.id);
+    const { error: deleteError } = await deleteQuery;
 
-      const { error: deleteError } = await supabase
-        .from('crm_contacts')
-        .delete()
-        .eq('id', contactId)
-        .in('agent_id', teamIds);
-
-      if (deleteError) {
-        console.error('Contact delete error:', deleteError);
-        return NextResponse.json({ error: deleteError.message }, { status: 500 });
-      }
-    } else {
-      // Admin can delete any contact
-      const { error: deleteError } = await supabase
-        .from('crm_contacts')
-        .delete()
-        .eq('id', contactId);
-
-      if (deleteError) {
-        console.error('Contact delete error:', deleteError);
-        return NextResponse.json({ error: deleteError.message }, { status: 500 });
-      }
+    if (deleteError) {
+      console.error('Contact delete error:', deleteError);
+      return NextResponse.json({ error: deleteError.message }, { status: 500 });
     }
 
     return NextResponse.json({ success: true });

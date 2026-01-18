@@ -18,6 +18,10 @@ import {
   Clock,
   Mail,
   Calendar,
+  ExternalLink,
+  Link as LinkIcon,
+  User,
+  KeyRound,
 } from 'lucide-react';
 import { Header } from '@/components/layout/Header';
 import { Button } from '@/components/ui/button';
@@ -68,7 +72,12 @@ export default function ProjectSettingsPage() {
     update_frequency: 'manual' as 'manual' | 'daily' | 'weekly' | 'monthly',
     auto_import_email: '',
     auto_import_enabled: false,
+    // Dashboard link settings
+    dashboard_url: '',
+    dashboard_username: '',
+    dashboard_password: '',
   });
+  const [showDashboardPassword, setShowDashboardPassword] = useState(false);
 
   // Load project data
   useEffect(() => {
@@ -96,6 +105,10 @@ export default function ProjectSettingsPage() {
           update_frequency: project.update_frequency || 'manual',
           auto_import_email: project.auto_import_email || '',
           auto_import_enabled: project.auto_import_enabled || false,
+          // Dashboard link settings
+          dashboard_url: project.dashboard_url || '',
+          dashboard_username: project.dashboard_username || '',
+          dashboard_password: '', // Don't show encrypted password
         });
       }
       setLoading(false);
@@ -163,6 +176,14 @@ export default function ProjectSettingsPage() {
       if (formData.supabase_service_key) {
         payload.supabase_service_key = formData.supabase_service_key;
         payload.test_connection = true; // Test when service key changes
+      }
+
+      // Dashboard credentials
+      payload.dashboard_url = formData.dashboard_url || undefined;
+      payload.dashboard_username = formData.dashboard_username || undefined;
+      // Only include password if it was changed
+      if (formData.dashboard_password) {
+        payload.dashboard_password = formData.dashboard_password;
       }
 
       const credResponse = await fetch(`/api/projects/${projectId}/update-credentials`, {
@@ -548,6 +569,104 @@ export default function ProjectSettingsPage() {
                   </p>
                 </div>
               )}
+            </CardContent>
+          </Card>
+
+          {/* Dashboard Link Card */}
+          <Card className="bg-white border-slate-200 shadow-sm">
+            <CardHeader>
+              <CardTitle className="text-slate-800 flex items-center gap-2">
+                <LinkIcon className="h-5 w-5 text-purple-600" />
+                קישור לדשבורד חיצוני
+              </CardTitle>
+              <CardDescription className="text-slate-500">
+                שמור פרטי התחברות לדשבורד חיצוני לגישה מהירה
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Dashboard URL */}
+              <div className="space-y-2">
+                <Label htmlFor="dashboard_url" className="text-slate-700 flex items-center gap-2">
+                  <ExternalLink className="h-4 w-4" />
+                  כתובת הדשבורד
+                </Label>
+                <Input
+                  id="dashboard_url"
+                  type="url"
+                  value={formData.dashboard_url}
+                  onChange={(e) => setFormData(prev => ({ ...prev, dashboard_url: e.target.value }))}
+                  placeholder="https://dashboard.example.com"
+                  className="bg-slate-50 border-slate-300 text-slate-800 font-mono text-sm"
+                  dir="ltr"
+                />
+              </div>
+
+              {/* Dashboard Username */}
+              <div className="space-y-2">
+                <Label htmlFor="dashboard_username" className="text-slate-700 flex items-center gap-2">
+                  <User className="h-4 w-4" />
+                  שם משתמש
+                </Label>
+                <Input
+                  id="dashboard_username"
+                  value={formData.dashboard_username}
+                  onChange={(e) => setFormData(prev => ({ ...prev, dashboard_username: e.target.value }))}
+                  placeholder="username"
+                  className="bg-slate-50 border-slate-300 text-slate-800"
+                  dir="ltr"
+                />
+              </div>
+
+              {/* Dashboard Password */}
+              <div className="space-y-2">
+                <Label htmlFor="dashboard_password" className="text-slate-700 flex items-center gap-2">
+                  <KeyRound className="h-4 w-4" />
+                  סיסמה (להחלפה בלבד)
+                </Label>
+                <div className="relative">
+                  <Input
+                    id="dashboard_password"
+                    type={showDashboardPassword ? 'text' : 'password'}
+                    value={formData.dashboard_password}
+                    onChange={(e) => setFormData(prev => ({ ...prev, dashboard_password: e.target.value }))}
+                    placeholder="השאר ריק כדי לשמור את הסיסמה הקיימת"
+                    className="bg-slate-50 border-slate-300 text-slate-800 pl-10"
+                    dir="ltr"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowDashboardPassword(!showDashboardPassword)}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  >
+                    {showDashboardPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+                <p className="text-xs text-slate-500">
+                  הסיסמה מוצפנת בשמירה. השאר ריק אם אין צורך לשנות.
+                </p>
+              </div>
+
+              {/* Open Dashboard Button */}
+              {formData.dashboard_url && (
+                <div className="pt-4 border-t border-slate-200">
+                  <Button
+                    variant="outline"
+                    onClick={() => window.open(formData.dashboard_url, '_blank')}
+                    className="border-purple-300 text-purple-700 hover:bg-purple-50"
+                  >
+                    <ExternalLink className="h-4 w-4 ml-2" />
+                    פתח דשבורד בחלון חדש
+                  </Button>
+                </div>
+              )}
+
+              {/* Info Box */}
+              <div className="p-3 bg-purple-50 border border-purple-200 rounded-lg">
+                <p className="text-purple-700 text-sm">
+                  פרטי ההתחברות נשמרים באופן מוצפן ומשמשים לגישה מהירה לדשבורד חיצוני.
+                  באפשרותך לצפות בפרטים אלו רק אם יש לך הרשאות מתאימות.
+                </p>
+              </div>
             </CardContent>
           </Card>
 

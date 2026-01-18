@@ -28,6 +28,10 @@ export interface Project {
   update_frequency?: 'manual' | 'daily' | 'weekly' | 'monthly';
   auto_import_email?: string;
   auto_import_enabled?: boolean;
+  // External dashboard credentials
+  dashboard_url?: string | null;
+  dashboard_username?: string | null;
+  dashboard_password?: string | null; // Stored encrypted
   created_at: string;
   updated_at: string;
   created_by: string;

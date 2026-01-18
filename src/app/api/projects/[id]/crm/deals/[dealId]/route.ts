@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import type { DealUpdate } from '@/types/crm';
+import { getCurrentUser, getTeamUserIds } from '@/lib/utils/teamHierarchy';
 
 // GET /api/projects/[id]/crm/deals/[dealId] - Get single deal with relations
 export async function GET(
@@ -28,6 +29,11 @@ export async function GET(
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
+    const currentUser = await getCurrentUser(supabase, user.id);
+    if (!currentUser) {
+      return NextResponse.json({ error: 'User not found' }, { status: 401 });
+    }
+
     // Fetch deal with relations
     let query = supabase
       .from('crm_deals')
@@ -41,18 +47,13 @@ export async function GET(
       .eq('id', dealId);
 
     // Apply RLS based on role
-    if (access.role === 'agent') {
-      query = query.eq('agent_id', user.id);
-    } else if (access.role === 'supervisor') {
-      const { data: teamMembers } = await supabase
-        .from('agent_supervisor_relations')
-        .select('agent_id')
-        .eq('supervisor_id', user.id)
-        .eq('is_active', true);
-
-      const teamIds = teamMembers?.map(m => m.agent_id) || [];
-      teamIds.push(user.id);
-      query = query.in('agent_id', teamIds);
+    const teamIds = await getTeamUserIds(supabase, currentUser);
+    if (teamIds !== null) {
+      if (teamIds.length === 1) {
+        query = query.eq('agent_id', teamIds[0]);
+      } else {
+        query = query.in('agent_id', teamIds);
+      }
     }
 
     const { data: deal, error: queryError } = await query.single();
@@ -101,6 +102,11 @@ export async function PUT(
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
+    const currentUser = await getCurrentUser(supabase, user.id);
+    if (!currentUser) {
+      return NextResponse.json({ error: 'User not found' }, { status: 401 });
+    }
+
     // Get current deal for activity tracking
     const { data: currentDeal } = await supabase
       .from('crm_deals')
@@ -121,18 +127,13 @@ export async function PUT(
       .eq('id', dealId);
 
     // Apply RLS based on role
-    if (access.role === 'agent') {
-      query = query.eq('agent_id', user.id);
-    } else if (access.role === 'supervisor') {
-      const { data: teamMembers } = await supabase
-        .from('agent_supervisor_relations')
-        .select('agent_id')
-        .eq('supervisor_id', user.id)
-        .eq('is_active', true);
-
-      const teamIds = teamMembers?.map(m => m.agent_id) || [];
-      teamIds.push(user.id);
-      query = query.in('agent_id', teamIds);
+    const teamIds = await getTeamUserIds(supabase, currentUser);
+    if (teamIds !== null) {
+      if (teamIds.length === 1) {
+        query = query.eq('agent_id', teamIds[0]);
+      } else {
+        query = query.in('agent_id', teamIds);
+      }
     }
 
     const { data: deal, error: updateError } = await query.select().single();
@@ -217,6 +218,11 @@ export async function DELETE(
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
+    const currentUser = await getCurrentUser(supabase, user.id);
+    if (!currentUser) {
+      return NextResponse.json({ error: 'User not found' }, { status: 401 });
+    }
+
     // Build delete query with RLS
     let query = supabase
       .from('crm_deals')
@@ -224,18 +230,13 @@ export async function DELETE(
       .eq('id', dealId);
 
     // Apply RLS based on role
-    if (access.role === 'agent') {
-      query = query.eq('agent_id', user.id);
-    } else if (access.role === 'supervisor') {
-      const { data: teamMembers } = await supabase
-        .from('agent_supervisor_relations')
-        .select('agent_id')
-        .eq('supervisor_id', user.id)
-        .eq('is_active', true);
-
-      const teamIds = teamMembers?.map(m => m.agent_id) || [];
-      teamIds.push(user.id);
-      query = query.in('agent_id', teamIds);
+    const teamIds = await getTeamUserIds(supabase, currentUser);
+    if (teamIds !== null) {
+      if (teamIds.length === 1) {
+        query = query.eq('agent_id', teamIds[0]);
+      } else {
+        query = query.in('agent_id', teamIds);
+      }
     }
 
     const { error: deleteError } = await query;

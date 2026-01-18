@@ -48,6 +48,10 @@ export async function PUT(
       update_frequency, // 'manual' | 'daily' | 'weekly' | 'monthly'
       auto_import_email, // Email to monitor for auto imports
       auto_import_enabled, // Boolean to enable/disable auto import
+      // Dashboard credentials
+      dashboard_url,
+      dashboard_username,
+      dashboard_password,
     } = await request.json();
 
     // Get current project data
@@ -106,6 +110,20 @@ export async function PUT(
       updateData.auto_import_enabled = auto_import_enabled;
     }
 
+    // Dashboard credentials
+    if (dashboard_url !== undefined) {
+      updateData.dashboard_url = dashboard_url?.trim() || null;
+    }
+
+    if (dashboard_username !== undefined) {
+      updateData.dashboard_username = dashboard_username?.trim() || null;
+    }
+
+    if (dashboard_password !== undefined) {
+      // Encrypt dashboard password before storing
+      updateData.dashboard_password = dashboard_password?.trim() ? encrypt(dashboard_password.trim()) : null;
+    }
+
     // Test connection if requested and we have complete credentials
     let testResult = null;
     if (test_connection) {
@@ -161,6 +179,8 @@ export async function PUT(
         has_service_key: !!supabase_service_key,
         connection_tested: !!testResult,
         connection_success: testResult?.success,
+        dashboard_url_updated: dashboard_url !== undefined,
+        dashboard_credentials_updated: dashboard_username !== undefined || dashboard_password !== undefined,
       },
     });
 

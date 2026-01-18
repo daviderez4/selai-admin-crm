@@ -51,20 +51,47 @@ export async function GET(
       .from('crm_leads')
       .select('*, contact:crm_contacts(id, full_name, phone, email)', { count: 'exact' });
 
+    // Get current user info from users table
+    const { data: currentUser } = await supabase
+      .from('users')
+      .select('id, user_type')
+      .eq('auth_id', user.id)
+      .single();
+
     // RLS filter based on role
-    if (access.role === 'agent') {
-      query = query.eq('agent_id', user.id);
-    } else if (access.role === 'supervisor') {
+    if (currentUser?.user_type === 'agent') {
+      query = query.eq('agent_id', currentUser.id);
+    } else if (currentUser?.user_type === 'supervisor') {
+      // Supervisors see their team's leads - agents where supervisor_id = this supervisor
       const { data: teamMembers } = await supabase
-        .from('agent_supervisor_relations')
-        .select('agent_id')
-        .eq('supervisor_id', user.id)
+        .from('users')
+        .select('id')
+        .eq('supervisor_id', currentUser.id)
         .eq('is_active', true);
 
-      const teamIds = teamMembers?.map(m => m.agent_id) || [];
-      teamIds.push(user.id);
+      const teamIds = teamMembers?.map(m => m.id) || [];
+      teamIds.push(currentUser.id);
+      query = query.in('agent_id', teamIds);
+    } else if (currentUser?.user_type === 'manager') {
+      // Managers see their assigned supervisors' teams
+      const { data: assignedSupervisors } = await supabase
+        .from('manager_supervisor_assignments')
+        .select('supervisor_id')
+        .eq('manager_id', currentUser.id);
+
+      const supervisorIds = assignedSupervisors?.map(s => s.supervisor_id) || [];
+
+      const { data: teamMembers } = await supabase
+        .from('users')
+        .select('id')
+        .in('supervisor_id', supervisorIds)
+        .eq('is_active', true);
+
+      const teamIds = teamMembers?.map(m => m.id) || [];
+      teamIds.push(...supervisorIds, currentUser.id);
       query = query.in('agent_id', teamIds);
     }
+    // Admin sees all leads (no filter needed)
 
     // Apply search filter
     if (filters.search) {
