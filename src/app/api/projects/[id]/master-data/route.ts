@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { createProjectClient } from '@/lib/utils/projectDatabase';
 
 // Known view schemas - when table is one of these, use direct column mapping
@@ -57,26 +57,61 @@ export async function GET(
   try {
     const { id: projectId } = await params;
     const supabase = await createClient();
+    const adminClient = createAdminClient();
     const { data: { user }, error: userError } = await supabase.auth.getUser();
 
     if (userError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Check access
-    const { data: access } = await supabase
-      .from('user_project_access')
-      .select('role')
-      .eq('user_id', user.id)
-      .eq('project_id', projectId)
-      .single();
+    // Get user's role from users table - use adminClient to bypass RLS
+    let userRecord = null;
+
+    const { data: byAuthId } = await adminClient
+      .from('users')
+      .select('user_type')
+      .eq('auth_id', user.id)
+      .maybeSingle();
+
+    if (byAuthId) {
+      userRecord = byAuthId;
+    } else {
+      const { data: byEmail } = await adminClient
+        .from('users')
+        .select('user_type')
+        .eq('email', user.email?.toLowerCase() || '')
+        .maybeSingle();
+      userRecord = byEmail;
+    }
+
+    const isAdmin = userRecord?.user_type === 'admin';
+    const isManager = userRecord?.user_type === 'manager';
+
+    // Check access - admins and managers get full access to all projects
+    let access: { role: string } | null = null;
+
+    if (isAdmin || isManager) {
+      // Admins/managers have implicit admin access to all projects
+      access = { role: 'admin' };
+    } else {
+      // Check user_project_access for other users
+      const { data: projectAccess } = await adminClient
+        .from('user_project_access')
+        .select('role')
+        .eq('user_id', user.id)
+        .eq('project_id', projectId)
+        .single();
+
+      access = projectAccess;
+    }
 
     if (!access) {
+      console.log('Master data access denied:', { userRecord, userId: user.id, email: user.email });
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
-    // Get project details including credentials and configuration status
-    const { data: project, error: projectError } = await supabase
+    // Get project details including credentials and configuration status - use adminClient to bypass RLS
+    const { data: project, error: projectError } = await adminClient
       .from('projects')
       .select('supabase_url, supabase_anon_key, supabase_service_key, name, table_name, is_configured, storage_mode')
       .eq('id', projectId)

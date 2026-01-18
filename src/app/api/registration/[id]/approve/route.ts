@@ -24,25 +24,42 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Get reviewer info
-    const { data: reviewer } = await supabase
+    // Get reviewer info - search by auth_id first, then by email
+    const adminClient = createAdminClient();
+    let reviewer = null;
+
+    const { data: byAuthId } = await adminClient
       .from('users')
       .select('id, user_type, full_name')
       .eq('auth_id', user.id)
-      .single();
+      .maybeSingle();
 
-    if (!reviewer || !['admin', 'manager', 'supervisor'].includes(reviewer.user_type)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (byAuthId) {
+      reviewer = byAuthId;
+    } else {
+      // Try by email
+      const { data: byEmail } = await adminClient
+        .from('users')
+        .select('id, user_type, full_name')
+        .eq('email', user.email?.toLowerCase() || '')
+        .maybeSingle();
+      reviewer = byEmail;
     }
 
-    // Get registration request
-    const { data: registration, error: fetchError } = await supabase
+    if (!reviewer || !['admin', 'manager', 'supervisor'].includes(reviewer.user_type)) {
+      console.log('Reviewer check failed:', { reviewer, userId: user.id, userEmail: user.email });
+      return NextResponse.json({ error: 'Forbidden - not authorized to approve registrations' }, { status: 403 });
+    }
+
+    // Get registration request (use adminClient to bypass RLS)
+    const { data: registration, error: fetchError } = await adminClient
       .from('registration_requests')
       .select('*')
       .eq('id', id)
       .single();
 
     if (fetchError || !registration) {
+      console.log('Registration not found:', { id, fetchError });
       return NextResponse.json({ error: 'Registration not found' }, { status: 404 });
     }
 
@@ -52,7 +69,7 @@ export async function POST(
 
     // Handle rejection
     if (action === 'reject') {
-      const { error: rejectError } = await supabase
+      const { error: rejectError } = await adminClient
         .from('registration_requests')
         .update({
           status: 'rejected',
@@ -72,7 +89,7 @@ export async function POST(
 
     // Handle approval - Create auth user and user record
     if (action === 'approve') {
-      const adminClient = createAdminClient();
+      // adminClient already declared above
       let authUserId: string | null = null;
 
       // Step 1: Check if auth user already exists
@@ -119,8 +136,8 @@ export async function POST(
         authUserId = newAuthUser.user.id;
       }
 
-      // Step 3: Check if user record exists in users table
-      const { data: existingUser } = await supabase
+      // Step 3: Check if user record exists in users table (use adminClient to bypass RLS)
+      const { data: existingUser } = await adminClient
         .from('users')
         .select('id')
         .eq('email', registration.email.toLowerCase())
@@ -130,7 +147,7 @@ export async function POST(
       let validSupervisorId = null;
       const requestedSupervisorId = registration.requested_supervisor_id || registration.supervisor_id;
       if (requestedSupervisorId) {
-        const { data: supervisorExists } = await supabase
+        const { data: supervisorExists } = await adminClient
           .from('users')
           .select('id')
           .eq('id', requestedSupervisorId)
@@ -146,7 +163,7 @@ export async function POST(
       // Step 3.6: Validate manager_id exists in users table (if provided)
       let validManagerId = null;
       if (registration.requested_manager_id) {
-        const { data: managerExists } = await supabase
+        const { data: managerExists } = await adminClient
           .from('users')
           .select('id')
           .eq('id', registration.requested_manager_id)
@@ -161,8 +178,8 @@ export async function POST(
       let userError;
 
       if (existingUser) {
-        // Update existing user record
-        const { data, error } = await supabase
+        // Update existing user record (use adminClient to bypass RLS)
+        const { data, error } = await adminClient
           .from('users')
           .update({
             auth_id: authUserId,
@@ -184,8 +201,8 @@ export async function POST(
         newUser = data;
         userError = error;
       } else {
-        // Create new user record
-        const { data, error } = await supabase
+        // Create new user record (use adminClient to bypass RLS)
+        const { data, error } = await adminClient
           .from('users')
           .insert({
             auth_id: authUserId,
@@ -234,7 +251,7 @@ export async function POST(
         contactData.assigned_to = registration.agent_id;
       }
 
-      const { data: contact, error: contactError } = await supabase
+      const { data: contact, error: contactError } = await adminClient
         .from('crm_contacts')
         .insert(contactData)
         .select()
@@ -246,7 +263,7 @@ export async function POST(
       }
 
       // Update registration request (clear password for security)
-      const { error: updateError } = await supabase
+      const { error: updateError } = await adminClient
         .from('registration_requests')
         .update({
           status: 'approved',
@@ -264,7 +281,7 @@ export async function POST(
 
       // Send welcome message (if user_messages table exists)
       try {
-        await supabase.from('user_messages').insert({
+        await adminClient.from('user_messages').insert({
           from_user_id: reviewer.id,
           to_user_id: newUser.id,
           subject: 'ברוכים הבאים ל-SELAI!',

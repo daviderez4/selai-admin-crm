@@ -81,6 +81,7 @@ interface UserProfile {
   role: SystemRole;
   supervisor_id?: string;
   supervisor_name?: string;
+  handler_name?: string; // שם מטפל לקישור נתונים פיננסיים
   is_active: boolean;
   is_verified: boolean;
   registration_status: 'pending' | 'approved' | 'rejected';
@@ -126,7 +127,10 @@ export default function AdminUsersContent() {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
   const [resetPasswordDialogOpen, setResetPasswordDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedUserForReset, setSelectedUserForReset] = useState<UserProfile | null>(null);
+  const [selectedUserForDelete, setSelectedUserForDelete] = useState<UserProfile | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [selectedUserForEdit, setSelectedUserForEdit] = useState<UserProfile | null>(null);
   const [editFormData, setEditFormData] = useState({
     full_name: '',
@@ -134,6 +138,7 @@ export default function AdminUsersContent() {
     mobile: '',
     role: 'agent' as SystemRole,
     supervisor_id: '',
+    handler_name: '', // שם מטפל - לקישור נתונים פיננסיים מאקסל
   });
   const [newUser, setNewUser] = useState({
     full_name: '',
@@ -201,6 +206,7 @@ export default function AdminUsersContent() {
             role: (u.user_type as SystemRole) || (u.role as SystemRole) || 'agent',
             supervisor_id: supervisorId,
             supervisor_name: supervisorId ? userMap.get(supervisorId) : undefined,
+            handler_name: u.handler_name as string | undefined, // שם מטפל לקישור נתונים פיננסיים
             is_active: u.is_active as boolean ?? true,
             is_verified: u.is_approved as boolean ?? false,
             registration_status: u.is_approved ? 'approved' : 'pending',
@@ -239,56 +245,34 @@ export default function AdminUsersContent() {
     }
 
     setIsCreating(true);
-    const supabase = createClient();
 
     try {
-      // Check if user already exists
-      const { data: existingUser } = await supabase
-        .from('users')
-        .select('id')
-        .eq('email', newUser.email.toLowerCase())
-        .maybeSingle();
+      // Use API route to bypass RLS
+      const response = await fetch('/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: newUser.email,
+          full_name: newUser.full_name,
+          phone: newUser.mobile || null,
+          user_type: newUser.role,
+          supervisor_id: newUser.supervisor_id || null,
+        }),
+      });
 
-      if (existingUser) {
-        // Update existing user
-        const { error: updateError } = await supabase
-          .from('users')
-          .update({
-            full_name: newUser.full_name,
-            phone: newUser.mobile || null,
-            user_type: newUser.role,
-            supervisor_id: newUser.supervisor_id || null,
-            is_active: true,
-            is_approved: true,
-          })
-          .eq('id', existingUser.id);
+      const result = await response.json();
 
-        if (updateError) throw updateError;
-        toast.success('המשתמש עודכן בהצלחה');
-      } else {
-        // Create new user
-        const { error: insertError } = await supabase
-          .from('users')
-          .insert({
-            email: newUser.email.toLowerCase(),
-            full_name: newUser.full_name,
-            phone: newUser.mobile || null,
-            user_type: newUser.role,
-            supervisor_id: newUser.supervisor_id || null,
-            is_active: true,
-            is_approved: true,
-          });
-
-        if (insertError) throw insertError;
-        toast.success('המשתמש נוצר בהצלחה');
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to create user');
       }
 
+      toast.success(result.message || 'המשתמש נוצר בהצלחה');
       setCreateDialogOpen(false);
       setNewUser({ full_name: '', email: '', mobile: '', role: 'agent', supervisor_id: '' });
       await fetchData();
     } catch (error) {
       console.error('Error creating user:', error);
-      toast.error('שגיאה ביצירת המשתמש');
+      toast.error(error instanceof Error ? error.message : 'שגיאה ביצירת המשתמש');
     } finally {
       setIsCreating(false);
     }
@@ -350,6 +334,7 @@ export default function AdminUsersContent() {
       mobile: user.mobile || '',
       role: user.role,
       supervisor_id: user.supervisor_id || '',
+      handler_name: user.handler_name || '',
     });
     setEditDialogOpen(true);
   };
@@ -358,34 +343,41 @@ export default function AdminUsersContent() {
     if (!selectedUserForEdit) return;
 
     setIsUpdating(true);
-    const supabase = createClient();
 
     try {
+      // Prepare update data
       const updateData: Record<string, unknown> = {
         full_name: editFormData.full_name,
         phone: editFormData.mobile || null,
-        user_type: editFormData.role,
-        updated_at: new Date().toISOString(),
+        handler_name: editFormData.handler_name || null,
       };
 
       // Handle supervisor assignment based on role
       if (editFormData.role === 'agent') {
         updateData.supervisor_id = editFormData.supervisor_id || null;
       } else if (editFormData.role === 'supervisor') {
-        // Supervisor doesn't have a supervisor, but might have a manager
-        updateData.supervisor_id = null;
-        updateData.manager_id = editFormData.supervisor_id || null; // Use the field for manager
-      } else {
-        updateData.supervisor_id = null;
-        updateData.manager_id = null;
+        updateData.manager_id = editFormData.supervisor_id || null;
       }
 
-      const { error } = await supabase
-        .from('users')
-        .update(updateData)
-        .eq('id', selectedUserForEdit.id);
+      // Use API route to bypass RLS
+      const response = await fetch('/api/users', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: selectedUserForEdit.id,
+          action: 'update_role',
+          data: {
+            user_type: editFormData.role,
+            ...updateData,
+          },
+        }),
+      });
 
-      if (error) throw error;
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to update user');
+      }
 
       toast.success('המשתמש עודכן בהצלחה');
       setEditDialogOpen(false);
@@ -393,23 +385,28 @@ export default function AdminUsersContent() {
       await fetchData();
     } catch (error) {
       console.error('Error updating user:', error);
-      toast.error('שגיאה בעדכון המשתמש');
+      toast.error(error instanceof Error ? error.message : 'שגיאה בעדכון המשתמש');
     } finally {
       setIsUpdating(false);
     }
   };
 
   const handleToggleUserStatus = async (userId: string, currentStatus: boolean) => {
-    const supabase = createClient();
-
     try {
-      const { error } = await supabase
-        .from('users')
-        .update({ is_active: !currentStatus })
-        .eq('id', userId);
+      // Use API route to bypass RLS
+      const response = await fetch('/api/users', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId,
+          action: currentStatus ? 'suspend' : 'activate',
+        }),
+      });
 
-      if (error) {
-        throw error;
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to update status');
       }
 
       setUsers(prev =>
@@ -418,7 +415,35 @@ export default function AdminUsersContent() {
       toast.success(currentStatus ? 'המשתמש הושבת' : 'המשתמש הופעל');
     } catch (error) {
       console.error('Error toggling user status:', error);
-      toast.error('שגיאה בעדכון הסטטוס');
+      toast.error(error instanceof Error ? error.message : 'שגיאה בעדכון הסטטוס');
+    }
+  };
+
+  // Delete user
+  const handleDeleteUser = async () => {
+    if (!selectedUserForDelete) return;
+
+    setIsDeleting(true);
+    try {
+      const response = await fetch(`/api/users?userId=${selectedUserForDelete.id}`, {
+        method: 'DELETE',
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to delete user');
+      }
+
+      setUsers(prev => prev.filter(u => u.id !== selectedUserForDelete.id));
+      toast.success('המשתמש נמחק בהצלחה');
+      setDeleteDialogOpen(false);
+      setSelectedUserForDelete(null);
+    } catch (error) {
+      console.error('Error deleting user:', error);
+      toast.error(error instanceof Error ? error.message : 'שגיאה במחיקת המשתמש');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -465,40 +490,23 @@ export default function AdminUsersContent() {
     const email = inviteEmail.trim().toLowerCase();
 
     try {
-      // Check if user already exists
-      const { data: existingUser } = await supabase
-        .from('users')
-        .select('id')
-        .eq('email', email)
-        .maybeSingle();
+      // First create/update user via API to bypass RLS
+      const userResponse = await fetch('/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: email,
+          full_name: email.split('@')[0], // Default name from email
+          user_type: inviteRole,
+        }),
+      });
 
-      if (existingUser) {
-        // Update existing user
-        await supabase
-          .from('users')
-          .update({
-            user_type: inviteRole,
-            is_active: true,
-            is_approved: true,
-          })
-          .eq('id', existingUser.id);
-      } else {
-        // Create new user record
-        const { error: userError } = await supabase
-          .from('users')
-          .insert({
-            email: email,
-            user_type: inviteRole,
-            is_active: true,
-            is_approved: true,
-          });
-
-        if (userError) {
-          console.error('User creation error:', userError);
-        }
+      if (!userResponse.ok) {
+        const result = await userResponse.json();
+        console.error('User creation error:', result.error);
       }
 
-      // Send magic link / invite email
+      // Send magic link / invite email (this uses auth which works client-side)
       const { error: inviteError } = await supabase.auth.signInWithOtp({
         email: email,
         options: {
@@ -714,7 +722,13 @@ export default function AdminUsersContent() {
                                 </>
                               )}
                             </DropdownMenuItem>
-                            <DropdownMenuItem className="text-red-600">
+                            <DropdownMenuItem
+                              className="text-red-600"
+                              onClick={() => {
+                                setSelectedUserForDelete(user);
+                                setDeleteDialogOpen(true);
+                              }}
+                            >
                               <Trash2 className="h-4 w-4 ml-2" />
                               מחק
                             </DropdownMenuItem>
@@ -1067,14 +1081,14 @@ export default function AdminUsersContent() {
               <div className="space-y-2">
                 <Label>מפקח אחראי</Label>
                 <Select
-                  value={editFormData.supervisor_id}
-                  onValueChange={(value) => setEditFormData({ ...editFormData, supervisor_id: value })}
+                  value={editFormData.supervisor_id || 'none'}
+                  onValueChange={(value) => setEditFormData({ ...editFormData, supervisor_id: value === 'none' ? '' : value })}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="בחר מפקח" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">ללא מפקח</SelectItem>
+                    <SelectItem value="none">ללא מפקח</SelectItem>
                     {supervisors.map((sup) => (
                       <SelectItem key={sup.id} value={sup.id}>
                         {sup.full_name} ({sup.email})
@@ -1090,14 +1104,14 @@ export default function AdminUsersContent() {
               <div className="space-y-2">
                 <Label>מנהל אחראי</Label>
                 <Select
-                  value={editFormData.supervisor_id}
-                  onValueChange={(value) => setEditFormData({ ...editFormData, supervisor_id: value })}
+                  value={editFormData.supervisor_id || 'none'}
+                  onValueChange={(value) => setEditFormData({ ...editFormData, supervisor_id: value === 'none' ? '' : value })}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="בחר מנהל" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">ללא מנהל</SelectItem>
+                    <SelectItem value="none">ללא מנהל</SelectItem>
                     {managers.map((mgr) => (
                       <SelectItem key={mgr.id} value={mgr.id}>
                         {mgr.full_name} ({mgr.email})
@@ -1105,6 +1119,24 @@ export default function AdminUsersContent() {
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+            )}
+
+            {/* Handler name for financial data matching - for agents and supervisors */}
+            {(editFormData.role === 'agent' || editFormData.role === 'supervisor') && (
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <FileText className="h-4 w-4" />
+                  שם מטפל (לקישור נתונים פיננסיים)
+                </Label>
+                <Input
+                  value={editFormData.handler_name}
+                  onChange={(e) => setEditFormData({ ...editFormData, handler_name: e.target.value })}
+                  placeholder="השם כפי שמופיע בעמודת 'מטפל' באקסל"
+                />
+                <p className="text-xs text-muted-foreground">
+                  השם חייב להתאים בדיוק לשם בעמודת "מטפל" בקבצי האקסל המיובאים
+                </p>
               </div>
             )}
           </div>
@@ -1160,6 +1192,53 @@ export default function AdminUsersContent() {
                 <Mail className="h-4 w-4 ml-2" />
               )}
               שלח מייל איפוס
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete User Dialog */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent dir="rtl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <Trash2 className="h-5 w-5" />
+              מחיקת משתמש
+            </DialogTitle>
+            <DialogDescription>
+              פעולה זו תמחק את המשתמש לצמיתות ולא ניתן לשחזר אותו.
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedUserForDelete && (
+            <div className="bg-red-50 p-4 rounded-lg space-y-2 border border-red-200">
+              <p className="font-medium">{selectedUserForDelete.full_name}</p>
+              <p className="text-sm text-muted-foreground">{selectedUserForDelete.email}</p>
+            </div>
+          )}
+
+          <div className="bg-amber-50 p-3 rounded-lg border border-amber-200">
+            <p className="text-sm text-amber-700">
+              <AlertCircle className="h-4 w-4 inline ml-1" />
+              שים לב: פעולה זו בלתי הפיכה!
+            </p>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
+              ביטול
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteUser}
+              disabled={isDeleting}
+            >
+              {isDeleting ? (
+                <Loader2 className="h-4 w-4 animate-spin ml-2" />
+              ) : (
+                <Trash2 className="h-4 w-4 ml-2" />
+              )}
+              מחק משתמש
             </Button>
           </DialogFooter>
         </DialogContent>

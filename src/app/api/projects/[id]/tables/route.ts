@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createProjectClient, decrypt, normalizeSupabaseUrl } from '@/lib/utils/projectDatabase';
+import { checkProjectAccess } from '@/lib/utils/projectAccess';
 
 export async function GET(
   request: Request,
@@ -15,15 +16,10 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Check access
-    const { data: access } = await supabase
-      .from('user_project_access')
-      .select('role')
-      .eq('user_id', user.id)
-      .eq('project_id', projectId)
-      .single();
+    // Check access - admins/managers get implicit access
+    const accessResult = await checkProjectAccess(supabase, user.id, user.email, projectId);
 
-    if (!access) {
+    if (!accessResult.hasAccess) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 

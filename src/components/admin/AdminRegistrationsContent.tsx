@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { createClient } from '@/lib/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -96,22 +95,17 @@ export default function AdminRegistrationsContent() {
 
   const fetchRegistrations = useCallback(async () => {
     setLoading(true);
-    const supabase = createClient();
 
     try {
-      let query = supabase
-        .from('registration_requests')
-        .select('*')
-        .order('created_at', { ascending: false });
+      // Use the API endpoint to fetch (bypasses RLS with adminClient)
+      const response = await fetch(`/api/registration?status=${statusFilter}`);
+      const data = await response.json();
 
-      if (statusFilter !== 'all') {
-        query = query.eq('status', statusFilter);
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to fetch registrations');
       }
 
-      const { data, error } = await query;
-
-      if (error) throw error;
-      setRegistrations(data || []);
+      setRegistrations(data.registrations || []);
     } catch (error) {
       console.error('Error fetching registrations:', error);
       toast.error('שגיאה בטעינת בקשות הרשמה');
@@ -207,14 +201,16 @@ export default function AdminRegistrationsContent() {
     setProcessing(true);
 
     try {
-      const supabase = createClient();
+      // Use the API endpoint to delete (bypasses RLS with adminClient)
+      const response = await fetch(`/api/registration?id=${selectedRequest.id}`, {
+        method: 'DELETE',
+      });
 
-      const { error } = await supabase
-        .from('registration_requests')
-        .delete()
-        .eq('id', selectedRequest.id);
+      const data = await response.json();
 
-      if (error) throw error;
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to delete');
+      }
 
       toast.success('הבקשה נמחקה');
       setShowDeleteDialog(false);
@@ -222,7 +218,7 @@ export default function AdminRegistrationsContent() {
       fetchRegistrations();
     } catch (error) {
       console.error('Error deleting request:', error);
-      toast.error('שגיאה במחיקת הבקשה');
+      toast.error(error instanceof Error ? error.message : 'שגיאה במחיקת הבקשה');
     } finally {
       setProcessing(false);
     }

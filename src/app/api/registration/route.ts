@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createAdminClient } from '@/lib/supabase/server';
 
 // GET - Fetch all registration requests (for admin)
 export async function GET(request: Request) {
   try {
     const supabase = await createClient();
+    const adminClient = createAdminClient();
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status') || 'pending';
 
@@ -14,10 +15,10 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Get user role - search by auth_id first, then by email
+    // Get user role - use adminClient to bypass RLS
     let currentUser = null;
 
-    const { data: byAuthId } = await supabase
+    const { data: byAuthId } = await adminClient
       .from('users')
       .select('user_type, id')
       .eq('auth_id', user.id)
@@ -26,7 +27,7 @@ export async function GET(request: Request) {
     if (byAuthId) {
       currentUser = byAuthId;
     } else {
-      const { data: byEmail } = await supabase
+      const { data: byEmail } = await adminClient
         .from('users')
         .select('user_type, id')
         .eq('email', user.email?.toLowerCase() || '')
@@ -39,8 +40,8 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    // Build query - select all fields without FK joins (no FK relationships defined)
-    let query = supabase
+    // Build query - use adminClient to bypass RLS
+    let query = adminClient
       .from('registration_requests')
       .select('*')
       .order('created_at', { ascending: false });
@@ -65,6 +66,67 @@ export async function GET(request: Request) {
     return NextResponse.json({ registrations: data || [] });
   } catch (error) {
     console.error('Registration GET error:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
+
+// DELETE - Delete a registration request (admin only)
+export async function DELETE(request: Request) {
+  try {
+    const supabase = await createClient();
+    const adminClient = createAdminClient();
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get('id');
+
+    if (!id) {
+      return NextResponse.json({ error: 'Missing registration request id' }, { status: 400 });
+    }
+
+    // Get current user to check permissions
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Get user role - use adminClient to bypass RLS
+    let currentUser = null;
+
+    const { data: byAuthId } = await adminClient
+      .from('users')
+      .select('user_type, id')
+      .eq('auth_id', user.id)
+      .maybeSingle();
+
+    if (byAuthId) {
+      currentUser = byAuthId;
+    } else {
+      const { data: byEmail } = await adminClient
+        .from('users')
+        .select('user_type, id')
+        .eq('email', user.email?.toLowerCase() || '')
+        .maybeSingle();
+
+      currentUser = byEmail;
+    }
+
+    if (!currentUser || !['admin', 'manager'].includes(currentUser.user_type)) {
+      return NextResponse.json({ error: 'Forbidden - only admins and managers can delete' }, { status: 403 });
+    }
+
+    // Delete the registration request using adminClient
+    const { error } = await adminClient
+      .from('registration_requests')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      console.error('Error deleting registration:', error);
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true, message: 'Registration request deleted' });
+  } catch (error) {
+    console.error('Registration DELETE error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

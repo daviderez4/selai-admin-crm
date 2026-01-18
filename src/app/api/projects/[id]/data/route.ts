@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { createProjectClient } from '@/lib/utils/projectDatabase';
+import { checkProjectAccess } from '@/lib/utils/projectAccess';
 
 export async function GET(
   request: Request,
@@ -23,26 +24,24 @@ export async function GET(
     }
 
     const supabase = await createClient();
+    const adminClient = createAdminClient();
     const { data: { user }, error: userError } = await supabase.auth.getUser();
 
     if (userError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Check access
-    const { data: access } = await supabase
-      .from('user_project_access')
-      .select('role')
-      .eq('user_id', user.id)
-      .eq('project_id', projectId)
-      .single();
+    // Check access - admins/managers get implicit access (checkProjectAccess uses adminClient internally)
+    const accessResult = await checkProjectAccess(supabase, user.id, user.email, projectId);
 
-    if (!access) {
+    if (!accessResult.hasAccess) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 });
     }
 
-    // Get project database connection
-    const { data: project } = await supabase
+    const access = { role: accessResult.role };
+
+    // Get project database connection - use adminClient to bypass RLS
+    const { data: project } = await adminClient
       .from('projects')
       .select('supabase_url, supabase_service_key, table_name, is_configured, storage_mode')
       .eq('id', projectId)
