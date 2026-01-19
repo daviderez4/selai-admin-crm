@@ -52,6 +52,12 @@ interface User {
   created_at?: string;
 }
 
+interface Supervisor {
+  id: string;
+  full_name: string;
+  email: string;
+}
+
 const userTypeLabels: Record<string, string> = {
   admin: 'מנהל מערכת',
   manager: 'מנהל',
@@ -77,8 +83,10 @@ export default function UsersPage() {
 
   const [editUser, setEditUser] = useState<User | null>(null);
   const [isEditOpen, setIsEditOpen] = useState(false);
-  const [editData, setEditData] = useState({ user_type: '' });
+  const [editData, setEditData] = useState({ user_type: '', supervisor_id: '' });
   const [isUpdating, setIsUpdating] = useState(false);
+  const [supervisors, setSupervisors] = useState<Supervisor[]>([]);
+  const [managers, setManagers] = useState<Supervisor[]>([]);
 
   // Fetch users
   const fetchUsers = async () => {
@@ -93,9 +101,22 @@ export default function UsersPage() {
       }
 
       const data = await response.json();
-      setUsers(data.users || []);
+      const allUsers = data.users || [];
+      setUsers(allUsers);
       setCurrentUserId(data.currentUserId || '');
       setCurrentUserType(data.currentUserType || '');
+
+      // Extract supervisors and managers for assignment
+      setSupervisors(allUsers.filter((u: User) => u.user_type === 'supervisor').map((u: User) => ({
+        id: u.id,
+        full_name: u.full_name || u.email,
+        email: u.email
+      })));
+      setManagers(allUsers.filter((u: User) => u.user_type === 'manager').map((u: User) => ({
+        id: u.id,
+        full_name: u.full_name || u.email,
+        email: u.email
+      })));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load users');
       toast.error('שגיאה בטעינת משתמשים');
@@ -163,13 +184,22 @@ export default function UsersPage() {
     setIsUpdating(true);
 
     try {
+      const updatePayload: Record<string, unknown> = { user_type: editData.user_type };
+
+      // Add supervisor/manager assignment based on role
+      if (editData.user_type === 'agent' && editData.supervisor_id) {
+        updatePayload.supervisor_id = editData.supervisor_id;
+      } else if (editData.user_type === 'supervisor' && editData.supervisor_id) {
+        updatePayload.manager_id = editData.supervisor_id;
+      }
+
       const response = await fetch('/api/users', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           userId: editUser.id,
           action: 'update_role',
-          data: { user_type: editData.user_type }
+          data: updatePayload
         }),
       });
 
@@ -192,7 +222,10 @@ export default function UsersPage() {
 
   const openEditDialog = (user: User) => {
     setEditUser(user);
-    setEditData({ user_type: user.user_type });
+    setEditData({
+      user_type: user.user_type,
+      supervisor_id: user.supervisor_id || user.manager_id || ''
+    });
     setIsEditOpen(true);
   };
 
@@ -424,7 +457,7 @@ export default function UsersPage() {
               </div>
               <div className="space-y-2">
                 <Label className="text-slate-700">תפקיד חדש</Label>
-                <Select value={editData.user_type} onValueChange={(value) => setEditData({ user_type: value })}>
+                <Select value={editData.user_type} onValueChange={(value) => setEditData({ user_type: value, supervisor_id: '' })}>
                   <SelectTrigger className="bg-white border-slate-200">
                     <SelectValue placeholder="בחר תפקיד" />
                   </SelectTrigger>
@@ -441,6 +474,53 @@ export default function UsersPage() {
                   </SelectContent>
                 </Select>
               </div>
+
+              {/* Show supervisor selector for agents */}
+              {editData.user_type === 'agent' && supervisors.length > 0 && (
+                <div className="space-y-2">
+                  <Label className="text-slate-700">מפקח אחראי</Label>
+                  <Select
+                    value={editData.supervisor_id || 'none'}
+                    onValueChange={(value) => setEditData({ ...editData, supervisor_id: value === 'none' ? '' : value })}
+                  >
+                    <SelectTrigger className="bg-white border-slate-200">
+                      <SelectValue placeholder="בחר מפקח" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-white border-slate-200">
+                      <SelectItem value="none" className="text-slate-600">ללא מפקח</SelectItem>
+                      {supervisors.map((sup) => (
+                        <SelectItem key={sup.id} value={sup.id} className="text-slate-800 focus:bg-slate-100">
+                          {sup.full_name} ({sup.email})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {/* Show manager selector for supervisors */}
+              {editData.user_type === 'supervisor' && managers.length > 0 && (
+                <div className="space-y-2">
+                  <Label className="text-slate-700">מנהל אחראי</Label>
+                  <Select
+                    value={editData.supervisor_id || 'none'}
+                    onValueChange={(value) => setEditData({ ...editData, supervisor_id: value === 'none' ? '' : value })}
+                  >
+                    <SelectTrigger className="bg-white border-slate-200">
+                      <SelectValue placeholder="בחר מנהל" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-white border-slate-200">
+                      <SelectItem value="none" className="text-slate-600">ללא מנהל</SelectItem>
+                      {managers.map((mgr) => (
+                        <SelectItem key={mgr.id} value={mgr.id} className="text-slate-800 focus:bg-slate-100">
+                          {mgr.full_name} ({mgr.email})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
               <Button
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white"
                 onClick={handleUpdateRole}

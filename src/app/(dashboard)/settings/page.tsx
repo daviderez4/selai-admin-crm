@@ -170,23 +170,27 @@ export default function SettingsPage() {
     }
   };
 
-  const toggleEmailNotification = (type: keyof typeof emailSettings.notifications, enabled: boolean) => {
-    if (!emailSettings) return;
+  type NotificationType = 'new_lead' | 'lead_assigned' | 'daily_report' | 'weekly_report' | 'campaign_alert' | 'system_alert';
+
+  const toggleEmailNotification = (type: NotificationType, enabled: boolean) => {
+    if (!emailSettings?.notifications) return;
+    const currentNotifications = emailSettings.notifications;
     setEmailSettings({
       ...emailSettings,
       notifications: {
-        ...emailSettings.notifications,
-        [type]: { ...emailSettings.notifications[type], enabled },
+        ...currentNotifications,
+        [type]: { ...currentNotifications[type], enabled },
       },
     });
   };
 
-  const addRecipient = (type: keyof typeof emailSettings.notifications) => {
-    if (!emailSettings || !newRecipient || !newRecipient.includes('@')) {
+  const addRecipient = (type: NotificationType) => {
+    if (!emailSettings?.notifications || !newRecipient || !newRecipient.includes('@')) {
       toast.error('יש להזין כתובת מייל תקינה');
       return;
     }
-    const current = emailSettings.notifications[type].recipients || [];
+    const notifications = emailSettings.notifications;
+    const current = notifications[type]?.recipients || [];
     if (current.includes(newRecipient)) {
       toast.error('הכתובת כבר קיימת');
       return;
@@ -194,9 +198,9 @@ export default function SettingsPage() {
     setEmailSettings({
       ...emailSettings,
       notifications: {
-        ...emailSettings.notifications,
+        ...notifications,
         [type]: {
-          ...emailSettings.notifications[type],
+          ...notifications[type],
           recipients: [...current, newRecipient],
         },
       },
@@ -204,15 +208,16 @@ export default function SettingsPage() {
     setNewRecipient('');
   };
 
-  const removeRecipient = (type: keyof typeof emailSettings.notifications, email: string) => {
-    if (!emailSettings) return;
-    const current = emailSettings.notifications[type].recipients || [];
+  const removeRecipient = (type: NotificationType, email: string) => {
+    if (!emailSettings?.notifications) return;
+    const notifications = emailSettings.notifications;
+    const current = notifications[type]?.recipients || [];
     setEmailSettings({
       ...emailSettings,
       notifications: {
-        ...emailSettings.notifications,
+        ...notifications,
         [type]: {
-          ...emailSettings.notifications[type],
+          ...notifications[type],
           recipients: current.filter((e) => e !== email),
         },
       },

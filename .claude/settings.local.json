@@ -39,7 +39,21 @@
       "Bash(git tag:*)",
       "Bash(npx vercel:*)",
       "Bash(echo:*)",
-      "Bash(dir)"
+      "Bash(dir)",
+      "Bash(git checkout:*)",
+      "Bash(git merge:*)",
+      "Bash(git pull:*)",
+      "Bash(npx supabase:*)",
+      "Bash(git reset:*)",
+      "Bash(grep:*)",
+      "Bash(npx next build)",
+      "Bash(powershell -Command \"cd C:\\\\dev\\\\selai-admin-hub; npx tsc --noEmit 2>&1\")",
+      "Bash(powershell -Command \"cd C:\\\\dev\\\\selai-admin-hub; npx tsc --noEmit 2>&1 | Select-Object -First 20\")",
+      "Bash(vercel --prod:*)",
+      "Bash(git stash:*)",
+      "Bash(npx eslint:*)",
+      "Bash(dir:*)",
+      "Bash(git remote:*)"
     ]
   }
 }
