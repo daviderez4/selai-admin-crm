@@ -172,13 +172,13 @@ export default function SettingsPage() {
 
   const toggleEmailNotification = (type: string, enabled: boolean) => {
     if (!emailSettings?.notifications) return;
-    const currentNotifications = emailSettings.notifications;
+    const notifications = emailSettings.notifications as Record<string, { enabled: boolean; recipients: string[] }>;
     setEmailSettings({
       ...emailSettings,
       notifications: {
-        ...currentNotifications,
-        [type]: { ...currentNotifications[type], enabled },
-      },
+        ...notifications,
+        [type]: { ...notifications[type], enabled },
+      } as typeof emailSettings.notifications,
     });
   };
 
@@ -187,7 +187,7 @@ export default function SettingsPage() {
       toast.error('יש להזין כתובת מייל תקינה');
       return;
     }
-    const notifications = emailSettings.notifications;
+    const notifications = emailSettings.notifications as Record<string, { enabled: boolean; recipients: string[] }>;
     const current = notifications[type]?.recipients || [];
     if (current.includes(newRecipient)) {
       toast.error('הכתובת כבר קיימת');
@@ -201,14 +201,14 @@ export default function SettingsPage() {
           ...notifications[type],
           recipients: [...current, newRecipient],
         },
-      },
+      } as typeof emailSettings.notifications,
     });
     setNewRecipient('');
   };
 
   const removeRecipient = (type: string, email: string) => {
     if (!emailSettings?.notifications) return;
-    const notifications = emailSettings.notifications;
+    const notifications = emailSettings.notifications as Record<string, { enabled: boolean; recipients: string[] }>;
     const current = notifications[type]?.recipients || [];
     setEmailSettings({
       ...emailSettings,
@@ -218,7 +218,7 @@ export default function SettingsPage() {
           ...notifications[type],
           recipients: current.filter((e) => e !== email),
         },
-      },
+      } as typeof emailSettings.notifications,
     });
   };
 

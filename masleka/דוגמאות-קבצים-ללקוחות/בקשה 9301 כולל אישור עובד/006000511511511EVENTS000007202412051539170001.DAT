@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Mimshak xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <KoteretKovetz>
+    <SUG-MIMSHAK>6</SUG-MIMSHAK>
+    <MISPAR-GIRSAT-XML>007</MISPAR-GIRSAT-XML>
+    <TAARICH-BITZUA>20241205153917</TAARICH-BITZUA>
+    <KOD-SVIVAT-AVODA>1</KOD-SVIVAT-AVODA>
+    <MISPAR-HAKOVETZ>2024110510440070660723820747630594</MISPAR-HAKOVETZ>
+    <MISPAR-SIDURI>0001</MISPAR-SIDURI>
+    <NetuneiGoremSholech>
+      <KOD-SHOLECH>6</KOD-SHOLECH>
+      <SUG-MEZAHE-SHOLECH>1</SUG-MEZAHE-SHOLECH>
+      <MISPAR-ZIHUI-SHOLECH>511511511</MISPAR-ZIHUI-SHOLECH>
+      <SHEM-GOREM-SHOLECH>מייצג אחד</SHEM-GOREM-SHOLECH>
+      <SHEM-PRATI-ISH-KESHER-SHOLECH>עובד</SHEM-PRATI-ISH-KESHER-SHOLECH>
+      <SHEM-MISHPACHA-ISH-KESHER-SHOLECH>מייצג</SHEM-MISHPACHA-ISH-KESHER-SHOLECH>
+      <MISPAR-TELEPHONE-KAVI-ISH-KESHER-SHOLECH>021234567</MISPAR-TELEPHONE-KAVI-ISH-KESHER-SHOLECH>
+      <E-MAIL-ISH-KESHER-SHOLECH>ishkesher@gmail.com</E-MAIL-ISH-KESHER-SHOLECH>
+      <MISPAR-CELLULARI-ISH-KESHER-SHOLECH>0521234567</MISPAR-CELLULARI-ISH-KESHER-SHOLECH>
+      <MISPAR-ZIHUI-ETZEL-YATZRAN-NIMAAN />
+    </NetuneiGoremSholech>
+    <NetuneiGoremNimaan>
+      <KOD-NIMAAN>2</KOD-NIMAAN>
+      <SUG-MEZAHE-NIMAAN>1</SUG-MEZAHE-NIMAAN>
+      <MISPAR-ZIHUI-NIMAAN>514813450</MISPAR-ZIHUI-NIMAAN>
+      <MISPAR-ZIHUI-ETZEL-YATZRAN-NIMAAN>514813450</MISPAR-ZIHUI-ETZEL-YATZRAN-NIMAAN>
+    </NetuneiGoremNimaan>
+  </KoteretKovetz>
+  <GufHamimshak>
+    <YeshutGoremPoneLemislaka>
+      <SUG-PONE xsi:nil="true" />
+      <SUG-KOD-MEZAHE-PONE xsi:nil="true" />
+      <MISPAR-MEZAHE-PONE xsi:nil="true" />
+      <SHEM-GOREM-PONE xsi:nil="true" />
+      <MISPAR-MEZAHE-METAFEL xsi:nil="true" />
+      <SHEM-PRATI-PONE-LEMISLAKA xsi:nil="true" />
+      <SHEM-MISHPACHA-PONE-LEMISLAKA xsi:nil="true" />
+      <MISPAR-TELEPHONE-KAVI-PONE-LEMISLAKA xsi:nil="true" />
+      <E-MAIL-PONE-LEMISLAKA xsi:nil="true" />
+      <MISPAR-CELLULARI xsi:nil="true" />
+      <MISPAR-ZIHUI-PNIMI-ETZEL-YATZRAN xsi:nil="true" />
+      <YeshutLakoachMeidaBsisi>
+        <SUG-LAKOACH>2</SUG-LAKOACH>
+        <SUG-MEZAHE-LAKOACH>1</SUG-MEZAHE-LAKOACH>
+        <MISPAR-MEZAHE-LAKOACH>512512512</MISPAR-MEZAHE-LAKOACH>
+        <SHEM-PRATI-LAKOACH xsi:nil="true" />
+        <SHEM-MISHPACHA-LAKOACH xsi:nil="true" />
+        <SHEM-MAASIK>עובדים בע"מ</SHEM-MAASIK>
+        <KOD-MEZAHE-MAASIK-ETZEL-YATZRAN xsi:nil="true" />
+        <KOD-MEDINA xsi:nil="true" />
+        <TAARICH-LEIDA xsi:nil="true" />
+        <Eirua>
+          <KodEirua>
+            <KOD-EIRUA>9301</KOD-EIRUA>
+            <MISPAR-MEZAHE-RESHUMA>20140909104036510229818432130035583100000000000000000000000910000010000000</MISPAR-MEZAHE-RESHUMA>
+            <MISPAR-MISLAKA xsi:nil="true" />
+            <MISPAR-MISLAKA-LPNIIYA-CHOZORET xsi:nil="true" />
+            <OFEN-HAAVARAT-MEIDA-MIMISLLAKA-LELAKOACH>1</OFEN-HAAVARAT-MEIDA-MIMISLLAKA-LELAKOACH>
+            <TAARICH-NECHONUT-MEIDA>20240924</TAARICH-NECHONUT-MEIDA>
+            <MAANE-ACHZAKOT xsi:nil="true" />
+            <DOCH-BEINAIM xsi:nil="true" />
+            <MISPAR-MISLAKA-LEBITUL xsi:nil="true" />
+            <BAKASHA-MITMASHECHET xsi:nil="true" />
+            <TADIRUT-BAKASHA xsi:nil="true" />
+            <HAZHARAT-MAASIK-H-P-KASUR>2</HAZHARAT-MAASIK-H-P-KASUR>
+            <ISUR-OVED-PIZUIM>1</ISUR-OVED-PIZUIM>
+            <RIANUN-FISHING xsi:nil="true" />
+            <KOD-ZIHUI-OVED-BAMISLAKA xsi:nil="true" />
+            <ZIHUI-HOSHECH-BAMISLAKA xsi:nil="true" />
+            <NITAN-LEYADEA-BAAL-RISHAYON xsi:nil="true" />
+            <ASMACHTA-MISLAKA xsi:nil="true" />
+            <RESERVA-MISLAKA xsi:nil="true" />
+            <YipuiKoach />
+            <mismachim>
+              <mismachim-Nilvim-Beramat-Eirua>
+                <KOL-MISMACHIM-TZURFU>1</KOL-MISMACHIM-TZURFU>
+                <TFASIM-DRUSHIM-CHATUMIM>1</TFASIM-DRUSHIM-CHATUMIM>
+              </mismachim-Nilvim-Beramat-Eirua>
+              <ZihuiShemMismachBeramatEirua>
+                <SHEM-KOVETZ-SHEL-MISMACH-BERAMAT-EIRUA-VEBERAMAT-LAKOACH>006000511511511EVENTS000007202412051539170001_001.pdf</SHEM-KOVETZ-SHEL-MISMACH-BERAMAT-EIRUA-VEBERAMAT-LAKOACH>
+                <SUG-MISMACH>20</SUG-MISMACH>
+                <ASMACHTA-KOVEZ xsi:nil="true" />
+                <TAARICH-CHTIMA-LAKOACH xsi:nil="true" />
+                <TAARICH-CHTIMA-BAAL-RISHAION xsi:nil="true" />
+                <CHATIMA-GRAFIT>2</CHATIMA-GRAFIT>
+                <ISHUR-MEMUCSHAV>2</ISHUR-MEMUCSHAV>
+              </ZihuiShemMismachBeramatEirua>
+            </mismachim>
+            <Mutzar>
+              <NetuneiMutzar>
+                <KOD-MEZAHE-YATZRAN>512008335</KOD-MEZAHE-YATZRAN>
+                <SUG-MUTZAR-PENSIONI xsi:nil="true" />
+                <BakashaLekabalatMeidaPitzuim>
+                  <SUG-MEZAHE-OVED>1</SUG-MEZAHE-OVED>
+                  <MISPAR-MEZAHE-OVED>21585419</MISPAR-MEZAHE-OVED>
+                  <SHEM-PRATI>יצחק</SHEM-PRATI>
+                  <SHEM-MISHPACHA>לוי</SHEM-MISHPACHA>
+                  <KOD-MUTZAR-LEFI-KIDUD-ACHID xsi:nil="true" />
+                  <MISPAR-POLISA-O-HESHBON xsi:nil="true" />
+                  <KOD-MEDINA xsi:nil="true" />
+                </BakashaLekabalatMeidaPitzuim>
+              </NetuneiMutzar>
+            </Mutzar>
+          </KodEirua>
+        </Eirua>
+      </YeshutLakoachMeidaBsisi>
+    </YeshutGoremPoneLemislaka>
+  </GufHamimshak>
+  <ReshumatSgira>
+    <MISPAR-YESHUYUT-LAKOACH-BAKOVETZ>1</MISPAR-YESHUYUT-LAKOACH-BAKOVETZ>
+    <MISPAR-BAKASHOT>1</MISPAR-BAKASHOT>
+  </ReshumatSgira>
+</Mimshak>
