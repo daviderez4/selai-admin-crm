@@ -48,6 +48,7 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
+import { VersionIndicator } from '@/components/VersionIndicator';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useProjectsStore } from '@/lib/stores/projectsStore';
 import { useUserStore } from '@/stores/userStore';
@@ -78,6 +79,10 @@ export function Sidebar() {
   const hasAdminAccess = isAdminAuth() || isAdmin();
   const hasProjectAccess = canAccessProjects() || isAdmin(); // admin or manager
   const hasTeamAccess = hasAdminAccess || isSupervisor() || isManager();
+
+  // Check if user is agent - agents can also see "My Team" (their supervisor and team)
+  const isAgent = userRecord?.user_type === 'agent' || profile?.role === 'agent';
+  const canSeeMyTeam = hasTeamAccess || isAgent;
 
   // Get project-specific dashboards based on table_name
   const getProjectDashboards = (): NavItem[] => {
@@ -178,8 +183,8 @@ export function Sidebar() {
       icon: FolderKanban,
       alwaysShow: true,
     }] : []),
-    // Supervisor team view - only for supervisors and admins
-    ...(hasTeamAccess ? [{
+    // My Team view - for admins, managers, supervisors, and agents
+    ...(canSeeMyTeam ? [{
       id: 'my-team',
       title: 'הצוות שלי',
       href: '/supervisor',
@@ -646,6 +651,13 @@ export function Sidebar() {
                   </p>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* Version Indicator */}
+          {!collapsed && (
+            <div className="px-2 pb-1">
+              <VersionIndicator />
             </div>
           )}
 
