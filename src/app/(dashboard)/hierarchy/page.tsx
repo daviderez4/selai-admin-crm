@@ -5,7 +5,7 @@ import {
   Users, UserCheck, Shield, Building2, Search,
   ChevronDown, ChevronRight, Phone, Mail, User,
   RefreshCw, BadgeCheck, UserX, UserPlus, Link2,
-  Copy, Check, Trash2, Clock, Loader2
+  Copy, Check, Trash2, Clock, Loader2, Crown
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -25,11 +25,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useUserStore } from '@/stores/userStore';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { toast } from 'sonner';
-import type { Supervisor, ExternalAgent } from '@/types';
+import { createClient } from '@/lib/supabase/client';
 
 interface Invitation {
   id: string;
@@ -42,8 +41,21 @@ interface Invitation {
   agent_id?: string;
 }
 
-interface SupervisorWithAgents extends Supervisor {
-  agents_count: number;
+// Registered user from users table
+interface RegisteredUser {
+  id: string;
+  auth_id: string | null;
+  email: string;
+  full_name: string;
+  phone: string | null;
+  user_type: 'admin' | 'manager' | 'supervisor' | 'agent';
+  supervisor_id: string | null;
+  manager_id: string | null;
+  is_active: boolean;
+  is_approved: boolean;
+  created_at: string;
+  supervisor_name?: string | null;
+  manager_name?: string | null;
 }
 
 export default function HierarchyPage() {
@@ -52,17 +64,20 @@ export default function HierarchyPage() {
 
   // Check admin from both stores - authStore (users table) or userStore (SELAI)
   const isAdmin = () => isAdminAuth() || isAdminUserStore();
-  const [supervisors, setSupervisors] = useState<SupervisorWithAgents[]>([]);
-  const [agents, setAgents] = useState<ExternalAgent[]>([]);
+
+  // Only registered users (with auth_id) from the users table
+  const [registeredUsers, setRegisteredUsers] = useState<RegisteredUser[]>([]);
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [expandedManagers, setExpandedManagers] = useState<Set<string>>(new Set());
   const [expandedSupervisors, setExpandedSupervisors] = useState<Set<string>>(new Set());
   const [stats, setStats] = useState({
+    totalAdmins: 0,
+    totalManagers: 0,
     totalSupervisors: 0,
     totalAgents: 0,
-    activeAgents: 0,
-    onboardedAgents: 0
+    totalRegistered: 0
   });
 
   // Invite dialog state
@@ -85,41 +100,48 @@ export default function HierarchyPage() {
   const fetchData = async () => {
     setIsLoading(true);
     try {
-      // Fetch supervisors
-      const supervisorsRes = await fetch('/api/selai/supervisors');
-      const supervisorsData = await supervisorsRes.json();
+      const supabase = createClient();
 
-      // Fetch all agents
-      const agentsRes = await fetch('/api/selai/agents?limit=500');
-      const agentsData = await agentsRes.json();
+      // Fetch ONLY registered users (with auth_id) from users table
+      const { data: allUsers, error: usersError } = await supabase
+        .from('users')
+        .select('id, auth_id, email, full_name, phone, user_type, supervisor_id, manager_id, is_active, is_approved, created_at')
+        .not('auth_id', 'is', null) // Only registered users
+        .eq('is_active', true)
+        .order('user_type')
+        .order('full_name');
 
-      // Fetch hierarchy stats (includes connected users from our users table)
-      const statsRes = await fetch('/api/hierarchy/stats');
-      const statsData = await statsRes.json();
-
-      if (supervisorsData.success && agentsData.success) {
-        setSupervisors(supervisorsData.data.supervisors || []);
-        setAgents(agentsData.data.agents || []);
-
-        // Use stats from our API (includes connected users from users table)
-        if (statsData.success) {
-          setStats({
-            totalSupervisors: statsData.data.totalSupervisors || 0,
-            totalAgents: statsData.data.totalAgents || 0,
-            activeAgents: statsData.data.activeAgents || 0,
-            onboardedAgents: statsData.data.connectedAgents || 0
-          });
-        } else {
-          // Fallback to calculating from agents data
-          const allAgents = agentsData.data.agents || [];
-          setStats({
-            totalSupervisors: supervisorsData.data.total || 0,
-            totalAgents: allAgents.length,
-            activeAgents: allAgents.filter((a: ExternalAgent) => a.is_active_in_sela).length,
-            onboardedAgents: allAgents.filter((a: ExternalAgent) => a.onboarded_to_app).length
-          });
-        }
+      if (usersError) {
+        console.error('Error fetching users:', usersError);
+        toast.error('שגיאה בטעינת המשתמשים');
+        return;
       }
+
+      // Create a map for looking up names
+      const userMap = new Map(allUsers?.map(u => [u.id, u]) || []);
+
+      // Add supervisor and manager names
+      const usersWithNames: RegisteredUser[] = (allUsers || []).map(u => ({
+        ...u,
+        supervisor_name: u.supervisor_id ? userMap.get(u.supervisor_id)?.full_name || null : null,
+        manager_name: u.manager_id ? userMap.get(u.manager_id)?.full_name || null : null,
+      }));
+
+      setRegisteredUsers(usersWithNames);
+
+      // Calculate stats from registered users only
+      const admins = usersWithNames.filter(u => u.user_type === 'admin');
+      const managers = usersWithNames.filter(u => u.user_type === 'manager');
+      const supervisors = usersWithNames.filter(u => u.user_type === 'supervisor');
+      const agents = usersWithNames.filter(u => u.user_type === 'agent');
+
+      setStats({
+        totalAdmins: admins.length,
+        totalManagers: managers.length,
+        totalSupervisors: supervisors.length,
+        totalAgents: agents.length,
+        totalRegistered: usersWithNames.length
+      });
     } catch (error) {
       console.error('Error fetching data:', error);
       toast.error('שגיאה בטעינת הנתונים');
@@ -204,14 +226,14 @@ export default function HierarchyPage() {
     setCopied(false);
   };
 
-  const openInviteForAgent = (agent: ExternalAgent) => {
-    setInviteData({
-      email: agent.email || '',
-      role: 'agent',
-      agent_id: agent.id
-    });
-    setGeneratedLink('');
-    setIsInviteOpen(true);
+  const toggleManager = (managerId: string) => {
+    const newExpanded = new Set(expandedManagers);
+    if (newExpanded.has(managerId)) {
+      newExpanded.delete(managerId);
+    } else {
+      newExpanded.add(managerId);
+    }
+    setExpandedManagers(newExpanded);
   };
 
   const toggleSupervisor = (supervisorId: string) => {
@@ -224,12 +246,26 @@ export default function HierarchyPage() {
     setExpandedSupervisors(newExpanded);
   };
 
-  const getSupervisorAgents = (supervisorId: string) => {
+  // Get users by role
+  const admins = registeredUsers.filter(u => u.user_type === 'admin');
+  const managers = registeredUsers.filter(u => u.user_type === 'manager');
+  const supervisors = registeredUsers.filter(u => u.user_type === 'supervisor');
+  const agents = registeredUsers.filter(u => u.user_type === 'agent');
+
+  // Get supervisors under a manager
+  const getSupervisorsForManager = (managerId: string) => {
+    return supervisors.filter(s => s.manager_id === managerId);
+  };
+
+  // Get agents under a supervisor
+  const getAgentsForSupervisor = (supervisorId: string) => {
     return agents.filter(a => a.supervisor_id === supervisorId);
   };
 
-  const filteredSupervisors = supervisors.filter(s =>
-    s.name.toLowerCase().includes(searchTerm.toLowerCase())
+  // Filter by search term
+  const filteredUsers = registeredUsers.filter(u =>
+    u.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    u.email.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   // Check permissions - allow admin, manager or supervisor
@@ -277,8 +313,36 @@ export default function HierarchyPage() {
         </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      {/* Stats Cards - Only registered users */}
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+        <Card className="bg-white border-slate-200">
+          <CardContent className="pt-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-amber-100 rounded-lg">
+                <Crown className="h-5 w-5 text-amber-600" />
+              </div>
+              <div>
+                <p className="text-sm text-slate-500">מנהלים</p>
+                <p className="text-2xl font-bold text-slate-800">{stats.totalAdmins}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-white border-slate-200">
+          <CardContent className="pt-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-indigo-100 rounded-lg">
+                <Building2 className="h-5 w-5 text-indigo-600" />
+              </div>
+              <div>
+                <p className="text-sm text-slate-500">מנהלי צוות</p>
+                <p className="text-2xl font-bold text-slate-800">{stats.totalManagers}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
         <Card className="bg-white border-slate-200">
           <CardContent className="pt-4">
             <div className="flex items-center gap-3">
@@ -300,7 +364,7 @@ export default function HierarchyPage() {
                 <Users className="h-5 w-5 text-blue-600" />
               </div>
               <div>
-                <p className="text-sm text-slate-500">סה"כ סוכנים</p>
+                <p className="text-sm text-slate-500">סוכנים</p>
                 <p className="text-2xl font-bold text-slate-800">{stats.totalAgents}</p>
               </div>
             </div>
@@ -311,25 +375,11 @@ export default function HierarchyPage() {
           <CardContent className="pt-4">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-green-100 rounded-lg">
-                <UserCheck className="h-5 w-5 text-green-600" />
+                <BadgeCheck className="h-5 w-5 text-green-600" />
               </div>
               <div>
-                <p className="text-sm text-slate-500">סוכנים פעילים</p>
-                <p className="text-2xl font-bold text-slate-800">{stats.activeAgents}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-white border-slate-200">
-          <CardContent className="pt-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-amber-100 rounded-lg">
-                <BadgeCheck className="h-5 w-5 text-amber-600" />
-              </div>
-              <div>
-                <p className="text-sm text-slate-500">מחוברים לאפליקציה</p>
-                <p className="text-2xl font-bold text-slate-800">{stats.onboardedAgents}</p>
+                <p className="text-sm text-slate-500">סה"כ רשומים</p>
+                <p className="text-2xl font-bold text-slate-800">{stats.totalRegistered}</p>
               </div>
             </div>
           </CardContent>
@@ -347,12 +397,12 @@ export default function HierarchyPage() {
         />
       </div>
 
-      {/* Hierarchy View */}
+      {/* Hierarchy View - Only Registered Users */}
       <Card className="bg-white border-slate-200">
         <CardHeader className="border-b border-slate-100">
           <CardTitle className="flex items-center gap-2 text-slate-800">
             <Building2 className="h-5 w-5 text-blue-600" />
-            מבנה ארגוני
+            מבנה ארגוני - משתמשים רשומים בלבד
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
@@ -360,130 +410,214 @@ export default function HierarchyPage() {
             <div className="flex items-center justify-center py-12">
               <RefreshCw className="h-8 w-8 animate-spin text-slate-400" />
             </div>
+          ) : registeredUsers.length === 0 ? (
+            <div className="text-center py-12 text-slate-500">
+              {searchTerm ? 'לא נמצאו תוצאות' : 'אין משתמשים רשומים במערכת'}
+            </div>
           ) : (
             <div className="divide-y divide-slate-100">
-              {filteredSupervisors.map((supervisor) => {
-                const supervisorAgents = getSupervisorAgents(supervisor.id);
-                const isExpanded = expandedSupervisors.has(supervisor.id);
-                const activeCount = supervisorAgents.filter(a => a.is_active_in_sela).length;
-
-                return (
-                  <div key={supervisor.id}>
-                    {/* Supervisor Row */}
-                    <button
-                      className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors"
-                      onClick={() => toggleSupervisor(supervisor.id)}
-                    >
-                      <div className="flex items-center gap-3">
-                        {isExpanded ? (
-                          <ChevronDown className="h-5 w-5 text-slate-400" />
-                        ) : (
-                          <ChevronRight className="h-5 w-5 text-slate-400" />
-                        )}
-                        <div className="p-2 bg-purple-100 rounded-full">
-                          <Shield className="h-4 w-4 text-purple-600" />
+              {/* Admins Section */}
+              {admins.length > 0 && (
+                <div className="p-4 bg-amber-50/50">
+                  <h3 className="font-semibold text-amber-800 mb-3 flex items-center gap-2">
+                    <Crown className="h-4 w-4" />
+                    מנהלי מערכת ({admins.length})
+                  </h3>
+                  <div className="space-y-2">
+                    {admins.filter(a =>
+                      a.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                      a.email.toLowerCase().includes(searchTerm.toLowerCase())
+                    ).map((admin) => (
+                      <div key={admin.id} className="flex items-center justify-between p-3 bg-white rounded-lg shadow-sm">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 bg-amber-100 rounded-full">
+                            <Crown className="h-4 w-4 text-amber-600" />
+                          </div>
+                          <div className="text-right">
+                            <p className="font-medium text-slate-800">{admin.full_name}</p>
+                            <p className="text-sm text-slate-500">{admin.email}</p>
+                          </div>
                         </div>
-                        <div className="text-right">
-                          <p className="font-medium text-slate-800">{supervisor.name}</p>
-                          <p className="text-sm text-slate-500">מפקח</p>
-                        </div>
+                        <Badge className="bg-amber-100 text-amber-700 border-0">מנהל</Badge>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-                          {supervisorAgents.length} סוכנים
-                        </Badge>
-                        <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                          {activeCount} פעילים
-                        </Badge>
-                      </div>
-                    </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
-                    {/* Agents List */}
-                    {isExpanded && supervisorAgents.length > 0 && (
-                      <div className="bg-slate-50/50">
-                        {supervisorAgents.map((agent, index) => (
-                          <div
-                            key={agent.id}
-                            className={`flex items-center justify-between p-4 pr-14 hover:bg-slate-100/50 ${
-                              index < supervisorAgents.length - 1 ? 'border-b border-slate-100' : ''
-                            }`}
+              {/* Managers Section */}
+              {managers.length > 0 && (
+                <div className="p-4">
+                  <h3 className="font-semibold text-indigo-800 mb-3 flex items-center gap-2">
+                    <Building2 className="h-4 w-4" />
+                    מנהלי צוות ({managers.length})
+                  </h3>
+                  <div className="space-y-2">
+                    {managers.filter(m =>
+                      m.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                      m.email.toLowerCase().includes(searchTerm.toLowerCase())
+                    ).map((manager) => {
+                      const managerSupervisors = getSupervisorsForManager(manager.id);
+                      const isExpanded = expandedManagers.has(manager.id);
+
+                      return (
+                        <div key={manager.id} className="bg-slate-50 rounded-lg overflow-hidden">
+                          <button
+                            className="w-full flex items-center justify-between p-3 hover:bg-slate-100 transition-colors"
+                            onClick={() => toggleManager(manager.id)}
                           >
                             <div className="flex items-center gap-3">
-                              <div className={`p-2 rounded-full ${
-                                agent.is_active_in_sela ? 'bg-blue-100' : 'bg-slate-100'
-                              }`}>
-                                {agent.is_active_in_sela ? (
-                                  <User className="h-4 w-4 text-blue-600" />
+                              {managerSupervisors.length > 0 ? (
+                                isExpanded ? (
+                                  <ChevronDown className="h-5 w-5 text-slate-400" />
                                 ) : (
-                                  <UserX className="h-4 w-4 text-slate-400" />
-                                )}
+                                  <ChevronRight className="h-5 w-5 text-slate-400" />
+                                )
+                              ) : (
+                                <div className="w-5" />
+                              )}
+                              <div className="p-2 bg-indigo-100 rounded-full">
+                                <Building2 className="h-4 w-4 text-indigo-600" />
                               </div>
                               <div className="text-right">
-                                <p className={`font-medium ${
-                                  agent.is_active_in_sela ? 'text-slate-700' : 'text-slate-400'
-                                }`}>
-                                  {agent.full_name}
-                                </p>
-                                <div className="flex items-center gap-3 text-sm text-slate-500">
-                                  {agent.email && (
-                                    <span className="flex items-center gap-1">
-                                      <Mail className="h-3 w-3" />
-                                      {agent.email}
-                                    </span>
-                                  )}
-                                  {agent.mobile_phone && (
-                                    <span className="flex items-center gap-1">
-                                      <Phone className="h-3 w-3" />
-                                      {agent.mobile_phone}
-                                    </span>
-                                  )}
-                                </div>
+                                <p className="font-medium text-slate-800">{manager.full_name}</p>
+                                <p className="text-sm text-slate-500">{manager.email}</p>
                               </div>
                             </div>
                             <div className="flex items-center gap-2">
-                              {agent.is_active_in_sela ? (
-                                <Badge className="bg-green-100 text-green-700 border-0">
-                                  פעיל
-                                </Badge>
-                              ) : (
-                                <Badge variant="secondary" className="bg-slate-100 text-slate-500">
-                                  לא פעיל
-                                </Badge>
-                              )}
-                              {agent.onboarded_to_app && (
-                                <Badge className="bg-blue-100 text-blue-700 border-0">
-                                  באפליקציה
-                                </Badge>
-                              )}
-                              {isAdmin() && agent.email && !agent.onboarded_to_app && (
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={(e) => { e.stopPropagation(); openInviteForAgent(agent); }}
-                                  className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 h-7 px-2"
-                                >
-                                  <UserPlus className="h-3.5 w-3.5 ml-1" />
-                                  הזמן
-                                </Button>
-                              )}
+                              <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">
+                                {managerSupervisors.length} מפקחים
+                              </Badge>
                             </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                          </button>
 
-                    {isExpanded && supervisorAgents.length === 0 && (
-                      <div className="p-4 pr-14 text-center text-slate-500 bg-slate-50/50">
-                        אין סוכנים תחת מפקח זה
-                      </div>
-                    )}
+                          {/* Supervisors under Manager */}
+                          {isExpanded && managerSupervisors.length > 0 && (
+                            <div className="pr-8 pb-2 space-y-1">
+                              {managerSupervisors.map((supervisor) => (
+                                <div key={supervisor.id} className="flex items-center justify-between p-2 mx-2 bg-white rounded-lg">
+                                  <div className="flex items-center gap-2">
+                                    <div className="p-1.5 bg-purple-100 rounded-full">
+                                      <Shield className="h-3 w-3 text-purple-600" />
+                                    </div>
+                                    <div className="text-right">
+                                      <p className="text-sm font-medium text-slate-700">{supervisor.full_name}</p>
+                                      <p className="text-xs text-slate-500">{supervisor.email}</p>
+                                    </div>
+                                  </div>
+                                  <Badge variant="outline" className="text-xs bg-blue-50 text-blue-600 border-blue-200">
+                                    {getAgentsForSupervisor(supervisor.id).length} סוכנים
+                                  </Badge>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
-                );
-              })}
+                </div>
+              )}
 
-              {filteredSupervisors.length === 0 && (
-                <div className="text-center py-12 text-slate-500">
-                  {searchTerm ? 'לא נמצאו תוצאות' : 'לא נמצאו מפקחים'}
+              {/* Supervisors Section (without manager) */}
+              {supervisors.filter(s => !s.manager_id).length > 0 && (
+                <div className="p-4">
+                  <h3 className="font-semibold text-purple-800 mb-3 flex items-center gap-2">
+                    <Shield className="h-4 w-4" />
+                    מפקחים ({supervisors.length})
+                  </h3>
+                  <div className="space-y-2">
+                    {supervisors.filter(s =>
+                      !s.manager_id &&
+                      (s.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                      s.email.toLowerCase().includes(searchTerm.toLowerCase()))
+                    ).map((supervisor) => {
+                      const supervisorAgents = getAgentsForSupervisor(supervisor.id);
+                      const isExpanded = expandedSupervisors.has(supervisor.id);
+
+                      return (
+                        <div key={supervisor.id} className="bg-slate-50 rounded-lg overflow-hidden">
+                          <button
+                            className="w-full flex items-center justify-between p-3 hover:bg-slate-100 transition-colors"
+                            onClick={() => toggleSupervisor(supervisor.id)}
+                          >
+                            <div className="flex items-center gap-3">
+                              {supervisorAgents.length > 0 ? (
+                                isExpanded ? (
+                                  <ChevronDown className="h-5 w-5 text-slate-400" />
+                                ) : (
+                                  <ChevronRight className="h-5 w-5 text-slate-400" />
+                                )
+                              ) : (
+                                <div className="w-5" />
+                              )}
+                              <div className="p-2 bg-purple-100 rounded-full">
+                                <Shield className="h-4 w-4 text-purple-600" />
+                              </div>
+                              <div className="text-right">
+                                <p className="font-medium text-slate-800">{supervisor.full_name}</p>
+                                <p className="text-sm text-slate-500">{supervisor.email}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                                {supervisorAgents.length} סוכנים
+                              </Badge>
+                            </div>
+                          </button>
+
+                          {/* Agents under Supervisor */}
+                          {isExpanded && supervisorAgents.length > 0 && (
+                            <div className="pr-8 pb-2 space-y-1">
+                              {supervisorAgents.map((agent) => (
+                                <div key={agent.id} className="flex items-center justify-between p-2 mx-2 bg-white rounded-lg">
+                                  <div className="flex items-center gap-2">
+                                    <div className="p-1.5 bg-blue-100 rounded-full">
+                                      <User className="h-3 w-3 text-blue-600" />
+                                    </div>
+                                    <div className="text-right">
+                                      <p className="text-sm font-medium text-slate-700">{agent.full_name}</p>
+                                      <p className="text-xs text-slate-500">{agent.email}</p>
+                                    </div>
+                                  </div>
+                                  <Badge className="bg-green-100 text-green-700 border-0 text-xs">סוכן</Badge>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Agents Section (without supervisor) */}
+              {agents.filter(a => !a.supervisor_id).length > 0 && (
+                <div className="p-4">
+                  <h3 className="font-semibold text-blue-800 mb-3 flex items-center gap-2">
+                    <Users className="h-4 w-4" />
+                    סוכנים ללא מפקח ({agents.filter(a => !a.supervisor_id).length})
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                    {agents.filter(a =>
+                      !a.supervisor_id &&
+                      (a.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                      a.email.toLowerCase().includes(searchTerm.toLowerCase()))
+                    ).map((agent) => (
+                      <div key={agent.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+                        <div className="flex items-center gap-2">
+                          <div className="p-1.5 bg-blue-100 rounded-full">
+                            <User className="h-3 w-3 text-blue-600" />
+                          </div>
+                          <div className="text-right">
+                            <p className="text-sm font-medium text-slate-700">{agent.full_name}</p>
+                            <p className="text-xs text-slate-500">{agent.email}</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
