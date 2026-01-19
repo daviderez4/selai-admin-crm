@@ -618,9 +618,9 @@ export default function SupervisorDashboardPage() {
                                   <div className="flex items-center gap-2">
                                     <p className="font-medium">{member.full_name}</p>
                                     {member.is_registered ? (
-                                      <CheckCircle2 className="h-4 w-4 text-green-500" title="משתמש רשום" />
+                                      <CheckCircle2 className="h-4 w-4 text-green-500" aria-label="משתמש רשום" />
                                     ) : (
-                                      <AlertCircle className="h-4 w-4 text-amber-500" title="לא רשום" />
+                                      <AlertCircle className="h-4 w-4 text-amber-500" aria-label="לא רשום" />
                                     )}
                                   </div>
                                   <p className="text-xs text-muted-foreground">{member.email}</p>
