@@ -67,12 +67,18 @@ import { toast } from 'sonner';
 import { createClient } from '@/lib/supabase/client';
 import { useAuthStore } from '@/lib/stores/authStore';
 
-interface Agent {
+interface TeamMember {
   id: string;
   full_name: string;
   email: string;
   phone: string | null;
+  user_type: string;
   status: 'active' | 'inactive';
+  supervisor_id: string | null;
+  supervisor_name: string | null;
+  manager_id: string | null;
+  manager_name: string | null;
+  is_registered: boolean;
   totalContacts: number;
   totalLeads: number;
   openDeals: number;
@@ -81,6 +87,9 @@ interface Agent {
   monthlyAchieved: number;
   lastActivity?: string;
 }
+
+// Keep old interface for backward compatibility
+interface Agent extends TeamMember {}
 
 interface PendingRequest {
   id: string;
@@ -96,7 +105,10 @@ interface PendingRequest {
 }
 
 interface TeamStats {
+  totalMembers: number;
   totalAgents: number;
+  totalSupervisors: number;
+  totalManagers: number;
   activeAgents: number;
   totalContacts: number;
   totalLeads: number;
@@ -145,128 +157,170 @@ export default function SupervisorDashboardPage() {
         return;
       }
 
-      const supervisorId = currentUser.id;
+      const currentUserId = currentUser.id;
+      const isAdminUser = currentUser.user_type === 'admin';
+      const isManagerUser = currentUser.user_type === 'manager';
+      const isSupervisorUser = currentUser.user_type === 'supervisor';
 
-      // Fetch agents under this supervisor
-      const { data: agentsData, error: agentsError } = await supabase
+      // Fetch ALL team members with their relationships
+      // Admin sees everyone, Manager sees their supervisors+agents, Supervisor sees their agents
+      const { data: allUsers, error: usersError } = await supabase
         .from('users')
-        .select('id, full_name, email, phone, is_active, user_type')
-        .eq('supervisor_id', supervisorId);
+        .select(`
+          id,
+          full_name,
+          email,
+          phone,
+          user_type,
+          is_active,
+          auth_id,
+          supervisor_id,
+          manager_id
+        `)
+        .in('user_type', ['manager', 'supervisor', 'agent'])
+        .eq('is_active', true)
+        .order('user_type');
 
-      if (agentsError) {
-        console.error('Error fetching agents:', agentsError);
+      if (usersError) {
+        console.error('Error fetching users:', usersError);
       }
 
-      // Fetch pending registration requests for this supervisor
-      const { data: requestsData, error: requestsError } = await supabase
+      // Build a lookup map for supervisor/manager names
+      const userMap = new Map<string, { full_name: string; user_type: string }>();
+      (allUsers || []).forEach(u => {
+        userMap.set(u.id, { full_name: u.full_name, user_type: u.user_type });
+      });
+
+      // Filter based on role and add relationship names
+      let filteredUsers = allUsers || [];
+
+      if (isManagerUser) {
+        // Manager sees their assigned supervisors and those supervisors' agents
+        const { data: assignedSupervisors } = await supabase
+          .from('manager_supervisor_assignments')
+          .select('supervisor_id')
+          .eq('manager_id', currentUserId);
+
+        const supervisorIds = (assignedSupervisors || []).map(s => s.supervisor_id);
+        filteredUsers = filteredUsers.filter(u =>
+          supervisorIds.includes(u.id) || // The supervisor themselves
+          supervisorIds.includes(u.supervisor_id) // Agents under these supervisors
+        );
+      } else if (isSupervisorUser) {
+        // Supervisor sees only their agents
+        filteredUsers = filteredUsers.filter(u => u.supervisor_id === currentUserId);
+      }
+      // Admin sees everyone (no filter needed)
+
+      // Transform to TeamMember format with relationship names
+      const teamMembersData = filteredUsers.map(u => ({
+        id: u.id,
+        full_name: u.full_name || 'ללא שם',
+        email: u.email || '',
+        phone: u.phone,
+        user_type: u.user_type,
+        status: (u.is_active ? 'active' : 'inactive') as 'active' | 'inactive',
+        supervisor_id: u.supervisor_id,
+        supervisor_name: u.supervisor_id ? userMap.get(u.supervisor_id)?.full_name || null : null,
+        manager_id: u.manager_id,
+        manager_name: u.manager_id ? userMap.get(u.manager_id)?.full_name || null : null,
+        is_registered: !!u.auth_id,
+      }));
+
+      // Fetch pending registration requests based on role
+      let requestsQuery = supabase
         .from('registration_requests')
         .select('*')
-        .eq('supervisor_id', supervisorId)
         .in('status', ['pending', 'needs_review'])
         .order('created_at', { ascending: false });
+
+      if (!isAdminUser && !isManagerUser) {
+        // Supervisors only see requests assigned to them
+        requestsQuery = requestsQuery.eq('supervisor_id', currentUserId);
+      }
+      // Admins and managers see ALL pending requests
+
+      const { data: requestsData, error: requestsError } = await requestsQuery;
 
       if (requestsError) {
         console.error('Error fetching requests:', requestsError);
       }
 
-      // For each agent, get their stats
-      const agentsWithStats: Agent[] = [];
-      if (agentsData) {
-        for (const agent of agentsData) {
-          // Get contacts count
-          const { count: contactsCount } = await supabase
-            .from('crm_contacts')
-            .select('*', { count: 'exact', head: true })
-            .eq('agent_id', agent.id);
+      // For each team member, get their stats
+      const membersWithStats: TeamMember[] = [];
+      for (const member of teamMembersData) {
+        // Get contacts count
+        const { count: contactsCount } = await supabase
+          .from('crm_contacts')
+          .select('*', { count: 'exact', head: true })
+          .eq('agent_id', member.id);
 
-          // Get leads count
-          const { count: leadsCount } = await supabase
-            .from('crm_leads')
-            .select('*', { count: 'exact', head: true })
-            .eq('agent_id', agent.id);
+        // Get leads count
+        const { count: leadsCount } = await supabase
+          .from('crm_leads')
+          .select('*', { count: 'exact', head: true })
+          .eq('agent_id', member.id);
 
-          // Get open deals count
-          const { count: openDealsCount } = await supabase
-            .from('crm_deals')
-            .select('*', { count: 'exact', head: true })
-            .eq('agent_id', agent.id)
-            .not('status', 'in', '("won","lost")');
+        // Get open deals count
+        const { count: openDealsCount } = await supabase
+          .from('crm_deals')
+          .select('*', { count: 'exact', head: true })
+          .eq('agent_id', member.id)
+          .not('status', 'in', '("won","lost")');
 
-          // Get won deals count
-          const { count: wonDealsCount } = await supabase
-            .from('crm_deals')
-            .select('*', { count: 'exact', head: true })
-            .eq('agent_id', agent.id)
-            .eq('status', 'won');
+        // Get won deals count
+        const { count: wonDealsCount } = await supabase
+          .from('crm_deals')
+          .select('*', { count: 'exact', head: true })
+          .eq('agent_id', member.id)
+          .eq('status', 'won');
 
-          agentsWithStats.push({
-            id: agent.id,
-            full_name: agent.full_name || 'ללא שם',
-            email: agent.email || '',
-            phone: agent.phone,
-            status: agent.is_active ? 'active' : 'inactive',
-            totalContacts: contactsCount || 0,
-            totalLeads: leadsCount || 0,
-            openDeals: openDealsCount || 0,
-            wonDeals: wonDealsCount || 0,
-            monthlyTarget: 50000, // Would come from targets table
-            monthlyAchieved: (wonDealsCount || 0) * 5000, // Simplified calculation
-          });
-        }
+        membersWithStats.push({
+          ...member,
+          totalContacts: contactsCount || 0,
+          totalLeads: leadsCount || 0,
+          openDeals: openDealsCount || 0,
+          wonDeals: wonDealsCount || 0,
+          monthlyTarget: 50000,
+          monthlyAchieved: (wonDealsCount || 0) * 5000,
+        });
       }
 
-      // Also include supervisor's own data if they have any contacts
-      const { count: supervisorContactsCount } = await supabase
-        .from('crm_contacts')
-        .select('*', { count: 'exact', head: true })
-        .eq('agent_id', supervisorId);
+      // Count by user type
+      const totalManagers = membersWithStats.filter(m => m.user_type === 'manager').length;
+      const totalSupervisors = membersWithStats.filter(m => m.user_type === 'supervisor').length;
+      const totalAgents = membersWithStats.filter(m => m.user_type === 'agent').length;
 
-      const { count: supervisorLeadsCount } = await supabase
-        .from('crm_leads')
-        .select('*', { count: 'exact', head: true })
-        .eq('agent_id', supervisorId);
+      console.log('Team members found:', membersWithStats.length, membersWithStats);
 
-      const { count: supervisorOpenDealsCount } = await supabase
-        .from('crm_deals')
-        .select('*', { count: 'exact', head: true })
-        .eq('agent_id', supervisorId)
-        .not('status', 'in', '("won","lost")');
-
-      const { count: supervisorWonDealsCount } = await supabase
-        .from('crm_deals')
-        .select('*', { count: 'exact', head: true })
-        .eq('agent_id', supervisorId)
-        .eq('status', 'won');
-
-      console.log('Supervisor ID:', supervisorId);
-      console.log('Agents found:', agentsData?.length || 0, agentsData);
-      console.log('Supervisor contacts:', supervisorContactsCount);
-
-      setAgents(agentsWithStats);
+      setAgents(membersWithStats);
       setPendingRequests(requestsData || []);
 
-      // Calculate team totals (including supervisor's own data)
+      // Calculate team totals
       const teamStats: TeamStats = {
-        totalAgents: agentsWithStats.length,
-        activeAgents: agentsWithStats.filter(a => a.status === 'active').length,
-        totalContacts: agentsWithStats.reduce((sum, a) => sum + a.totalContacts, 0) + (supervisorContactsCount || 0),
-        totalLeads: agentsWithStats.reduce((sum, a) => sum + a.totalLeads, 0) + (supervisorLeadsCount || 0),
-        openDeals: agentsWithStats.reduce((sum, a) => sum + a.openDeals, 0) + (supervisorOpenDealsCount || 0),
-        wonDeals: agentsWithStats.reduce((sum, a) => sum + a.wonDeals, 0) + (supervisorWonDealsCount || 0),
+        totalMembers: membersWithStats.length,
+        totalManagers,
+        totalSupervisors,
+        totalAgents,
+        activeAgents: membersWithStats.filter(a => a.status === 'active').length,
+        totalContacts: membersWithStats.reduce((sum, a) => sum + a.totalContacts, 0),
+        totalLeads: membersWithStats.reduce((sum, a) => sum + a.totalLeads, 0),
+        openDeals: membersWithStats.reduce((sum, a) => sum + a.openDeals, 0),
+        wonDeals: membersWithStats.reduce((sum, a) => sum + a.wonDeals, 0),
         totalPolicies: 0,
         pendingRequests: requestsData?.length || 0,
       };
 
-      // Get total policies - only query if there are agents
-      const allAgentIds = agentsWithStats.map(a => a.id);
-      allAgentIds.push(supervisorId); // Include supervisor's own policies
+      // Get total policies
+      const allMemberIds = membersWithStats.map(a => a.id);
+      if (allMemberIds.length > 0) {
+        const { count: policiesCount } = await supabase
+          .from('crm_policies')
+          .select('*', { count: 'exact', head: true })
+          .in('agent_id', allMemberIds);
 
-      const { count: policiesCount } = await supabase
-        .from('crm_policies')
-        .select('*', { count: 'exact', head: true })
-        .in('agent_id', allAgentIds);
-
-      teamStats.totalPolicies = policiesCount || 0;
+        teamStats.totalPolicies = policiesCount || 0;
+      }
 
       setStats(teamStats);
     } catch (error) {
@@ -363,9 +417,9 @@ export default function SupervisorDashboardPage() {
           <div>
             <h1 className="text-2xl font-bold flex items-center gap-2">
               <Users className="h-6 w-6 text-blue-600" />
-              ניהול צוות הסוכנים
+              הצוות שלי
             </h1>
-            <p className="text-muted-foreground">צפה בביצועי הסוכנים שלך ונהל בקשות הצטרפות</p>
+            <p className="text-muted-foreground">ניהול וצפייה בחברי הצוות - מנהלים, מפקחים וסוכנים</p>
           </div>
           <div className="flex items-center gap-2">
             {pendingRequests.length > 0 && (
@@ -390,22 +444,8 @@ export default function SupervisorDashboardPage() {
                   <Users className="h-5 w-5 text-white" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold text-blue-700">{stats?.totalAgents}</p>
-                  <p className="text-xs text-blue-600">סוכנים</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-green-500 rounded-lg">
-                  <UserCheck className="h-5 w-5 text-white" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-green-700">{stats?.activeAgents}</p>
-                  <p className="text-xs text-green-600">פעילים</p>
+                  <p className="text-2xl font-bold text-blue-700">{stats?.totalMembers}</p>
+                  <p className="text-xs text-blue-600">חברי צוות</p>
                 </div>
               </div>
             </CardContent>
@@ -415,11 +455,39 @@ export default function SupervisorDashboardPage() {
             <CardContent className="p-4">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-purple-500 rounded-lg">
+                  <Shield className="h-5 w-5 text-white" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-purple-700">{stats?.totalManagers}</p>
+                  <p className="text-xs text-purple-600">מנהלים</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-gradient-to-br from-indigo-50 to-indigo-100 border-indigo-200">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-indigo-500 rounded-lg">
+                  <UserCheck className="h-5 w-5 text-white" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-indigo-700">{stats?.totalSupervisors}</p>
+                  <p className="text-xs text-indigo-600">מפקחים</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-green-500 rounded-lg">
                   <Users className="h-5 w-5 text-white" />
                 </div>
                 <div>
-                  <p className="text-2xl font-bold text-purple-700">{stats?.totalContacts}</p>
-                  <p className="text-xs text-purple-600">אנשי קשר</p>
+                  <p className="text-2xl font-bold text-green-700">{stats?.totalAgents}</p>
+                  <p className="text-xs text-green-600">סוכנים</p>
                 </div>
               </div>
             </CardContent>
@@ -462,20 +530,6 @@ export default function SupervisorDashboardPage() {
                 <div>
                   <p className="text-2xl font-bold text-emerald-700">{stats?.wonDeals}</p>
                   <p className="text-xs text-emerald-600">עסקאות שנסגרו</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-gradient-to-br from-indigo-50 to-indigo-100 border-indigo-200">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-indigo-500 rounded-lg">
-                  <Shield className="h-5 w-5 text-white" />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-indigo-700">{stats?.totalPolicies}</p>
-                  <p className="text-xs text-indigo-600">פוליסות</p>
                 </div>
               </div>
             </CardContent>
@@ -525,68 +579,85 @@ export default function SupervisorDashboardPage() {
               </div>
             </div>
 
-            {/* Agents Table */}
+            {/* Team Members Table */}
             {filteredAgents.length > 0 ? (
               <Card>
                 <CardContent className="p-0">
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>סוכן</TableHead>
+                        <TableHead>שם</TableHead>
+                        <TableHead>תפקיד</TableHead>
+                        <TableHead>מפקח</TableHead>
+                        <TableHead>מנהל</TableHead>
                         <TableHead>סטטוס</TableHead>
-                        <TableHead className="text-center">אנשי קשר</TableHead>
                         <TableHead className="text-center">לידים</TableHead>
-                        <TableHead className="text-center">עסקאות פתוחות</TableHead>
-                        <TableHead className="text-center">עסקאות שנסגרו</TableHead>
-                        <TableHead>התקדמות יעד</TableHead>
+                        <TableHead className="text-center">עסקאות</TableHead>
                         <TableHead></TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredAgents.map((agent) => {
-                        const progress = agent.monthlyTarget > 0
-                          ? Math.round((agent.monthlyAchieved / agent.monthlyTarget) * 100)
-                          : 0;
+                      {filteredAgents.map((member) => {
+                        const userTypeLabels: Record<string, { label: string; color: string }> = {
+                          manager: { label: 'מנהל', color: 'bg-purple-100 text-purple-700' },
+                          supervisor: { label: 'מפקח', color: 'bg-blue-100 text-blue-700' },
+                          agent: { label: 'סוכן', color: 'bg-green-100 text-green-700' },
+                        };
+                        const typeInfo = userTypeLabels[member.user_type] || { label: member.user_type, color: 'bg-gray-100 text-gray-700' };
+
                         return (
-                          <TableRow key={agent.id}>
+                          <TableRow key={member.id}>
                             <TableCell>
                               <div className="flex items-center gap-3">
                                 <Avatar className="h-10 w-10">
-                                  <AvatarFallback className="bg-blue-100 text-blue-700">
-                                    {agent.full_name.charAt(0)}
+                                  <AvatarFallback className={typeInfo.color}>
+                                    {member.full_name.charAt(0)}
                                   </AvatarFallback>
                                 </Avatar>
                                 <div>
-                                  <p className="font-medium">{agent.full_name}</p>
-                                  <p className="text-xs text-muted-foreground">{agent.email}</p>
+                                  <div className="flex items-center gap-2">
+                                    <p className="font-medium">{member.full_name}</p>
+                                    {member.is_registered ? (
+                                      <CheckCircle2 className="h-4 w-4 text-green-500" title="משתמש רשום" />
+                                    ) : (
+                                      <AlertCircle className="h-4 w-4 text-amber-500" title="לא רשום" />
+                                    )}
+                                  </div>
+                                  <p className="text-xs text-muted-foreground">{member.email}</p>
                                 </div>
                               </div>
                             </TableCell>
                             <TableCell>
-                              <Badge variant={agent.status === 'active' ? 'default' : 'secondary'}>
-                                {agent.status === 'active' ? 'פעיל' : 'לא פעיל'}
+                              <Badge className={typeInfo.color}>
+                                {typeInfo.label}
                               </Badge>
                             </TableCell>
-                            <TableCell className="text-center font-medium">{agent.totalContacts}</TableCell>
-                            <TableCell className="text-center font-medium">{agent.totalLeads}</TableCell>
-                            <TableCell className="text-center font-medium">{agent.openDeals}</TableCell>
-                            <TableCell className="text-center font-medium text-green-600">{agent.wonDeals}</TableCell>
                             <TableCell>
-                              <div className="flex items-center gap-2">
-                                <Progress value={progress} className="h-2 w-24" />
-                                <span className="text-sm font-medium">{progress}%</span>
-                                {progress >= 100 ? (
-                                  <TrendingUp className="h-4 w-4 text-green-600" />
-                                ) : progress < 50 ? (
-                                  <TrendingDown className="h-4 w-4 text-red-600" />
-                                ) : null}
-                              </div>
+                              {member.supervisor_name ? (
+                                <span className="text-sm">{member.supervisor_name}</span>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">-</span>
+                              )}
                             </TableCell>
+                            <TableCell>
+                              {member.manager_name ? (
+                                <span className="text-sm">{member.manager_name}</span>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">-</span>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant={member.status === 'active' ? 'default' : 'secondary'}>
+                                {member.status === 'active' ? 'פעיל' : 'לא פעיל'}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-center font-medium">{member.totalLeads}</TableCell>
+                            <TableCell className="text-center font-medium text-green-600">{member.wonDeals}</TableCell>
                             <TableCell>
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => handleViewAgent(agent)}
+                                onClick={() => handleViewAgent(member)}
                               >
                                 <Eye className="h-4 w-4 ml-1" />
                                 צפה
@@ -603,9 +674,9 @@ export default function SupervisorDashboardPage() {
               <Card>
                 <CardContent className="py-12 text-center">
                   <Users className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                  <h3 className="text-lg font-medium mb-2">אין סוכנים בצוות</h3>
+                  <h3 className="text-lg font-medium mb-2">אין חברי צוות</h3>
                   <p className="text-muted-foreground">
-                    סוכנים שיבחרו אותך כמפקח יופיעו כאן
+                    חברי צוות שמשויכים אליך יופיעו כאן
                   </p>
                 </CardContent>
               </Card>

@@ -78,7 +78,7 @@ export const useProjectsStore = create<ProjectsState>((set, get) => ({
 
       const { data: byAuthId } = await supabase
         .from('users')
-        .select('user_type')
+        .select('id, user_type')
         .eq('auth_id', user.id)
         .maybeSingle();
 
@@ -87,7 +87,7 @@ export const useProjectsStore = create<ProjectsState>((set, get) => ({
       } else {
         const { data: byEmail } = await supabase
           .from('users')
-          .select('user_type')
+          .select('id, user_type')
           .eq('email', user.email?.toLowerCase() || '')
           .maybeSingle();
         userProfile = byEmail;
@@ -100,42 +100,66 @@ export const useProjectsStore = create<ProjectsState>((set, get) => ({
         return;
       }
 
-      // Get projects the user has access to
-      const { data: accessData, error: accessError } = await supabase
-        .from('user_project_access')
-        .select('project_id');
+      // ADMIN: Can see ALL projects directly (RLS policy allows this)
+      if (userProfile.user_type === 'admin') {
+        const { data: projects, error } = await supabase
+          .from('projects')
+          .select('*')
+          .order('created_at', { ascending: false });
 
-      if (accessError) {
-        // Handle table not existing gracefully
-        if (['42P01', 'PGRST204'].includes(accessError.code || '')) {
-          console.warn('user_project_access table not found - run schema.sql');
-        } else {
-          console.error('Error fetching project access:', accessError);
+        if (error) {
+          console.error('Error fetching projects for admin:', error);
+          set({ projects: [], isLoadingProjects: false });
+          return;
         }
-        set({ projects: [], isLoadingProjects: false });
+
+        set({ projects: projects || [], isLoadingProjects: false });
         return;
       }
 
-      const projectIds = (accessData || []).map(a => a.project_id);
+      // MANAGER: Check manager_project_assignments first, then user_project_access
+      if (userProfile.user_type === 'manager') {
+        // Try manager_project_assignments first
+        const { data: mpaData } = await supabase
+          .from('manager_project_assignments')
+          .select('project_id')
+          .eq('manager_id', userProfile.id);
 
-      if (projectIds.length === 0) {
-        set({ projects: [], isLoadingProjects: false });
+        let projectIds: string[] = (mpaData || []).map(a => a.project_id);
+
+        // Also check user_project_access as fallback
+        const { data: accessData } = await supabase
+          .from('user_project_access')
+          .select('project_id');
+
+        if (accessData && accessData.length > 0) {
+          const accessIds = accessData.map(a => a.project_id);
+          projectIds = [...new Set([...projectIds, ...accessIds])];
+        }
+
+        if (projectIds.length === 0) {
+          set({ projects: [], isLoadingProjects: false });
+          return;
+        }
+
+        const { data: projects, error } = await supabase
+          .from('projects')
+          .select('*')
+          .in('id', projectIds)
+          .order('created_at', { ascending: false });
+
+        if (error) {
+          console.error('Error fetching projects for manager:', error);
+          set({ projects: [], isLoadingProjects: false });
+          return;
+        }
+
+        set({ projects: projects || [], isLoadingProjects: false });
         return;
       }
 
-      const { data: projects, error } = await supabase
-        .from('projects')
-        .select('*')
-        .in('id', projectIds)
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        console.error('Error fetching projects:', error);
-        set({ isLoadingProjects: false });
-        return;
-      }
-
-      set({ projects: projects || [], isLoadingProjects: false });
+      // Fallback: empty list
+      set({ projects: [], isLoadingProjects: false });
     } catch (error) {
       console.error('Error fetching projects:', error);
       set({ isLoadingProjects: false });
