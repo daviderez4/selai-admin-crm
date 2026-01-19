@@ -170,9 +170,7 @@ export default function SettingsPage() {
     }
   };
 
-  type NotificationType = 'new_lead' | 'lead_assigned' | 'daily_report' | 'weekly_report' | 'campaign_alert' | 'system_alert';
-
-  const toggleEmailNotification = (type: NotificationType, enabled: boolean) => {
+  const toggleEmailNotification = (type: string, enabled: boolean) => {
     if (!emailSettings?.notifications) return;
     const currentNotifications = emailSettings.notifications;
     setEmailSettings({
@@ -184,7 +182,7 @@ export default function SettingsPage() {
     });
   };
 
-  const addRecipient = (type: NotificationType) => {
+  const addRecipient = (type: string) => {
     if (!emailSettings?.notifications || !newRecipient || !newRecipient.includes('@')) {
       toast.error('יש להזין כתובת מייל תקינה');
       return;
@@ -208,7 +206,7 @@ export default function SettingsPage() {
     setNewRecipient('');
   };
 
-  const removeRecipient = (type: NotificationType, email: string) => {
+  const removeRecipient = (type: string, email: string) => {
     if (!emailSettings?.notifications) return;
     const notifications = emailSettings.notifications;
     const current = notifications[type]?.recipients || [];
