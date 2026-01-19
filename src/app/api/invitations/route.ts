@@ -55,8 +55,9 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const {
       email,
-      role = 'agent', // admin, supervisor, agent
+      role = 'agent', // admin, manager, supervisor, agent
       agent_id,       // Optional: link to existing agent in SELAI
+      project_id,     // Optional: grant access to specific project on registration
       expires_days = 7
     } = body;
 
@@ -87,6 +88,19 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // If project_id provided, verify it exists
+    if (project_id) {
+      const { data: project, error: projectError } = await supabase
+        .from('projects')
+        .select('id, name')
+        .eq('id', project_id)
+        .single();
+
+      if (projectError || !project) {
+        return NextResponse.json({ error: 'Project not found' }, { status: 404 });
+      }
+    }
+
     // Create invitation
     const { data: invitation, error } = await supabase
       .from('hub_invitations')
@@ -95,6 +109,7 @@ export async function POST(request: NextRequest) {
         token,
         role,
         agent_id,
+        project_id,
         expires_at: expires_at.toISOString(),
         created_by: user.id,
         status: 'pending'

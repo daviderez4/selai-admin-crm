@@ -50,7 +50,8 @@ export async function GET(
       data: {
         email: invitation.email,
         role: invitation.role,
-        agent_id: invitation.agent_id
+        agent_id: invitation.agent_id,
+        project_id: invitation.project_id
       }
     });
 
@@ -143,6 +144,20 @@ export async function POST(
           agent_id: invitation.agent_id,
           created_at: new Date().toISOString()
         });
+
+      // If invitation includes project_id, grant user access to that project
+      if (invitation.project_id) {
+        await supabase
+          .from('user_project_access')
+          .upsert({
+            user_id: authData.user.id,
+            project_id: invitation.project_id,
+            access_level: invitation.role === 'admin' ? 'admin' : 'read',
+            granted_at: new Date().toISOString()
+          }, {
+            onConflict: 'user_id,project_id'
+          });
+      }
     }
 
     return NextResponse.json({
@@ -150,7 +165,8 @@ export async function POST(
       message: 'Account created successfully',
       data: {
         user: authData.user,
-        role: invitation.role
+        role: invitation.role,
+        project_id: invitation.project_id
       }
     });
 
